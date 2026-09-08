@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "sample-mcp-server": {
+      "command": "node",
+      "args": ["./dist/index.js"],
+      "disabled": true
+    }
+  }
+}

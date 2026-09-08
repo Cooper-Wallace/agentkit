@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Antigravity lifecycle hooks template for workstation and project automation.",
+  "_comment": "Place in .agents/hooks.json (workspace) or plugins/<name>/hooks.json. Set 'enabled: false' to keep inactive until needed.",
+
+  "command-safety-guard": {
+    "enabled": false,
+    "description": "PreToolUse hook to intercept run_command and prevent accidental execution of destructive patterns.",
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/hooks/verify-safe-command.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+
+  "code-linter-formatter": {
+    "enabled": false,
+    "description": "PostToolUse hook to auto-format files or run linters after file modifications.",
+    "PostToolUse": [
+      {
+        "matcher": "write_to_file|replace_file_content",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "git status --porcelain",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+
+  "git-hygiene-reminder": {
+    "enabled": false,
+    "description": "PreInvocation hook to check working tree hygiene before agent execution begins.",
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "git status -s",
+        "timeout": 5
+      }
+    ]
+  }
+}

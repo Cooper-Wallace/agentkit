@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Registration manifest for Antigravity plugins.",
+  "_comment": "Place in .agents/plugins.json (workspace) or ~/.gemini/config/plugins.json (global).",
+  "inherits": [],
+  "entries": [
+    {
+      "path": ".agents/plugins"
+    }
+  ]
+}

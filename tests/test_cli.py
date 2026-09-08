@@ -51,6 +51,43 @@ class TestPermissionsCatalog(unittest.TestCase):
         self.assertIn("model", default_settings)
 
 
+class TestTemplatesAndArchetypes(unittest.TestCase):
+    def test_hooks_template_validity(self):
+        hooks_file = REPO_ROOT / "templates" / "hooks.json"
+        self.assertTrue(hooks_file.exists())
+        data = json.loads(hooks_file.read_text(encoding="utf-8"))
+        self.assertIn("command-safety-guard", data)
+        self.assertIn("code-linter-formatter", data)
+        self.assertFalse(data["command-safety-guard"]["enabled"])
+
+    def test_plugins_json_template_validity(self):
+        plugins_file = REPO_ROOT / "templates" / "plugins.json"
+        self.assertTrue(plugins_file.exists())
+        data = json.loads(plugins_file.read_text(encoding="utf-8"))
+        self.assertIn("entries", data)
+        self.assertIsInstance(data["entries"], list)
+
+    def test_plugin_archetype_validity(self):
+        plugin_dir = REPO_ROOT / "templates" / "plugin"
+        self.assertTrue(plugin_dir.exists())
+
+        manifest = json.loads((plugin_dir / "plugin.json").read_text(encoding="utf-8"))
+        self.assertIn("name", manifest)
+        self.assertTrue(manifest.get("disabled", False))
+
+        hooks = json.loads((plugin_dir / "hooks.json").read_text(encoding="utf-8"))
+        self.assertIsInstance(hooks, dict)
+
+        mcp = json.loads((plugin_dir / "mcp_config.json").read_text(encoding="utf-8"))
+        self.assertIn("mcpServers", mcp)
+
+        agents_rule = plugin_dir / "rules" / "AGENTS.md"
+        self.assertTrue(agents_rule.exists())
+
+        sample_skill = plugin_dir / "skills" / "sample-skill" / "SKILL.md"
+        self.assertTrue(sample_skill.exists())
+
+
 class TestPermissionMerger(unittest.TestCase):
     def test_merge_into_empty_settings(self):
         standard = ["command(ls)", "command(cat)"]

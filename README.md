@@ -152,6 +152,17 @@ agy-standardise hook install
 
 ---
 
+## Extensibility: Lifecycle Hooks & Plugin Templates
+
+Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvocation`) and shareable plugin bundles. This repository includes opt-in templates and architectural recommendations without imposing live runtime side-effects prematurely:
+
+- **Lifecycle Hooks Template**: [`templates/hooks.json`](templates/hooks.json) (Pre-configured examples: command safety guard, auto-formatting, git status watcher).
+- **Plugin Bundle Archetype**: [`templates/plugin/`](templates/plugin/) (Structure for packaging rules, skills, hooks, and MCP servers).
+- **Plugin Registration Manifest**: [`templates/plugins.json`](templates/plugins.json).
+- **Comprehensive Guide & Recommendations**: [docs/plugins-and-hooks-guide.md](docs/plugins-and-hooks-guide.md).
+
+---
+
 ## Repository Structure
 
 ```text
@@ -174,20 +185,25 @@ agy-standardise hook install
 │   ├── GEMINI.md                 # Universal developer agent directives
 │   ├── AGENTS.md                 # Symlink to GEMINI.md
 │   ├── project-GEMINI.md         # Template for project-specific scaffolding
+│   ├── hooks.json                # Template for Antigravity lifecycle hooks
+│   ├── plugins.json              # Template for plugin registration manifest
+│   ├── plugin/                   # Complete archetype bundle for Antigravity plugins
 │   └── rules/                    # Reusable rules (bash-safety.md, conventional-commits.md)
 │
 ├── docs/                         # Comprehensive documentation
 │   ├── permissions-matrix.md     # Permission classifications and safety tiers
 │   ├── gemini-md-guide.md        # Guide on Antigravity cascading rules
+│   ├── plugins-and-hooks-guide.md# Guide on lifecycle hooks and plugin architectures
 │   ├── replication-guide.md      # Multi-machine setup checklist
 │   ├── settings-reference.md     # Settings schema and options reference
 │   └── decisions/                # Architecture Decision Records (ADRs)
 │       ├── 0001-permission-merging-strategy.md
 │       ├── 0002-dual-naming-convention.md
-│       └── 0003-global-vs-workspace-rules.md
+│       ├── 0003-global-vs-workspace-rules.md
+│       └── 0004-plugin-and-hook-templating.md
 │
 └── tests/
-    └── test_cli.py               # 14 automated unit tests
+    └── test_cli.py               # 17 automated unit tests
 ```
 
 ---

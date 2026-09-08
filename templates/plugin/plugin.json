@@ -1,0 +1,6 @@
+{
+  "name": "sample-developer-plugin",
+  "description": "Archetype template for bundling Antigravity skills, rules, hooks, and MCP servers.",
+  "version": "0.1.0",
+  "disabled": true
+}
