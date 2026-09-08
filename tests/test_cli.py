@@ -1,0 +1,243 @@
+"""
+Tests for agy-standardise CLI tool and standardization engine.
+"""
+
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import unittest
+from pathlib import Path
+
+# Add bin directory and load agy-standardise module
+REPO_ROOT = Path(__file__).resolve().parent.parent
+BIN_PATH = REPO_ROOT / "bin" / "agy-standardise"
+
+loader = importlib.machinery.SourceFileLoader("agy_standardise", str(BIN_PATH))
+spec = importlib.util.spec_from_loader("agy_standardise", loader)
+agy_std = importlib.util.module_from_spec(spec)
+loader.exec_module(agy_std)
+
+COMMIT_PATTERN = agy_std.COMMIT_PATTERN
+BIN_CMD = [sys.executable, str(BIN_PATH)]
+
+
+class TestPermissionsCatalog(unittest.TestCase):
+    def test_permissions_json_validity(self):
+        catalog = agy_std.get_standard_permissions_catalog()
+        self.assertIn("categories", catalog)
+        self.assertGreater(len(catalog["categories"]), 0)
+
+        for cat_name, cat_data in catalog["categories"].items():
+            self.assertIn("commands", cat_data, f"Category {cat_name} missing 'commands'")
+            self.assertGreater(len(cat_data["commands"]), 0, f"Category {cat_name} has empty commands")
+
+    def test_flat_permissions_generation(self):
+        flat = agy_std.get_flat_standard_permissions()
+        self.assertGreater(len(flat), 20)
+        for perm in flat:
+            self.assertTrue(perm.startswith("command("), f"Invalid format: {perm}")
+            self.assertTrue(perm.endswith(")"), f"Invalid format: {perm}")
+
+    def test_settings_default_file_exists(self):
+        default_settings = agy_std.load_json(agy_std.SETTINGS_DEFAULT_FILE)
+        self.assertIn("allowNonWorkspaceAccess", default_settings)
+        self.assertIn("colorScheme", default_settings)
+        self.assertIn("model", default_settings)
+
+
+class TestPermissionMerger(unittest.TestCase):
+    def test_merge_into_empty_settings(self):
+        standard = ["command(ls)", "command(cat)"]
+        default_settings = {"colorScheme": "dark"}
+        merged, added = agy_std.merge_permissions({}, standard, default_settings)
+
+        self.assertEqual(merged["colorScheme"], "dark")
+        self.assertEqual(added, ["command(ls)", "command(cat)"])
+        self.assertEqual(merged["permissions"]["allow"], ["command(ls)", "command(cat)"])
+        self.assertEqual(merged["trustedWorkspaces"], [])
+
+    def test_merge_preserves_custom_permissions(self):
+        existing = {
+            "permissions": {
+                "allow": ["command(custom_script.sh)", "command(ls)"]
+            },
+            "trustedWorkspaces": ["/custom/path"],
+            "model": "Custom Model"
+        }
+        standard = ["command(ls)", "command(cat)", "command(grep)"]
+        merged, added = agy_std.merge_permissions(existing, standard)
+
+        self.assertEqual(added, ["command(cat)", "command(grep)"])
+        self.assertIn("command(custom_script.sh)", merged["permissions"]["allow"])
+        self.assertIn("command(ls)", merged["permissions"]["allow"])
+        self.assertIn("command(cat)", merged["permissions"]["allow"])
+        self.assertIn("command(grep)", merged["permissions"]["allow"])
+        self.assertEqual(merged["trustedWorkspaces"], ["/custom/path"])
+        self.assertEqual(merged["model"], "Custom Model")
+
+    def test_merge_idempotence(self):
+        existing = {
+            "permissions": {
+                "allow": ["command(ls)", "command(cat)"]
+            }
+        }
+        standard = ["command(ls)", "command(cat)"]
+        merged, added = agy_std.merge_permissions(existing, standard)
+
+        self.assertEqual(added, [])
+        self.assertEqual(len(merged["permissions"]["allow"]), 2)
+
+
+class TestCLIOperations(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp(prefix="agy_test_")
+        self.settings_file = Path(self.test_dir) / "settings.json"
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_audit_non_compliant(self):
+        # Write incomplete settings
+        with open(self.settings_file, "w") as f:
+            json.dump({"permissions": {"allow": ["command(ls)"]}}, f)
+
+        res = subprocess.run(
+            BIN_CMD + ["audit", "--settings-path", str(self.settings_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(res.returncode, 0)
+        self.assertIn("[NON-COMPLIANT]", res.stdout)
+
+    def test_apply_and_audit_flow(self):
+        # Initial empty settings
+        with open(self.settings_file, "w") as f:
+            json.dump({}, f)
+
+        # Apply standards
+        res_apply = subprocess.run(
+            BIN_CMD + ["apply", "--settings-path", str(self.settings_file), "--no-backup"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_apply.returncode, 0, f"Apply failed: {res_apply.stderr}")
+
+        # Verify file content
+        with open(self.settings_file, "r") as f:
+            saved = json.load(f)
+        self.assertIn("permissions", saved)
+        self.assertIn("command(git status)", saved["permissions"]["allow"])
+        self.assertIn("command(pytest)", saved["permissions"]["allow"])
+        self.assertTrue(saved.get("allowNonWorkspaceAccess"))
+
+    def test_apply_dry_run_does_not_modify_file(self):
+        initial_data = {"permissions": {"allow": ["command(ls)"]}}
+        with open(self.settings_file, "w") as f:
+            json.dump(initial_data, f)
+
+        res_dry = subprocess.run(
+            BIN_CMD + ["apply", "--settings-path", str(self.settings_file), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_dry.returncode, 0)
+        self.assertIn("[DRY-RUN]", res_dry.stdout)
+
+        with open(self.settings_file, "r") as f:
+            current = json.load(f)
+        self.assertEqual(current, initial_data)
+
+    def test_diff_command(self):
+        with open(self.settings_file, "w") as f:
+            json.dump({"permissions": {"allow": ["command(my_unique_script.sh)"]}}, f)
+
+        res_diff = subprocess.run(
+            BIN_CMD + ["diff", "--settings-path", str(self.settings_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_diff.returncode, 0)
+        self.assertIn("Missing Standard Permissions", res_diff.stdout)
+        self.assertIn("command(my_unique_script.sh)", res_diff.stdout)
+
+    def test_snapshot_command(self):
+        with open(self.settings_file, "w") as f:
+            json.dump({"permissions": {"allow": ["command(custom_tool)", "command(ls)"]}}, f)
+
+        res_snap = subprocess.run(
+            BIN_CMD + ["snapshot", "--settings-path", str(self.settings_file), "--json"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_snap.returncode, 0)
+        data = json.loads(res_snap.stdout)
+        self.assertIn("command(custom_tool)", data["unmanaged_permissions"])
+        self.assertNotIn("command(ls)", data["unmanaged_permissions"])
+
+    def test_template_scaffolding(self):
+        target_dir = Path(self.test_dir) / "scaffold_proj"
+        res = subprocess.run(
+            BIN_CMD + [
+                "template",
+                "--output", str(target_dir),
+                "--name", "demo-service",
+                "--lang", "Go",
+                "--test", "go test ./...",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+        gemini_file = target_dir / "GEMINI.md"
+        agents_file = target_dir / "AGENTS.md"
+
+        self.assertTrue(gemini_file.exists())
+        self.assertTrue(agents_file.exists())
+        content = gemini_file.read_text()
+        self.assertIn("demo-service", content)
+        self.assertIn("Go", content)
+        self.assertIn("go test ./...", content)
+
+
+class TestConventionalCommits(unittest.TestCase):
+    def test_valid_commit_messages(self):
+        valid = [
+            "feat: add permission catalog",
+            "fix(cli): handle missing permissions key gracefully",
+            "docs: update multi-machine replication guide",
+            "style: format code according to PEP8",
+            "refactor(core): extract permission set logic",
+            "perf: optimize settings audit search",
+            "test: add unit tests for diff command",
+            "build: update python packaging metadata",
+            "ci: add github actions test workflow",
+            "chore: bump catalog version",
+            "revert: revert previous commit",
+            "feat(auth)!: breaking token renewal change",
+        ]
+        for msg in valid:
+            with self.subTest(msg=msg):
+                self.assertIsNotNone(re.match(COMMIT_PATTERN, msg), f"Should match: {msg}")
+
+    def test_invalid_commit_messages(self):
+        invalid = [
+            "WIP",
+            "Fixed bug",
+            "added feature",
+            "feat:no space after colon",
+            "feature: wrong type name",
+            "fix(): empty scope",
+        ]
+        for msg in invalid:
+            with self.subTest(msg=msg):
+                self.assertIsNone(re.match(COMMIT_PATTERN, msg), f"Should not match: {msg}")
+
+
+if __name__ == "__main__":
+    unittest.main()

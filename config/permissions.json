@@ -1,0 +1,121 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Standardized pre-approved commands for Google Antigravity CLI across developer workstations.",
+  "categories": {
+    "core_inspection": {
+      "description": "Read-only system inspection, file reading, and search utilities.",
+      "commands": [
+        "which",
+        "cat",
+        "head",
+        "tail",
+        "grep",
+        "ls",
+        "pwd",
+        "echo",
+        "diff",
+        "wc",
+        "find",
+        "file",
+        "tree",
+        "fastfetch"
+      ]
+    },
+    "safe_file_operations": {
+      "description": "Non-destructive file and directory creation, moving, and permission adjustments (rm is deliberately excluded).",
+      "commands": [
+        "mkdir",
+        "touch",
+        "cp",
+        "mv",
+        "chmod",
+        "ln"
+      ]
+    },
+    "git_hygiene": {
+      "description": "Standard version control workflows and inspection commands.",
+      "commands": [
+        "git status",
+        "git diff",
+        "git log",
+        "git show",
+        "git branch",
+        "git checkout",
+        "git switch",
+        "git fetch",
+        "git pull",
+        "git add",
+        "git commit",
+        "git remote",
+        "git config",
+        "git init",
+        "git stash",
+        "git rebase"
+      ]
+    },
+    "github_governance": {
+      "description": "GitHub CLI automation and repository standardisation tools.",
+      "commands": [
+        "gh",
+        "gh pr",
+        "gh issue",
+        "gh repo",
+        "gh auth",
+        "gh-standardise",
+        "gh-standardize"
+      ]
+    },
+    "system_and_environment": {
+      "description": "Querying workstation environment, hostnames, and user identities.",
+      "commands": [
+        "uname",
+        "hostname",
+        "date",
+        "env",
+        "whoami",
+        "id"
+      ]
+    },
+    "package_querying": {
+      "description": "Package manager queries and manifest inspections without administrative elevation.",
+      "commands": [
+        "apt-cache",
+        "apt-mark",
+        "dpkg -l",
+        "flatpak",
+        "snap list"
+      ]
+    },
+    "test_runners_and_runtimes": {
+      "description": "Common development runtimes and automated test harnesses.",
+      "commands": [
+        "python3 -m unittest discover tests",
+        "python3 -m unittest discover",
+        "pytest",
+        "python3",
+        "python",
+        "node",
+        "npm test",
+        "npm run",
+        "pnpm",
+        "yarn",
+        "mvn test",
+        "cargo test",
+        "go test"
+      ]
+    },
+    "local_workflows": {
+      "description": "Workstation provisioning scripts and Antigravity standardisation tooling.",
+      "commands": [
+        "./bootstrap.sh",
+        "./install.sh",
+        "./plasma/restore-kde.sh",
+        "konsole",
+        "agy",
+        "agy-standardise",
+        "antigravity-standardise"
+      ]
+    }
+  }
+}
