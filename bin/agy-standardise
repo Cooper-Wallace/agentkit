@@ -42,6 +42,8 @@ SETTINGS_DEFAULT_FILE = CONFIG_DIR / "settings.default.json"
 
 DEFAULT_SETTINGS_PATH = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
 DEFAULT_GLOBAL_GEMINI_DIR = Path.home() / ".gemini"
+MCP_CATALOG_FILE = CONFIG_DIR / "mcp.json"
+DEFAULT_MCP_CONFIG_PATH = Path.home() / ".gemini" / "config" / "mcp_config.json"
 
 # Conventional commit regex pattern (aligning with gh-standardise)
 COMMIT_PATTERN = (
@@ -159,6 +161,87 @@ def merge_permissions(
     return result, added_permissions
 
 
+def get_standard_mcp_catalog() -> Dict[str, Any]:
+    """Load standard MCP catalog from repository config."""
+    if not MCP_CATALOG_FILE.exists():
+        return {"mcpServers": {}, "_requirements": {}}
+    return load_json(MCP_CATALOG_FILE)
+
+
+def load_user_mcp_config(mcp_path: Path) -> Tuple[Dict[str, Any], bool]:
+    """Load user mcp_config.json. Returns (dict, file_exists)."""
+    if not mcp_path.exists():
+        return {"mcpServers": {}}, False
+    try:
+        data = load_json(mcp_path)
+        if "mcpServers" not in data or not isinstance(data["mcpServers"], dict):
+            data["mcpServers"] = {}
+        return data, True
+    except json.JSONDecodeError as err:
+        raise ValueError(f"Corrupted JSON in {mcp_path}: {err}")
+
+
+def merge_mcp_servers(
+    existing_mcp: Dict[str, Any],
+    standard_catalog: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    Idempotently merge standard MCP servers into existing mcp_config.json.
+    Preserves custom/local MCP servers.
+    Returns (merged_dict, list_of_newly_added_server_keys).
+    """
+    result = dict(existing_mcp)
+    if "mcpServers" not in result or not isinstance(result["mcpServers"], dict):
+        result["mcpServers"] = {}
+
+    current_servers = dict(result["mcpServers"])
+    standard_servers = standard_catalog.get("mcpServers", {})
+    added_servers: List[str] = []
+
+    for name, srv_def in standard_servers.items():
+        if name not in current_servers:
+            current_servers[name] = srv_def
+            added_servers.append(name)
+
+    result["mcpServers"] = current_servers
+    return result, added_servers
+
+
+def audit_mcp_requirements(
+    mcp_catalog: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Inspect the host environment against MCP requirements.
+    Checks required binaries (via shutil.which) and required environment variables (via os.environ).
+    Returns list of requirement status dicts.
+    """
+    diagnostics = []
+    requirements = mcp_catalog.get("_requirements", {})
+    standard_servers = mcp_catalog.get("mcpServers", {})
+
+    for server_name in standard_servers.keys():
+        req = requirements.get(server_name, {})
+        desc = req.get("description", "")
+        required_bins = req.get("required_bins", [])
+        required_env = req.get("required_env", [])
+        setup_hint = req.get("setup_hint", "")
+
+        missing_bins = [b for b in required_bins if shutil.which(b) is None]
+        missing_env = [v for v in required_env if not os.environ.get(v)]
+
+        diagnostics.append({
+            "server": server_name,
+            "description": desc,
+            "required_bins": required_bins,
+            "missing_bins": missing_bins,
+            "required_env": required_env,
+            "missing_env": missing_env,
+            "setup_hint": setup_hint,
+            "ready": len(missing_bins) == 0 and len(missing_env) == 0,
+        })
+    return diagnostics
+
+
 # ==============================================================================
 # Commands
 # ==============================================================================
@@ -255,6 +338,44 @@ def cmd_audit(args: argparse.Namespace) -> int:
     else:
         print_warning(f"Environment PATH missing {local_bin}")
 
+    # 8. MCP Server Standards & Environment Diagnostics
+    if not getattr(args, "no_mcp", False):
+        mcp_path = Path(getattr(args, "mcp_path", DEFAULT_MCP_CONFIG_PATH)).expanduser().resolve()
+        mcp_catalog = get_standard_mcp_catalog()
+        std_servers = mcp_catalog.get("mcpServers", {})
+
+        total_checks += 1
+        user_mcp, mcp_exists = load_user_mcp_config(mcp_path)
+        configured_servers = user_mcp.get("mcpServers", {})
+        missing_mcp = [s for s in std_servers.keys() if s not in configured_servers]
+
+        if not missing_mcp:
+            print_success(f"MCP Configuration: All {len(std_servers)} standard servers configured ({mcp_path})")
+            passed_checks += 1
+        else:
+            print_failure(f"MCP Configuration: {len(missing_mcp)} of {len(std_servers)} standard servers missing ({', '.join(missing_mcp)})")
+
+        # Environment & Binary Diagnostics
+        mcp_diagnostics = audit_mcp_requirements(mcp_catalog)
+        missing_env_advisories = []
+        for diag in mcp_diagnostics:
+            s_name = diag["server"]
+            if diag["ready"]:
+                if args.verbose:
+                    print_success(f"MCP '{s_name}': Dependencies and environment ready")
+            else:
+                if diag["missing_bins"]:
+                    print_warning(f"MCP '{s_name}': Missing required binary in PATH: {', '.join(diag['missing_bins'])}")
+                if diag["missing_env"]:
+                    print_warning(f"MCP '{s_name}': Missing environment variable: {', '.join(diag['missing_env'])}")
+                    if diag["setup_hint"]:
+                        missing_env_advisories.append((s_name, diag["setup_hint"]))
+
+        if missing_env_advisories and args.verbose:
+            print_step("MCP Environment Setup Advisories")
+            for s_name, hint in missing_env_advisories:
+                print(f"  {CYAN}ℹ{RESET} {BOLD}{s_name}{RESET}: {hint}")
+
     # Summary
     print("\n" + "─" * 60)
     score_pct = int((passed_checks / total_checks) * 100) if total_checks else 0
@@ -336,6 +457,46 @@ def cmd_apply(args: argparse.Namespace) -> int:
     else:
         print_warning(f"[DRY-RUN] Skipped symlinking {target_gemini_file} -> {template_gemini}")
 
+    # 4. MCP Servers Configuration
+    if not getattr(args, "no_mcp", False):
+        mcp_path = Path(getattr(args, "mcp_path", DEFAULT_MCP_CONFIG_PATH)).expanduser().resolve()
+        mcp_catalog = get_standard_mcp_catalog()
+        existing_mcp, mcp_exists = load_user_mcp_config(mcp_path)
+        merged_mcp, added_mcp = merge_mcp_servers(existing_mcp, mcp_catalog)
+
+        print_step(f"Configuring Standard MCP Servers: {mcp_path}")
+        if added_mcp:
+            print_info(f"Adding {len(added_mcp)} standard MCP servers:")
+            for s in added_mcp:
+                print(f"    {GREEN}+{RESET} {s}")
+        else:
+            print_success("All standard MCP servers are already configured.")
+
+        if not args.dry_run:
+            if mcp_exists and not args.no_backup:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                mcp_backup = mcp_path.with_name(f"{mcp_path.name}.bak.{timestamp}")
+                shutil.copy2(mcp_path, mcp_backup)
+                print_success(f"Created MCP backup: {mcp_backup}")
+
+            save_json(mcp_path, merged_mcp)
+            print_success(f"Updated {mcp_path}")
+        else:
+            print_warning("[DRY-RUN] Skipped writing mcp_config.json updates.")
+
+        # Print Environment Variable Advisories
+        mcp_diagnostics = audit_mcp_requirements(mcp_catalog)
+        missing_env_advisories = [
+            (d["server"], d["missing_env"], d["setup_hint"])
+            for d in mcp_diagnostics if d["missing_env"]
+        ]
+        if missing_env_advisories:
+            print_step("Required Environment Variables for Active MCPs")
+            for s_name, missing_vars, hint in missing_env_advisories:
+                print(f"  {YELLOW}⚠{RESET} {BOLD}{s_name}{RESET} needs: {', '.join(missing_vars)}")
+                if hint:
+                    print(f"    {CYAN}Advisory:{RESET} {hint}")
+
     print(f"\n{BOLD}{GREEN}[SUCCESS]{RESET} Antigravity standardization successfully applied!")
     return 0
 
@@ -372,11 +533,31 @@ def cmd_diff(args: argparse.Namespace) -> int:
         for p in extra_local:
             print(f"  {GREEN}+{RESET} {p}")
 
+    # MCP Server Diff
+    if not getattr(args, "no_mcp", False):
+        mcp_path = Path(getattr(args, "mcp_path", DEFAULT_MCP_CONFIG_PATH)).expanduser().resolve()
+        mcp_catalog = get_standard_mcp_catalog()
+        std_servers = set(mcp_catalog.get("mcpServers", {}).keys())
+        existing_mcp, _ = load_user_mcp_config(mcp_path)
+        local_servers = set(existing_mcp.get("mcpServers", {}).keys())
+
+        missing_std_mcp = sorted(list(std_servers - local_servers))
+        extra_local_mcp = sorted(list(local_servers - std_servers))
+
+        if missing_std_mcp:
+            print_step(f"Missing Standard MCP Servers ({len(missing_std_mcp)}):")
+            for s in missing_std_mcp:
+                print(f"  {RED}-{RESET} {s}")
+        if extra_local_mcp:
+            print_step(f"Custom / Machine-Specific MCP Servers ({len(extra_local_mcp)}):")
+            for s in extra_local_mcp:
+                print(f"  {GREEN}+{RESET} {s}")
+
     return 0
 
 
 def cmd_snapshot(args: argparse.Namespace) -> int:
-    """Export or display unmanaged local permissions for syncing back to git."""
+    """Export or display unmanaged local permissions and MCP servers for syncing back to git."""
     settings_path = Path(args.settings_path).expanduser().resolve()
     existing_settings, exists = load_user_settings(settings_path)
     if not exists:
@@ -387,24 +568,42 @@ def cmd_snapshot(args: argparse.Namespace) -> int:
     standard_permissions = set(get_flat_standard_permissions(catalog))
 
     user_allow = existing_settings.get("permissions", {}).get("allow", [])
-    unmanaged = [p for p in user_allow if p not in standard_permissions]
+    unmanaged_perms = [p for p in user_allow if p not in standard_permissions]
+
+    unmanaged_mcp = []
+    if not getattr(args, "no_mcp", False):
+        mcp_path = Path(getattr(args, "mcp_path", DEFAULT_MCP_CONFIG_PATH)).expanduser().resolve()
+        mcp_catalog = get_standard_mcp_catalog()
+        std_servers = set(mcp_catalog.get("mcpServers", {}).keys())
+        existing_mcp, _ = load_user_mcp_config(mcp_path)
+        local_servers = set(existing_mcp.get("mcpServers", {}).keys())
+        unmanaged_mcp = [s for s in local_servers if s not in std_servers]
 
     if args.json:
-        print(json.dumps({"unmanaged_permissions": unmanaged}, indent=2))
+        print(json.dumps({
+            "unmanaged_permissions": unmanaged_perms,
+            "unmanaged_mcp_servers": unmanaged_mcp,
+        }, indent=2))
         return 0
 
-    print(f"\n{BOLD}Snapshot: Unmanaged Local Permissions{RESET}")
-    print(f"Source: {CYAN}{settings_path}{RESET}")
+    print(f"\n{BOLD}Snapshot: Unmanaged Local Configurations{RESET}")
+    print(f"Settings: {CYAN}{settings_path}{RESET}")
 
-    if not unmanaged:
-        print_success("No unmanaged permissions found. Local workstation has no untracked rules.")
-        return 0
+    if not unmanaged_perms:
+        print_success("No unmanaged permissions found. Local workstation permissions match baseline.")
+    else:
+        print_info(f"Found {len(unmanaged_perms)} permissions allowed locally but not in repository:")
+        for p in unmanaged_perms:
+            print(f"  {CYAN}•{RESET} {p}")
 
-    print_info(f"Found {len(unmanaged)} permissions allowed locally but not in repository:")
-    for p in unmanaged:
-        print(f"  {CYAN}•{RESET} {p}")
+    if not getattr(args, "no_mcp", False):
+        if not unmanaged_mcp:
+            print_success("No unmanaged MCP servers found. Local workstation MCPs match baseline.")
+        else:
+            print_info(f"Found {len(unmanaged_mcp)} MCP servers configured locally but not in repository:")
+            for s in unmanaged_mcp:
+                print(f"  {CYAN}•{RESET} {s}")
 
-    print(f"\n{YELLOW}Tip:{RESET} To standardize any of these across all machines, add them to {BOLD}config/permissions.json{RESET} and commit.")
     return 0
 
 
@@ -497,12 +696,16 @@ def main() -> None:
     # audit
     p_audit = subparsers.add_parser("audit", help="Audit local Antigravity CLI configuration against standards")
     p_audit.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
-    p_audit.add_argument("-v", "--verbose", action="store_true", help="Show detailed breakdown of all permissions")
+    p_audit.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_audit.add_argument("--no-mcp", action="store_true", help="Skip MCP server checks")
+    p_audit.add_argument("-v", "--verbose", action="store_true", help="Show detailed breakdown of all checks")
     p_audit.set_defaults(func=cmd_audit)
 
     # apply / configure
     p_apply = subparsers.add_parser("apply", aliases=["configure"], help="Apply standards to local workstation")
     p_apply.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
+    p_apply.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_apply.add_argument("--no-mcp", action="store_true", help="Skip MCP server configuration")
     p_apply.add_argument("--dry-run", action="store_true", help="Simulate changes without writing to disk")
     p_apply.add_argument("--no-backup", action="store_true", help="Do not create backup before writing")
     p_apply.add_argument("--link-home", action="store_true", help="Also symlink GEMINI.md into $HOME")
@@ -511,11 +714,15 @@ def main() -> None:
     # diff
     p_diff = subparsers.add_parser("diff", help="Diff local settings against standard permissions baseline")
     p_diff.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
+    p_diff.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_diff.add_argument("--no-mcp", action="store_true", help="Skip MCP server diffing")
     p_diff.set_defaults(func=cmd_diff)
 
     # snapshot / export
     p_snap = subparsers.add_parser("snapshot", aliases=["export"], help="Inspect or export unmanaged local permissions")
     p_snap.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
+    p_snap.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_snap.add_argument("--no-mcp", action="store_true", help="Skip MCP server snapshot")
     p_snap.add_argument("--json", action="store_true", help="Output results in JSON format")
     p_snap.set_defaults(func=cmd_snapshot)
 

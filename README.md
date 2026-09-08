@@ -39,6 +39,9 @@ When using AI pair programmers across multiple machines (such as desktop worksta
   - Detects newly approved commands on the local machine (`snapshot`) so you can commit them back to version control.
 - **Universal Agent Directives**:
   - Deploys canonical developer rules (`templates/GEMINI.md` and `AGENTS.md`) emphasizing Conventional Commits, clean architecture, bash safety, and verification before completion.
+- **Declarative MCP Server Management**:
+  - Declarative catalog (`config/mcp.json`) for Model Context Protocol servers (e.g. GitHub, SQLite, Fetch) referencing decoupled environment variables (`${GITHUB_PERSONAL_ACCESS_TOKEN}`).
+  - Active diagnostics: `audit` and `apply` verify CLI dependencies (`npx`, `uvx`) and inspect `os.environ`, providing actionable setup advisories for missing variables.
 - **Project Scaffolding**:
   - Scaffolds modular project-level `GEMINI.md` files with custom test commands and architecture maps.
 
@@ -179,6 +182,7 @@ Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvoc
 │
 ├── config/
 │   ├── permissions.json          # Categorized catalog of pre-approved commands
+│   ├── mcp.json                  # Declarative catalog of standard MCP servers & requirements
 │   └── settings.default.json     # Standard baseline preferences
 │
 ├── templates/
@@ -193,6 +197,7 @@ Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvoc
 ├── docs/                         # Comprehensive documentation
 │   ├── permissions-matrix.md     # Permission classifications and safety tiers
 │   ├── gemini-md-guide.md        # Guide on Antigravity cascading rules
+│   ├── mcp-guide.md              # MCP standardization & decoupled secrets guide
 │   ├── plugins-and-hooks-guide.md# Guide on lifecycle hooks and plugin architectures
 │   ├── replication-guide.md      # Multi-machine setup checklist
 │   ├── settings-reference.md     # Settings schema and options reference
@@ -200,10 +205,11 @@ Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvoc
 │       ├── 0001-permission-merging-strategy.md
 │       ├── 0002-dual-naming-convention.md
 │       ├── 0003-global-vs-workspace-rules.md
-│       └── 0004-plugin-and-hook-templating.md
+│       ├── 0004-plugin-and-hook-templating.md
+│       └── 0005-declarative-mcp-management-and-env-advisories.md
 │
 └── tests/
-    └── test_cli.py               # 17 automated unit tests
+    └── test_cli.py               # 20 automated unit tests
 ```
 
 ---

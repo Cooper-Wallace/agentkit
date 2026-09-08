@@ -276,5 +276,49 @@ class TestConventionalCommits(unittest.TestCase):
                 self.assertIsNone(re.match(COMMIT_PATTERN, msg), f"Should not match: {msg}")
 
 
+class TestMCPManagement(unittest.TestCase):
+    def test_mcp_catalog_validity(self):
+        catalog = agy_std.get_standard_mcp_catalog()
+        self.assertIn("mcpServers", catalog)
+        self.assertIn("_requirements", catalog)
+        self.assertIn("github", catalog["mcpServers"])
+        self.assertIn("fetch", catalog["mcpServers"])
+
+    def test_mcp_merger_preserves_custom_servers(self):
+        existing = {
+            "mcpServers": {
+                "custom-service": {"command": "custom-cmd"}
+            }
+        }
+        catalog = {
+            "mcpServers": {
+                "github": {"command": "npx"}
+            }
+        }
+        merged, added = agy_std.merge_mcp_servers(existing, catalog)
+        self.assertEqual(added, ["github"])
+        self.assertIn("custom-service", merged["mcpServers"])
+        self.assertIn("github", merged["mcpServers"])
+
+    def test_mcp_diagnostics_detection(self):
+        catalog = {
+            "mcpServers": {
+                "test-server": {"command": "fake-bin-12345"}
+            },
+            "_requirements": {
+                "test-server": {
+                    "required_bins": ["nonexistent_binary_xyz_987"],
+                    "required_env": ["NONEXISTENT_ENV_VAR_XYZ_987"],
+                    "setup_hint": "Export var"
+                }
+            }
+        }
+        diagnostics = agy_std.audit_mcp_requirements(catalog)
+        self.assertEqual(len(diagnostics), 1)
+        self.assertIn("nonexistent_binary_xyz_987", diagnostics[0]["missing_bins"])
+        self.assertIn("NONEXISTENT_ENV_VAR_XYZ_987", diagnostics[0]["missing_env"])
+        self.assertFalse(diagnostics[0]["ready"])
+
+
 if __name__ == "__main__":
     unittest.main()

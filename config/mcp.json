@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "version": "1.0.0",
+  "description": "Declarative catalog of standard Antigravity MCP servers across workstations.",
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_PERSONAL_ACCESS_TOKEN}"
+      }
+    },
+    "fetch": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-fetch"]
+    },
+    "sqlite": {
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "${SQLITE_DEV_DB}"]
+    }
+  },
+  "_requirements": {
+    "github": {
+      "description": "GitHub integration for repository, PR, and issue management via MCP.",
+      "required_bins": ["npx", "node"],
+      "required_env": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+      "setup_hint": "Create a GitHub PAT with repo scope and add 'export GITHUB_PERSONAL_ACCESS_TOKEN=\"...\"' to ~/.bashrc"
+    },
+    "fetch": {
+      "description": "Web fetch and content conversion tool for retrieving web pages via MCP.",
+      "required_bins": ["npx", "node"],
+      "required_env": [],
+      "setup_hint": "Ensure Node.js and npm/npx are installed (e.g., via nvm or package manager)."
+    },
+    "sqlite": {
+      "description": "Local SQLite database querying and inspection via MCP.",
+      "required_bins": ["uvx"],
+      "required_env": ["SQLITE_DEV_DB"],
+      "setup_hint": "Install uv (pip install uv) and add 'export SQLITE_DEV_DB=\"$HOME/dev.db\"' to ~/.bashrc"
+    }
+  }
+}
