@@ -10,7 +10,8 @@ Welcome to the enterprise autonomous development environment. These directives g
   - The root session operates under Gemini 4 Argon. It is responsible for high-level requirement analysis, architectural contracts, task DAG generation, and adversarial reviews.
   - The root session MUST NEVER perform repetitive file edits, iterative syntax refactoring, or voluminous test runs directly.
 - **Worker Subagents (Gemini 3.8 Flash)**:
-  - Code implementation, localized refactoring, documentation syncing, and test runs MUST be delegated to subagents launched with `Model: "flash"` and `Workspace: "share"`.
+  - Code implementation, localized refactoring, documentation syncing, and test runs MUST be delegated to subagents launched with `Model: "flash"` and `Workspace: "share"` (or `Workspace: "inherit"` when the active workspace is `$HOME` rather than a VCS repository root).
+  - **Disjoint-File Parallel Worker Partitioning**: Multi-component tasks (e.g., backend logic, frontend UI, documentation, and unit tests) MUST be partitioned across concurrent Flash subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
 - **Adversarial Auditor (Gemini 4 Argon)**:
   - Before requesting task completion or submitting a Pull Request, an adversarial review must evaluate the `git diff` against the initial specification.
 
@@ -28,7 +29,22 @@ Welcome to the enterprise autonomous development environment. These directives g
 
 ---
 
-## 3. Git Source Control & Trunk Hygiene
+## 3. Subagent Autonomy & Zero-Prompt Command Discipline
+
+- **Pure-Edit Worker Isolation**:
+  - Subagents assigned exclusively to file edits (frontend UI, configuration, or documentation) MUST be instructed to use ONLY native `read_file` and `edit_file` tools (`NEVER call run_command`), guaranteeing zero terminal approval prompts.
+- **Prefix-Matchable Command Shapes**:
+  - Antigravity CLI generalizes `"always allow"` command permissions by prefix-matching the binary and subcommand. Shell chaining operators (`&&`, `;`, `||`, `|`), command substitutions (`$(...)`), and `cd <dir> && <cmd>` disable prefix matching and stall subagents waiting for manual human approval.
+  - Always invoke binaries directly with explicit path flags:
+    - Git: `git -C /path/to/repo <subcommand>`
+    - Pytest: `/path/to/repo/.venv/bin/pytest /path/to/repo/tests`
+    - Unittest: `python3 -m unittest discover -s /path/to/repo/tests -v`
+- **Subagent Lifecycle Cleanup**:
+  - Once Phase 3/4 verification completes, the Root Orchestrator MUST terminate idle subagents via `manage_subagents(Action="kill_all")`.
+
+---
+
+## 4. Git Source Control & Trunk Hygiene
 
 - **Strict Trunk Protection**:
   - Never run `git push origin main`, `git push origin master`, or force-pushes.

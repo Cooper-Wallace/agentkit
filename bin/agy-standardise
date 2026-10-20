@@ -46,6 +46,10 @@ MCP_CATALOG_FILE = CONFIG_DIR / "mcp.json"
 DEFAULT_MCP_CONFIG_PATH = Path.home() / ".gemini" / "config" / "mcp_config.json"
 PLUGINS_SRC_DIR = REPO_ROOT / "plugins"
 DEFAULT_GLOBAL_PLUGINS_DIR = Path.home() / ".gemini" / "config" / "plugins"
+DEFAULT_BASHRC_PATH = Path.home() / ".bashrc"
+
+BASHRC_ENV_BLOCK_START = "# >>> Antigravity Standards Environment >>>"
+BASHRC_ENV_BLOCK_END = "# <<< Antigravity Standards Environment <<<"
 
 # Conventional commit regex pattern (aligning with gh-standardise)
 COMMIT_PATTERN = (
@@ -244,6 +248,69 @@ def audit_mcp_requirements(
     return diagnostics
 
 
+def get_standard_bashrc_block() -> str:
+    """Return the managed environment block for ~/.bashrc."""
+    return f"""{BASHRC_ENV_BLOCK_START}
+# Dynamically resolve GitHub token from gh keyring if not already exported
+if command -v gh >/dev/null 2>&1; then
+    export GITHUB_PERSONAL_ACCESS_TOKEN="${{GITHUB_PERSONAL_ACCESS_TOKEN:-$(gh auth token 2>/dev/null)}}"
+fi
+
+# Default SQLite development database path for Antigravity SQLite MCP server
+export SQLITE_DEV_DB="${{SQLITE_DEV_DB:-$HOME/dev.db}}"
+{BASHRC_ENV_BLOCK_END}"""
+
+
+def configure_bashrc_environment(
+    bashrc_path: Path, dry_run: bool = False
+) -> Tuple[bool, str]:
+    """
+    Idempotently inject or update the managed Antigravity environment block in ~/.bashrc.
+    Ensures dev.db is initialized if missing.
+    Returns (changed, message).
+    """
+    block = get_standard_bashrc_block()
+    content = ""
+    if bashrc_path.exists():
+        content = bashrc_path.read_text(encoding="utf-8")
+
+    pattern = re.compile(
+        rf"{re.escape(BASHRC_ENV_BLOCK_START)}.*?{re.escape(BASHRC_ENV_BLOCK_END)}",
+        re.DOTALL,
+    )
+
+    if pattern.search(content):
+        current_block = pattern.search(content).group(0)
+        if current_block.strip() == block.strip():
+            return False, "Environment block is already up to date."
+        new_content = pattern.sub(block, content)
+    else:
+        new_content = content.rstrip() + "\n\n" + block + "\n"
+
+    dev_db = Path.home() / "dev.db"
+    if not dry_run:
+        bashrc_path.parent.mkdir(parents=True, exist_ok=True)
+        bashrc_path.write_text(new_content, encoding="utf-8")
+        if not dev_db.exists():
+            try:
+                dev_db.touch()
+            except Exception:
+                pass
+
+        # Also sync ~/.profile for login / non-interactive desktop sessions
+        if bashrc_path == DEFAULT_BASHRC_PATH:
+            profile_path = Path.home() / ".profile"
+            if profile_path.exists():
+                prof_content = profile_path.read_text(encoding="utf-8")
+                if pattern.search(prof_content):
+                    prof_content = pattern.sub(block, prof_content)
+                else:
+                    prof_content = prof_content.rstrip() + "\n\n" + block + "\n"
+                profile_path.write_text(prof_content, encoding="utf-8")
+
+    return True, "Configured Antigravity environment variables in shell configuration."
+
+
 # ==============================================================================
 # Commands
 # ==============================================================================
@@ -404,6 +471,21 @@ def cmd_audit(args: argparse.Namespace) -> int:
                     else:
                         print_failure(f"Plugin '{plugin_path.name}' missing ({target_plugin})")
 
+    # 10. Shell Environment Check (~/.bashrc)
+    if not getattr(args, "no_env", False):
+        total_checks += 1
+        bashrc_path = Path(getattr(args, "bashrc_path", DEFAULT_BASHRC_PATH)).expanduser().resolve()
+        has_block = False
+        if bashrc_path.exists():
+            has_block = BASHRC_ENV_BLOCK_START in bashrc_path.read_text(encoding="utf-8")
+        has_env = bool(os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN") and os.environ.get("SQLITE_DEV_DB"))
+
+        if has_block or has_env:
+            print_success(f"Shell Environment: Antigravity MCP variables configured ({bashrc_path})")
+            passed_checks += 1
+        else:
+            print_warning(f"Shell Environment: Antigravity MCP variables missing in {bashrc_path}")
+
     # Summary
     print("\n" + "─" * 60)
     score_pct = int((passed_checks / total_checks) * 100) if total_checks else 0
@@ -546,6 +628,22 @@ def cmd_apply(args: argparse.Namespace) -> int:
                     print_success(f"Deployed standard plugin: {plugin_path.name} -> {target_plugin}")
                 else:
                     print_warning(f"[DRY-RUN] Skipped deploying plugin {plugin_path.name} -> {target_plugin}")
+
+    # 6. Shell Environment Configuration (~/.bashrc)
+    if not getattr(args, "no_env", False):
+        bashrc_path = Path(getattr(args, "bashrc_path", DEFAULT_BASHRC_PATH)).expanduser().resolve()
+        print_step(f"Configuring Shell Environment: {bashrc_path}")
+        changed, msg = configure_bashrc_environment(bashrc_path, dry_run=args.dry_run)
+        if changed:
+            if not args.dry_run:
+                print_success(f"Configured Antigravity environment block in {bashrc_path}")
+                dev_db = Path.home() / "dev.db"
+                if dev_db.exists():
+                    print_success(f"Ensured SQLite dev database initialized at {dev_db}")
+            else:
+                print_warning(f"[DRY-RUN] Would configure Antigravity environment block in {bashrc_path}")
+        else:
+            print_success(f"Shell environment block already up to date in {bashrc_path}")
 
     print(f"\n{BOLD}{GREEN}[SUCCESS]{RESET} Antigravity standardization successfully applied!")
     return 0
@@ -749,8 +847,10 @@ def main() -> None:
     p_audit.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
     p_audit.add_argument("--plugins-dir", default=str(DEFAULT_GLOBAL_PLUGINS_DIR), help="Path to plugins directory")
     p_audit.add_argument("--gemini-dir", default=str(DEFAULT_GLOBAL_GEMINI_DIR), help="Path to .gemini directory")
+    p_audit.add_argument("--bashrc-path", default=str(DEFAULT_BASHRC_PATH), help="Path to .bashrc file")
     p_audit.add_argument("--no-mcp", action="store_true", help="Skip MCP server checks")
     p_audit.add_argument("--no-plugins", action="store_true", help="Skip plugin checks")
+    p_audit.add_argument("--no-env", action="store_true", help="Skip shell environment checks")
     p_audit.add_argument("-v", "--verbose", action="store_true", help="Show detailed breakdown of all checks")
     p_audit.set_defaults(func=cmd_audit)
 
@@ -760,8 +860,10 @@ def main() -> None:
     p_apply.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
     p_apply.add_argument("--plugins-dir", default=str(DEFAULT_GLOBAL_PLUGINS_DIR), help="Path to plugins directory")
     p_apply.add_argument("--gemini-dir", default=str(DEFAULT_GLOBAL_GEMINI_DIR), help="Path to .gemini directory")
+    p_apply.add_argument("--bashrc-path", default=str(DEFAULT_BASHRC_PATH), help="Path to .bashrc file")
     p_apply.add_argument("--no-mcp", action="store_true", help="Skip MCP server configuration")
     p_apply.add_argument("--no-plugins", action="store_true", help="Skip plugin deployment")
+    p_apply.add_argument("--no-env", action="store_true", help="Skip shell environment configuration")
     p_apply.add_argument("--dry-run", action="store_true", help="Simulate changes without writing to disk")
     p_apply.add_argument("--no-backup", action="store_true", help="Do not create backup before writing")
     p_apply.add_argument("--link-home", action="store_true", help="Also symlink GEMINI.md into $HOME")

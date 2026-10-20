@@ -42,6 +42,10 @@ When using AI pair programmers across multiple machines (such as desktop worksta
 - **Declarative MCP Server Management**:
   - Declarative catalog (`config/mcp.json`) for Model Context Protocol servers (e.g. GitHub, SQLite, Fetch) referencing decoupled environment variables (`${GITHUB_PERSONAL_ACCESS_TOKEN}`).
   - Active diagnostics: `audit` and `apply` verify CLI dependencies (`npx`, `uvx`) and inspect `os.environ`, providing actionable setup advisories for missing variables.
+- **Automated Shell Environment Management**:
+  - `apply` idempotently injects and maintains the Antigravity MCP environment block in `~/.bashrc` (supporting custom paths with `--bashrc-path`).
+  - Dynamically resolves `GITHUB_PERSONAL_ACCESS_TOKEN` from the active GitHub keyring (`gh auth token`) without hardcoding plain-text secrets.
+  - Automatically sets `SQLITE_DEV_DB` (`$HOME/dev.db`) and initializes the database file for the SQLite MCP server.
 - **Project Scaffolding**:
   - Scaffolds modular project-level `GEMINI.md` files with custom test commands and architecture maps.
 - **Autonomous Orchestrator & Plugin Governance**:

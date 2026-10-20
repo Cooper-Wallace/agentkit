@@ -421,5 +421,43 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         self.assertEqual(res_dry.returncode, 0)
 
 
+class TestShellEnvironmentManagement(unittest.TestCase):
+    def setUp(self):
+        self.test_dir = tempfile.mkdtemp(prefix="agy_env_test_")
+        self.bashrc_path = Path(self.test_dir) / ".bashrc"
+
+    def tearDown(self):
+        shutil.rmtree(self.test_dir, ignore_errors=True)
+
+    def test_configure_bashrc_injection(self):
+        self.bashrc_path.write_text("# Existing user bashrc\nalias ll='ls -la'\n", encoding="utf-8")
+        changed, msg = agy_std.configure_bashrc_environment(self.bashrc_path, dry_run=False)
+        self.assertTrue(changed)
+
+        content = self.bashrc_path.read_text(encoding="utf-8")
+        self.assertIn(agy_std.BASHRC_ENV_BLOCK_START, content)
+        self.assertIn("GITHUB_PERSONAL_ACCESS_TOKEN", content)
+        self.assertIn("SQLITE_DEV_DB", content)
+        self.assertIn("alias ll='ls -la'", content)
+
+    def test_configure_bashrc_idempotence(self):
+        self.bashrc_path.write_text("# Existing user bashrc\n", encoding="utf-8")
+        agy_std.configure_bashrc_environment(self.bashrc_path, dry_run=False)
+        first_content = self.bashrc_path.read_text(encoding="utf-8")
+
+        # Second call
+        changed, msg = agy_std.configure_bashrc_environment(self.bashrc_path, dry_run=False)
+        self.assertFalse(changed)
+        second_content = self.bashrc_path.read_text(encoding="utf-8")
+        self.assertEqual(first_content, second_content)
+
+    def test_configure_bashrc_dry_run(self):
+        initial_content = "# Existing bashrc\n"
+        self.bashrc_path.write_text(initial_content, encoding="utf-8")
+        changed, msg = agy_std.configure_bashrc_environment(self.bashrc_path, dry_run=True)
+        self.assertTrue(changed)
+        self.assertEqual(self.bashrc_path.read_text(encoding="utf-8"), initial_content)
+
+
 if __name__ == "__main__":
     unittest.main()

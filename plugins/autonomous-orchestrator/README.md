@@ -8,6 +8,8 @@ An opinionated Antigravity plugin enabling state-of-the-art autonomous agent wor
 
 - **Cognitive Tiering**: Routes high-level architecture and adversarial reviews to **Gemini 4 Argon**, and rapid implementation/testing to **Gemini 3.8 Flash**.
 - **Context Preservation**: Subagents execute in isolated scopes, preventing test log bloat from degrading the orchestrator context window.
+- **Disjoint-File Parallel Worker Partitioning**: Partitions multi-component features across concurrent Flash subagents operating on strictly disjoint file sets for race-free parallel execution.
+- **Zero-Prompt Command Shape Discipline**: Pure-edit workers use native file editing tools without terminal calls; test/build workers invoke binaries directly using absolute paths and explicit flags, avoiding shell chaining or directory changes that trigger manual approval prompts.
 - **Git Worktree Isolation**: Supports concurrent workers in independent git worktrees via `Workspace: "share"`.
 - **Deterministic Hook Guards**:
   - `PreToolUse` (`scripts/guard-git-operations.sh`): Hard blocks direct pushes, force-pushes, or merges to `main`/`master`, and gates destructive deletions.
