@@ -135,6 +135,9 @@ class TestCLIOperations(unittest.TestCase):
     def setUp(self):
         self.test_dir = tempfile.mkdtemp(prefix="agy_test_")
         self.settings_file = Path(self.test_dir) / "settings.json"
+        self.gemini_dir = Path(self.test_dir) / ".gemini"
+        self.plugins_dir = self.gemini_dir / "config" / "plugins"
+        self.mcp_file = self.gemini_dir / "config" / "mcp_config.json"
 
     def tearDown(self):
         shutil.rmtree(self.test_dir, ignore_errors=True)
@@ -145,7 +148,13 @@ class TestCLIOperations(unittest.TestCase):
             json.dump({"permissions": {"allow": ["command(ls)"]}}, f)
 
         res = subprocess.run(
-            BIN_CMD + ["audit", "--settings-path", str(self.settings_file)],
+            BIN_CMD + [
+                "audit",
+                "--settings-path", str(self.settings_file),
+                "--gemini-dir", str(self.gemini_dir),
+                "--plugins-dir", str(self.plugins_dir),
+                "--mcp-path", str(self.mcp_file),
+            ],
             capture_output=True,
             text=True,
         )
@@ -159,7 +168,14 @@ class TestCLIOperations(unittest.TestCase):
 
         # Apply standards
         res_apply = subprocess.run(
-            BIN_CMD + ["apply", "--settings-path", str(self.settings_file), "--no-backup"],
+            BIN_CMD + [
+                "apply",
+                "--settings-path", str(self.settings_file),
+                "--gemini-dir", str(self.gemini_dir),
+                "--plugins-dir", str(self.plugins_dir),
+                "--mcp-path", str(self.mcp_file),
+                "--no-backup",
+            ],
             capture_output=True,
             text=True,
         )
@@ -172,6 +188,15 @@ class TestCLIOperations(unittest.TestCase):
         self.assertIn("command(git status)", saved["permissions"]["allow"])
         self.assertIn("command(pytest)", saved["permissions"]["allow"])
         self.assertTrue(saved.get("allowNonWorkspaceAccess"))
+
+        # Verify plugin deployment
+        deployed_plugin = self.plugins_dir / "autonomous-orchestrator"
+        self.assertTrue(deployed_plugin.exists())
+        self.assertTrue((deployed_plugin / "plugin.json").exists())
+        self.assertTrue((deployed_plugin / "hooks.json").exists())
+        guard_script = deployed_plugin / "scripts" / "guard-git-operations.sh"
+        self.assertTrue(guard_script.exists())
+        self.assertTrue(os.access(guard_script, os.X_OK))
 
     def test_apply_dry_run_does_not_modify_file(self):
         initial_data = {"permissions": {"allow": ["command(ls)"]}}
@@ -318,6 +343,82 @@ class TestMCPManagement(unittest.TestCase):
         self.assertIn("nonexistent_binary_xyz_987", diagnostics[0]["missing_bins"])
         self.assertIn("NONEXISTENT_ENV_VAR_XYZ_987", diagnostics[0]["missing_env"])
         self.assertFalse(diagnostics[0]["ready"])
+
+
+class TestAutonomousOrchestratorPlugin(unittest.TestCase):
+    def setUp(self):
+        self.plugin_dir = REPO_ROOT / "plugins" / "autonomous-orchestrator"
+        self.guard_script = self.plugin_dir / "scripts" / "guard-git-operations.sh"
+        self.verify_script = self.plugin_dir / "scripts" / "verify-clean-completion.sh"
+
+    def test_plugin_structure(self):
+        self.assertTrue(self.plugin_dir.exists())
+        self.assertTrue((self.plugin_dir / "plugin.json").exists())
+        self.assertTrue((self.plugin_dir / "hooks.json").exists())
+        self.assertTrue((self.plugin_dir / "rules" / "AGENTS.md").exists())
+        self.assertTrue((self.plugin_dir / "skills" / "auto-lifecycle" / "SKILL.md").exists())
+        self.assertTrue(self.guard_script.exists())
+        self.assertTrue(self.verify_script.exists())
+        self.assertTrue(os.access(self.guard_script, os.X_OK))
+        self.assertTrue(os.access(self.verify_script, os.X_OK))
+
+    def test_guard_git_operations_hook(self):
+        # 1. Direct push to main is blocked
+        res_push_main = subprocess.run(
+            [str(self.guard_script), "--test", "git push origin main"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_push_main.returncode, 0)
+        data = json.loads(res_push_main.stdout)
+        self.assertEqual(data["decision"], "deny")
+        self.assertIn("SECURITY VIOLATION", data["reason"])
+
+        # 2. Force push is blocked
+        res_force_push = subprocess.run(
+            [str(self.guard_script), "--test", "git push origin --force feat/branch"],
+            capture_output=True,
+            text=True,
+        )
+        data = json.loads(res_force_push.stdout)
+        self.assertEqual(data["decision"], "deny")
+
+        # 3. Destructive deletion prompts user (decision: ask)
+        res_rm = subprocess.run(
+            [str(self.guard_script), "--test", "rm -rf /tmp/test-dir"],
+            capture_output=True,
+            text=True,
+        )
+        data = json.loads(res_rm.stdout)
+        self.assertEqual(data["decision"], "ask")
+
+        # 4. Safe git command allowed
+        res_safe = subprocess.run(
+            [str(self.guard_script), "--test", "git checkout -b feat/new-feature"],
+            capture_output=True,
+            text=True,
+        )
+        data = json.loads(res_safe.stdout)
+        self.assertEqual(data["decision"], "allow")
+
+    def test_verify_clean_completion_hook(self):
+        # 1. Non-NO_TOOL_CALL exits cleanly
+        res_cancel = subprocess.run(
+            [str(self.verify_script)],
+            input=json.dumps({"terminationReason": "USER_CANCELED"}),
+            capture_output=True,
+            text=True,
+        )
+        data = json.loads(res_cancel.stdout)
+        self.assertEqual(data["decision"], "stop")
+
+        # 2. Dry run check
+        res_dry = subprocess.run(
+            [str(self.verify_script), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_dry.returncode, 0)
 
 
 if __name__ == "__main__":

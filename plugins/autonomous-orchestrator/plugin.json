@@ -1,0 +1,5 @@
+{
+  "name": "autonomous-orchestrator",
+  "version": "1.0.0",
+  "description": "Enterprise multi-model orchestrator enforcing Argon planning, Flash execution, worktree isolation, and deterministic git gates."
+}

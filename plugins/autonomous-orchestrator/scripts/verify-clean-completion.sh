@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# verify-clean-completion.sh: Stop hook to prevent autonomous agent termination on dirty git status or failing tests.
+set -euo pipefail
+
+# Support CLI test / dry-run mode
+if [[ "${1:-}" == "--dry-run" ]]; then
+  echo "Running verify-clean-completion.sh in dry-run mode..."
+  INPUT_JSON='{"terminationReason": "NO_TOOL_CALL"}'
+else
+  INPUT_JSON="$(cat)"
+fi
+
+# Extract terminationReason
+if command -v jq >/dev/null 2>&1; then
+  TERM_REASON="$(echo "$INPUT_JSON" | jq -r '.terminationReason // ""')"
+else
+  TERM_REASON="$(python3 -c 'import sys, json; data=json.load(sys.stdin); print(data.get("terminationReason", ""))' <<< "$INPUT_JSON")"
+fi
+
+# Allow non-standard terminations (e.g. user cancellations, errors, max invocations) to exit cleanly
+if [[ "$TERM_REASON" != "NO_TOOL_CALL" && -n "$TERM_REASON" ]]; then
+  echo '{"decision": "stop"}'
+  exit 0
+fi
+
+# Check for developer bypass override
+if [[ "${AGY_ALLOW_DIRTY_STOP:-0}" == "1" ]]; then
+  echo '{"decision": "stop", "reason": "Bypassed via AGY_ALLOW_DIRTY_STOP=1"}'
+  exit 0
+fi
+
+# 1. Inspect Git Working Tree for uncommitted / unstaged changes
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  DIRTY_FILES="$(git status --porcelain 2>/dev/null || true)"
+  if [[ -n "$DIRTY_FILES" ]]; then
+    # Format top 5 dirty files for agent feedback
+    DIRTY_SAMPLE="$(echo "$DIRTY_FILES" | head -n 5 | sed 's/^/  • /')"
+    echo "{\"decision\": \"continue\", \"reason\": \"QUALITY GATE BLOCKED: Uncommitted changes or unstaged files detected in repository:\n${DIRTY_SAMPLE}\nEnsure all modifications are cleanly committed to your feature branch with Conventional Commits before concluding.\"}"
+    exit 0
+  fi
+fi
+
+# 2. Automated Test Verification
+TEST_FAILURES=0
+FAILED_SUITE=""
+
+# Python verification
+if [[ -f "pytest.ini" || -f "pyproject.toml" || -d "tests" ]]; then
+  if command -v pytest >/dev/null 2>&1; then
+    pytest -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="pytest"; }
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -m unittest discover tests -v >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="python unittest"; }
+  fi
+fi
+
+# Node.js verification
+if [[ -f "package.json" ]] && grep -q '"test"' package.json; then
+  if command -v npm >/dev/null 2>&1; then
+    npm test >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="npm test"; }
+  fi
+fi
+
+# Cargo / Rust verification
+if [[ -f "Cargo.toml" ]]; then
+  if command -v cargo >/dev/null 2>&1; then
+    cargo test -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="cargo test"; }
+  fi
+fi
+
+# Go verification
+if [[ -f "go.mod" ]]; then
+  if command -v go >/dev/null 2>&1; then
+    go test ./... >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="go test"; }
+  fi
+fi
+
+if [[ "$TEST_FAILURES" -ne 0 ]]; then
+  echo "{\"decision\": \"continue\", \"reason\": \"QUALITY GATE BLOCKED: Test suite (${FAILED_SUITE}) failed. All automated unit and integration tests must pass deterministically before completing this task.\"}"
+  exit 0
+fi
+
+# All gates passed: allow agent execution loop to stop cleanly
+echo '{"decision": "stop"}'
+exit 0

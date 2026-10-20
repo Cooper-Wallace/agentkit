@@ -44,6 +44,8 @@ DEFAULT_SETTINGS_PATH = Path.home() / ".gemini" / "antigravity-cli" / "settings.
 DEFAULT_GLOBAL_GEMINI_DIR = Path.home() / ".gemini"
 MCP_CATALOG_FILE = CONFIG_DIR / "mcp.json"
 DEFAULT_MCP_CONFIG_PATH = Path.home() / ".gemini" / "config" / "mcp_config.json"
+PLUGINS_SRC_DIR = REPO_ROOT / "plugins"
+DEFAULT_GLOBAL_PLUGINS_DIR = Path.home() / ".gemini" / "config" / "plugins"
 
 # Conventional commit regex pattern (aligning with gh-standardise)
 COMMIT_PATTERN = (
@@ -302,8 +304,9 @@ def cmd_audit(args: argparse.Namespace) -> int:
 
     # 4. Global GEMINI.md / AGENTS.md Directives
     total_checks += 1
-    global_gemini = DEFAULT_GLOBAL_GEMINI_DIR / "GEMINI.md"
-    global_agents = DEFAULT_GLOBAL_GEMINI_DIR / "AGENTS.md"
+    target_gemini_dir = Path(getattr(args, "gemini_dir", DEFAULT_GLOBAL_GEMINI_DIR)).expanduser().resolve()
+    global_gemini = target_gemini_dir / "GEMINI.md"
+    global_agents = target_gemini_dir / "AGENTS.md"
     if global_gemini.exists() or global_agents.exists():
         target_found = global_gemini if global_gemini.exists() else global_agents
         print_success(f"Global Agent Directives installed ({target_found})")
@@ -376,6 +379,31 @@ def cmd_audit(args: argparse.Namespace) -> int:
             for s_name, hint in missing_env_advisories:
                 print(f"  {CYAN}ℹ{RESET} {BOLD}{s_name}{RESET}: {hint}")
 
+    # 9. Standard Plugins Audit
+    if not getattr(args, "no_plugins", False):
+        plugins_dir = Path(getattr(args, "plugins_dir", DEFAULT_GLOBAL_PLUGINS_DIR)).expanduser().resolve()
+        if PLUGINS_SRC_DIR.exists():
+            for plugin_path in sorted(PLUGINS_SRC_DIR.iterdir()):
+                if plugin_path.is_dir() and (plugin_path / "plugin.json").exists():
+                    total_checks += 1
+                    target_plugin = plugins_dir / plugin_path.name
+                    target_manifest = target_plugin / "plugin.json"
+                    if target_manifest.exists():
+                        scripts_dir = target_plugin / "scripts"
+                        all_executable = True
+                        if scripts_dir.exists():
+                            for script in scripts_dir.iterdir():
+                                if script.is_file() and not os.access(script, os.X_OK):
+                                    all_executable = False
+                        if all_executable:
+                            print_success(f"Plugin '{plugin_path.name}' installed and operational ({target_plugin})")
+                            passed_checks += 1
+                        else:
+                            print_warning(f"Plugin '{plugin_path.name}' scripts missing executable permission (+x)")
+                            passed_checks += 1
+                    else:
+                        print_failure(f"Plugin '{plugin_path.name}' missing ({target_plugin})")
+
     # Summary
     print("\n" + "─" * 60)
     score_pct = int((passed_checks / total_checks) * 100) if total_checks else 0
@@ -430,7 +458,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         print_failure(f"Template GEMINI.md not found at: {template_gemini}")
         return 1
 
-    target_gemini_dir = DEFAULT_GLOBAL_GEMINI_DIR
+    target_gemini_dir = Path(getattr(args, "gemini_dir", DEFAULT_GLOBAL_GEMINI_DIR)).expanduser().resolve()
     target_gemini_file = target_gemini_dir / "GEMINI.md"
     target_agents_file = target_gemini_dir / "AGENTS.md"
 
@@ -496,6 +524,28 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 print(f"  {YELLOW}⚠{RESET} {BOLD}{s_name}{RESET} needs: {', '.join(missing_vars)}")
                 if hint:
                     print(f"    {CYAN}Advisory:{RESET} {hint}")
+
+    # 5. Standard Plugins Deployment
+    if not getattr(args, "no_plugins", False) and PLUGINS_SRC_DIR.exists():
+        plugins_dir = Path(getattr(args, "plugins_dir", DEFAULT_GLOBAL_PLUGINS_DIR)).expanduser().resolve()
+        print_step(f"Deploying Standard Plugins: {plugins_dir}")
+        for plugin_path in sorted(PLUGINS_SRC_DIR.iterdir()):
+            if plugin_path.is_dir() and (plugin_path / "plugin.json").exists():
+                target_plugin = plugins_dir / plugin_path.name
+                if not args.dry_run:
+                    target_plugin.mkdir(parents=True, exist_ok=True)
+                    for item in plugin_path.rglob("*"):
+                        rel_path = item.relative_to(plugin_path)
+                        dest = target_plugin / rel_path
+                        if item.is_dir():
+                            dest.mkdir(parents=True, exist_ok=True)
+                        else:
+                            shutil.copy2(item, dest)
+                            if rel_path.parts and rel_path.parts[0] == "scripts":
+                                dest.chmod(dest.stat().st_mode | 0o755)
+                    print_success(f"Deployed standard plugin: {plugin_path.name} -> {target_plugin}")
+                else:
+                    print_warning(f"[DRY-RUN] Skipped deploying plugin {plugin_path.name} -> {target_plugin}")
 
     print(f"\n{BOLD}{GREEN}[SUCCESS]{RESET} Antigravity standardization successfully applied!")
     return 0
@@ -697,7 +747,10 @@ def main() -> None:
     p_audit = subparsers.add_parser("audit", help="Audit local Antigravity CLI configuration against standards")
     p_audit.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
     p_audit.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_audit.add_argument("--plugins-dir", default=str(DEFAULT_GLOBAL_PLUGINS_DIR), help="Path to plugins directory")
+    p_audit.add_argument("--gemini-dir", default=str(DEFAULT_GLOBAL_GEMINI_DIR), help="Path to .gemini directory")
     p_audit.add_argument("--no-mcp", action="store_true", help="Skip MCP server checks")
+    p_audit.add_argument("--no-plugins", action="store_true", help="Skip plugin checks")
     p_audit.add_argument("-v", "--verbose", action="store_true", help="Show detailed breakdown of all checks")
     p_audit.set_defaults(func=cmd_audit)
 
@@ -705,7 +758,10 @@ def main() -> None:
     p_apply = subparsers.add_parser("apply", aliases=["configure"], help="Apply standards to local workstation")
     p_apply.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
     p_apply.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_apply.add_argument("--plugins-dir", default=str(DEFAULT_GLOBAL_PLUGINS_DIR), help="Path to plugins directory")
+    p_apply.add_argument("--gemini-dir", default=str(DEFAULT_GLOBAL_GEMINI_DIR), help="Path to .gemini directory")
     p_apply.add_argument("--no-mcp", action="store_true", help="Skip MCP server configuration")
+    p_apply.add_argument("--no-plugins", action="store_true", help="Skip plugin deployment")
     p_apply.add_argument("--dry-run", action="store_true", help="Simulate changes without writing to disk")
     p_apply.add_argument("--no-backup", action="store_true", help="Do not create backup before writing")
     p_apply.add_argument("--link-home", action="store_true", help="Also symlink GEMINI.md into $HOME")

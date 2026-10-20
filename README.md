@@ -44,6 +44,11 @@ When using AI pair programmers across multiple machines (such as desktop worksta
   - Active diagnostics: `audit` and `apply` verify CLI dependencies (`npx`, `uvx`) and inspect `os.environ`, providing actionable setup advisories for missing variables.
 - **Project Scaffolding**:
   - Scaffolds modular project-level `GEMINI.md` files with custom test commands and architecture maps.
+- **Autonomous Orchestrator & Plugin Governance**:
+  - Bundles the standard `autonomous-orchestrator` plugin for state-of-the-art multi-model workflows with Gemini 4 Argon and Gemini 3.8 Flash.
+  - Automatically deploys and audits standard plugins in `~/.gemini/config/plugins/` with executable lifecycle hook scripts.
+  - Hardens version control workflows with deterministic hook gates (`PreToolUse` blocking direct pushes and merges to `main`, and `Stop` verifying clean worktrees and green test suites).
+  - Pre-approves Git worktree operations (`git worktree`, `git rev-parse`, `git ls-files`) for concurrent subagent isolation.
 
 ---
 

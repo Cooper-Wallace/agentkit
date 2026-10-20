@@ -51,7 +51,10 @@
         "git config",
         "git init",
         "git stash",
-        "git rebase"
+        "git rebase",
+        "git worktree",
+        "git rev-parse",
+        "git ls-files"
       ]
     },
     "github_governance": {
