@@ -17,6 +17,14 @@
     "sqlite": {
       "command": "uvx",
       "args": ["mcp-server-sqlite", "--db-path", "${SQLITE_DEV_DB}"]
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    "repomix": {
+      "command": "npx",
+      "args": ["-y", "repomix", "--mcp"]
     }
   },
   "_requirements": {
@@ -37,6 +45,18 @@
       "required_bins": ["uvx"],
       "required_env": ["SQLITE_DEV_DB"],
       "setup_hint": "Run 'workstation-setup apply' to install uv/uvx and configure SQLITE_DEV_DB in your shell profile."
+    },
+    "memory": {
+      "description": "Persistent cross-repository knowledge graph for architectural contracts, entity relationships, and multi-session decisions.",
+      "required_bins": ["npx", "node"],
+      "required_env": [],
+      "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."
+    },
+    "repomix": {
+      "description": "AST-compressed repository packing for low-token modular cross-repository code inspection.",
+      "required_bins": ["npx", "node"],
+      "required_env": [],
+      "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."
     }
   }
 }

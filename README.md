@@ -55,7 +55,8 @@ By separating Layer 2 from Layer 1, `agy-standardise` maintains strict focus on 
 - **Universal Agent Directives**:
   - Deploys canonical developer rules (`templates/GEMINI.md` and `AGENTS.md`) emphasizing Conventional Commits, clean architecture, bash safety, and verification before completion.
 - **Declarative MCP Server Management**:
-  - Declarative catalog (`config/mcp.json`) for Model Context Protocol servers (e.g. GitHub, SQLite, Fetch) referencing decoupled environment variables (`${GITHUB_PERSONAL_ACCESS_TOKEN}`).
+  - Declarative catalog (`config/mcp.json`) for 5 standard Model Context Protocol servers: `github`, `fetch`, `sqlite`, `memory` (cross-repository knowledge graph), and `repomix` (AST-compressed repository code maps).
+  - All sensitive credentials decoupled via environment variable interpolations (`${GITHUB_PERSONAL_ACCESS_TOKEN}`, `${SQLITE_DEV_DB}`).
   - Active diagnostics: `audit` and `apply` verify CLI dependencies (`npx`, `uvx`) and inspect `os.environ` and shell profiles (`~/.profile`, `~/.bashrc`), providing actionable setup advisories for missing variables.
   - Clear architectural boundary: `agy-standardise` audits runtime and environment readiness while delegating OS/toolchain provisioning and shell environment injection to `workstation-setup`.
 - **Project Scaffolding**:
@@ -63,7 +64,9 @@ By separating Layer 2 from Layer 1, `agy-standardise` maintains strict focus on 
 - **Autonomous Orchestrator & Plugin Governance**:
   - Bundles the standard `autonomous-orchestrator` plugin for state-of-the-art multi-model workflows with Gemini 4 Argon and Gemini 3.8 Flash.
   - Automatically deploys and audits standard plugins in `~/.gemini/config/plugins/` with executable lifecycle hook scripts.
-  - Hardens version control workflows with deterministic hook gates (`PreToolUse` blocking direct pushes and merges to `main`, and `Stop` verifying clean worktrees and green test suites).
+  - **Cognitive Tiering & Subagent Guard**: Enforces root planning via Gemini 4 Argon and code execution via Gemini 3.8 Flash with `PreToolUse` delegation enforcement (`scripts/guard-subagent-delegation.sh`).
+  - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`filter-and-wrap.py` -> `headroom-wrap.py`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
+  - **Deterministic Hook Gates**: Hard blocks direct pushes and trunk merges to `main` (`guard-git-operations.sh`), gates destructive deletions, and prevents task termination on test failures or dirty trees (`verify-clean-completion.sh`).
   - Pre-approves Git worktree operations (`git worktree`, `git rev-parse`, `git ls-files`) for concurrent subagent isolation.
 
 ---
@@ -206,6 +209,13 @@ Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvoc
 │   ├── mcp.json                  # Declarative catalog of standard MCP servers & requirements
 │   └── settings.default.json     # Standard baseline preferences
 │
+├── plugins/
+│   └── autonomous-orchestrator/  # Multi-model orchestration plugin (Argon + Flash)
+│       ├── hooks.json            # Subagent delegation, Headroom CCR, git safety gates
+│       ├── rules/AGENTS.md       # Cognitive tiering & zero-prompt discipline rules
+│       ├── skills/auto-lifecycle # 4-phase autonomous feature lifecycle runbook
+│       └── scripts/              # Lifecycle hook scripts (headroom-wrap, guard-*)
+│
 ├── templates/
 │   ├── GEMINI.md                 # Universal developer agent directives
 │   ├── AGENTS.md                 # Symlink to GEMINI.md
@@ -227,10 +237,11 @@ Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvoc
 │       ├── 0002-dual-naming-convention.md
 │       ├── 0003-global-vs-workspace-rules.md
 │       ├── 0004-plugin-and-hook-templating.md
-│       └── 0005-declarative-mcp-management-and-env-advisories.md
+│       ├── 0005-declarative-mcp-management-and-env-advisories.md
+│       └── 0006-token-compression-and-cross-repo-memory.md
 │
 └── tests/
-    └── test_cli.py               # 24 automated unit tests
+    └── test_cli.py               # 27 automated unit tests
 ```
 
 ---

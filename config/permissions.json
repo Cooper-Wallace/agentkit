@@ -121,6 +121,13 @@
         "workstation-setup",
         "ws-setup"
       ]
+    },
+    "context_and_memory_optimization": {
+      "description": "Context compression, reversible retrieval, and AST-based repository packing tools.",
+      "commands": [
+        "headroom",
+        "repomix"
+      ]
     }
   }
 }

@@ -309,6 +309,8 @@ class TestMCPManagement(unittest.TestCase):
         self.assertIn("_requirements", catalog)
         self.assertIn("github", catalog["mcpServers"])
         self.assertIn("fetch", catalog["mcpServers"])
+        self.assertIn("memory", catalog["mcpServers"])
+        self.assertIn("repomix", catalog["mcpServers"])
 
     def test_mcp_merger_preserves_custom_servers(self):
         existing = {
@@ -373,6 +375,9 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         self.plugin_dir = REPO_ROOT / "plugins" / "autonomous-orchestrator"
         self.guard_script = self.plugin_dir / "scripts" / "guard-git-operations.sh"
         self.verify_script = self.plugin_dir / "scripts" / "verify-clean-completion.sh"
+        self.headroom_script = self.plugin_dir / "scripts" / "headroom-wrap.py"
+        self.filter_wrap_script = self.plugin_dir / "scripts" / "filter-and-wrap.py"
+        self.guard_delegation_script = self.plugin_dir / "scripts" / "guard-subagent-delegation.sh"
 
     def test_plugin_structure(self):
         self.assertTrue(self.plugin_dir.exists())
@@ -382,8 +387,14 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         self.assertTrue((self.plugin_dir / "skills" / "auto-lifecycle" / "SKILL.md").exists())
         self.assertTrue(self.guard_script.exists())
         self.assertTrue(self.verify_script.exists())
+        self.assertTrue(self.headroom_script.exists())
+        self.assertTrue(self.filter_wrap_script.exists())
+        self.assertTrue(self.guard_delegation_script.exists())
         self.assertTrue(os.access(self.guard_script, os.X_OK))
         self.assertTrue(os.access(self.verify_script, os.X_OK))
+        self.assertTrue(os.access(self.headroom_script, os.X_OK))
+        self.assertTrue(os.access(self.filter_wrap_script, os.X_OK))
+        self.assertTrue(os.access(self.guard_delegation_script, os.X_OK))
 
     def test_guard_git_operations_hook(self):
         # 1. Direct push to main is blocked
@@ -442,6 +453,265 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
             text=True,
         )
         self.assertEqual(res_dry.returncode, 0)
+
+    def test_filter_and_wrap_hook(self):
+        # 1. Verify --dry-run exits 0
+        res_dry = subprocess.run(
+            [str(self.filter_wrap_script), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_dry.returncode, 0)
+
+        # 2. Verify verbose commands return decision == "allow" and overwrite.CommandLine containing headroom-wrap.py --
+        verbose_cmds = [
+            "pytest tests -v",
+            "git diff",
+            "python3 -m unittest discover -s tests -v",
+        ]
+        for cmd in verbose_cmds:
+            with self.subTest(cmd=cmd):
+                res = subprocess.run(
+                    [str(self.filter_wrap_script), "--test", cmd],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(res.returncode, 0)
+                data = json.loads(res.stdout)
+                self.assertEqual(data.get("decision"), "allow")
+                self.assertIn("overwrite", data)
+                self.assertIn("headroom-wrap.py --", data["overwrite"].get("CommandLine", ""))
+
+        # 3. Verify non-verbose or mutation commands return decision == "allow" with NO overwrite
+        non_verbose_cmds = [
+            "git status",
+            "git checkout -b feat/x",
+            'git commit -m "feat: x"',
+            "ls -la",
+        ]
+        for cmd in non_verbose_cmds:
+            with self.subTest(cmd=cmd):
+                res = subprocess.run(
+                    [str(self.filter_wrap_script), "--test", cmd],
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(res.returncode, 0)
+                data = json.loads(res.stdout)
+                self.assertEqual(data.get("decision"), "allow")
+                self.assertNotIn("overwrite", data)
+
+        # 4. Verify idempotence: command already containing headroom-wrap.py is not wrapped again
+        already_wrapped = f"python3 {self.headroom_script} -- pytest tests -v"
+        res_wrapped = subprocess.run(
+            [str(self.filter_wrap_script), "--test", already_wrapped],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_wrapped.returncode, 0)
+        data_wrapped = json.loads(res_wrapped.stdout)
+        self.assertEqual(data_wrapped.get("decision"), "allow")
+        self.assertNotIn("overwrite", data_wrapped)
+
+        # 5. Verify daemon skip: JSON input with "IsDaemon": True is not wrapped
+        daemon_payload = {
+            "toolCall": {
+                "name": "run_command",
+                "args": {
+                    "CommandLine": "pytest tests -v",
+                    "IsDaemon": True,
+                },
+            }
+        }
+        res_daemon = subprocess.run(
+            [str(self.filter_wrap_script)],
+            input=json.dumps(daemon_payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_daemon.returncode, 0)
+        data_daemon = json.loads(res_daemon.stdout)
+        self.assertEqual(data_daemon.get("decision"), "allow")
+        self.assertNotIn("overwrite", data_daemon)
+
+        # 6. Verify safety preservation: git push origin main returns decision == "deny" and rm -rf /tmp/x returns decision == "ask"
+        res_push = subprocess.run(
+            [str(self.filter_wrap_script), "--test", "git push origin main"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_push.returncode, 0)
+        data_push = json.loads(res_push.stdout)
+        self.assertEqual(data_push.get("decision"), "deny")
+
+        res_rm = subprocess.run(
+            [str(self.filter_wrap_script), "--test", "rm -rf /tmp/x"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_rm.returncode, 0)
+        data_rm = json.loads(res_rm.stdout)
+        self.assertEqual(data_rm.get("decision"), "ask")
+
+    def test_headroom_wrap_execution_and_ccr(self):
+        # 1. Verify --dry-run exits 0
+        res_dry = subprocess.run(
+            [str(self.headroom_script), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_dry.returncode, 0)
+
+        # 2. Verify short output (< 1500 chars) passes through unmodified with exit code 0
+        res_short = subprocess.run(
+            [str(self.headroom_script), "--", "echo", "antigravity test output"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_short.returncode, 0)
+        self.assertEqual(res_short.stdout.strip(), "antigravity test output")
+        self.assertNotIn("[Headroom CCR:", res_short.stdout)
+
+        # 3. Verify non-zero exit code preservation
+        res_err = subprocess.run(
+            [str(self.headroom_script), "--", "ls", "/nonexistent_path_xyz_987"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(res_err.returncode, 0)
+
+        # 4. Verify large log output (> 2000 chars with a FAIL: test_important_case line in the middle)
+        log_script = (
+            "import sys\n"
+            "lines = [f'test_{i:03d} (module.tests.StandardTestCase) ... ok [duration=0.012s]' for i in range(40)]\n"
+            "lines.append('FAIL: test_important_case (module.tests.CriticalSuite)')\n"
+            "lines.extend([f'test_{i:03d} (module.tests.StandardTestCase) ... ok [duration=0.012s]' for i in range(41, 85)])\n"
+            "sys.stdout.write('\\n'.join(lines) + '\\n')\n"
+        )
+        res_log = subprocess.run(
+            [str(self.headroom_script), "--", sys.executable, "-c", log_script],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_log.returncode, 0)
+        self.assertIn("FAIL: test_important_case", res_log.stdout)
+        self.assertIn("[Headroom CCR:", res_log.stdout)
+
+        cache_match = re.search(r"Full output cached at (/[^\s\]]+\.txt)", res_log.stdout)
+        self.assertIsNotNone(cache_match, "Breadcrumb should contain full cached file path")
+        cached_file = Path(cache_match.group(1))
+        self.assertTrue(cached_file.exists())
+        cached_content = cached_file.read_text(encoding="utf-8")
+        self.assertIn("FAIL: test_important_case", cached_content)
+        self.assertGreater(len(cached_content), 2000)
+        self.assertLess(len(res_log.stdout), len(cached_content))
+
+        # 5. Verify large JSON array output (> 2000 chars) is compressed by JSON SmartCrusher and appends [Headroom CCR:
+        json_script = (
+            "import json, sys\n"
+            "data = [{'index': i, 'name': f'node_{i}', 'payload': 'x' * 60} for i in range(40)]\n"
+            "sys.stdout.write(json.dumps(data, indent=2) + '\\n')\n"
+        )
+        res_json = subprocess.run(
+            [str(self.headroom_script), "--", sys.executable, "-c", json_script],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_json.returncode, 0)
+        self.assertIn("[Headroom CCR:", res_json.stdout)
+        self.assertIn("_headroom_omitted", res_json.stdout)
+
+        # 6. Verify multi-hunk diff output (> 2000 chars) preserves headers while compressing hunk bodies
+        diff_lines = [
+            "diff --git a/foo.py b/foo.py",
+            "index 1234567..89abcdef 100644",
+            "--- a/foo.py",
+            "+++ b/foo.py",
+            "@@ -1,40 +1,40 @@ def func_one():",
+        ]
+        diff_lines.extend([f"+    line_hunk1_{i:03d} = 'some data payload {i:03d}'" for i in range(35)])
+        diff_lines.append("@@ -50,40 +50,40 @@ def func_two():")
+        diff_lines.extend([f"+    line_hunk2_{i:03d} = 'some data payload {i:03d}'" for i in range(35)])
+
+        diff_script = (
+            "import sys\n"
+            f"lines = {repr(diff_lines)}\n"
+            "sys.stdout.write('\\n'.join(lines) + '\\n')\n"
+        )
+        res_diff = subprocess.run(
+            [str(self.headroom_script), "--", sys.executable, "-c", diff_script],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_diff.returncode, 0)
+        self.assertIn("diff --git a/foo.py b/foo.py", res_diff.stdout)
+        self.assertIn("@@ -1,40 +1,40 @@ def func_one():", res_diff.stdout)
+        self.assertIn("@@ -50,40 +50,40 @@ def func_two():", res_diff.stdout)
+        self.assertIn("hunk lines compressed by Headroom CCR", res_diff.stdout)
+        self.assertIn("[Headroom CCR:", res_diff.stdout)
+
+    def test_guard_subagent_delegation_hook(self):
+        # 1. Verify --dry-run exits 0
+        res_dry = subprocess.run(
+            [str(self.guard_delegation_script), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_dry.returncode, 0)
+
+        # 2. Verify Flash subagent returns decision == "allow"
+        flash_payload = {
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+            },
+            "modelName": "gemini-3.8-flash",
+        }
+        res_flash = subprocess.run(
+            [str(self.guard_delegation_script)],
+            input=json.dumps(flash_payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_flash.returncode, 0)
+        data_flash = json.loads(res_flash.stdout)
+        self.assertEqual(data_flash.get("decision"), "allow")
+
+        # 3. Verify brain artifact path returns decision == "allow"
+        brain_payload = {
+            "toolCall": {
+                "name": "write_file",
+                "args": {"Path": str(Path.home() / ".gemini/antigravity-cli/brain/123/plan.md")},
+            },
+            "modelName": "gemini-4-argon",
+        }
+        res_brain = subprocess.run(
+            [str(self.guard_delegation_script)],
+            input=json.dumps(brain_payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_brain.returncode, 0)
+        data_brain = json.loads(res_brain.stdout)
+        self.assertEqual(data_brain.get("decision"), "allow")
+
+        # 4. Verify direct root edit on project file returns decision == "deny"
+        root_payload = {
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+            },
+            "modelName": "gemini-4-argon",
+        }
+        res_root = subprocess.run(
+            [str(self.guard_delegation_script)],
+            input=json.dumps(root_payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_root.returncode, 0)
+        data_root = json.loads(res_root.stdout)
+        self.assertEqual(data_root.get("decision"), "deny")
 
 
 if __name__ == "__main__":
