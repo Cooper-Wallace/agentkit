@@ -117,7 +117,9 @@
         "konsole",
         "agy",
         "agy-standardise",
-        "antigravity-standardise"
+        "antigravity-standardise",
+        "workstation-setup",
+        "ws-setup"
       ]
     }
   }
