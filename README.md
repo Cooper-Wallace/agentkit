@@ -1,48 +1,85 @@
-# antigravity-standardise (`agy-standardise`)
+# agentkit
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
 
-An opinionated developer CLI and declarative configuration space to define, audit, and standardise the **Google Antigravity CLI (`agy`)** across multiple developer workstations.
+The harness-agnostic AI agent configuration, permissions catalog, directives, and orchestration toolkit across Cooper Wallace's workstations.
 
 ---
 
 ## The Philosophy
 
-When using AI pair programmers across multiple machines (such as desktop workstations, laptops, and remote dev environments), developers encounter two recurring friction points:
+When utilizing autonomous AI agents and pair-programming harnesses across multiple machines (such as desktop workstations, laptops, and remote dev environments), developers encounter two recurring friction points:
 
 1. **Permission Approval Fatigue**: Constant interactive interruptions prompting the user to allow basic read, git, inspection, or test commands (`command(git status)`, `command(ls)`, `command(pytest)`).
-2. **Configuration & Context Drift**: Fresh workstations lack the engineering directives, safety guidelines, and tool permissions established on primary machines.
+2. **Configuration & Context Drift**: Fresh workstations lack the engineering directives, safety guidelines, tool permissions, and model tiering established on primary machines.
 
-`antigravity-standardise` eliminates both issues:
+`agentkit` eliminates both issues:
 - It maintains a **declarative, tiered catalog of pre-approved commands** in `config/permissions.json`, granting immediate access to safe inspection, testing, and git operations while strictly withholding destructive operations (`rm -rf`, `sudo`, disk formatters).
-- It provides an **idempotent CLI (`agy-standardise`)** that audits local settings, merges standard permissions without overwriting custom workspaces or models, creates automated backups, and links universal developer directives (`GEMINI.md` / `AGENTS.md`).
+- It provides an **idempotent, harness-agnostic CLI (`agentkit`)** that audits local settings, merges standard permissions without overwriting custom workspaces or models, creates automated backups, manages switchable model profiles, distributes reusable domain skills and tools, and links universal developer directives (`AGENTS.md` / `GEMINI.md`).
 
 ---
 
 ## 4-Layer Workstation Ecosystem
 
-`antigravity-standardise` operates as **Layer 2** in a modular 4-layer workstation engineering architecture:
+`agentkit` operates as **Layer 2** in a modular 4-layer workstation engineering architecture:
 
 | Layer | System | Responsibility |
 |---|---|---|
 | **Layer 0** | **`riced-kubuntu-os` (RKO)** | Base OS configuration, KDE Plasma 6 desktop styling, system dotfiles, and system packages. |
 | **Layer 1** | **`workstation-setup`** | Developer toolchains (Node.js, Python, uv), shell profiles (`~/.profile`, `~/.bashrc`), keyrings, and environment bridging. |
-| **Layer 2** | **`antigravity-standardise`** | AI pair programming harness, CLI permissions catalog, global agent directives (`GEMINI.md`/`AGENTS.md`), MCP server catalogs, and plugin lifecycle hooks. |
-| **Layer 3** | **`gh-standardise`** | GitHub repository governance, branch protection rulesets, squash-and-merge enforcement, and semantic PR checks. |
+| **Layer 2** | **`agentkit`** (CLI: `agentkit`) | Harness-agnostic AI agent configuration, CLI permissions catalog, global agent directives (`AGENTS.md` / `GEMINI.md`), MCP server catalogs, switchable model profiles, project skill/tool distribution, and plugin lifecycle hooks. |
+| **Layer 3** | **`repokit`** | GitHub repository governance, branch protection rulesets, squash-and-merge enforcement, and semantic PR checks. |
 
-By separating Layer 2 from Layer 1, `agy-standardise` maintains strict focus on AI agent governance and safety policies without performing runtime toolchain installations or modifying shell profiles directly.
+By separating Layer 2 from Layer 1, `agentkit` maintains strict focus on AI agent governance and safety policies without performing runtime toolchain installations or modifying shell profiles directly.
+
+---
+
+## Harness-Agnostic Architecture
+
+`agentkit` provides an extensible architecture designed to manage multiple AI developer harnesses:
+
+- **Harness Flag (`--harness`)**: Commands accept `--harness <name>` (default: `antigravity`). Modular adapters handle harness-specific configuration formats, permission schemas, and settings files.
+- **Canonical `AGENTS.md` Directives**: All repository and global directives are centered on `AGENTS.md` as the canonical standard. Harness-specific directive files (such as `GEMINI.md` or `CLAUDE.md`) are maintained as symlinks to `AGENTS.md`.
+- **Modular Lifecycle Hooks**: Standardized hook manifests allow running cognitive tiering guards, Headroom CCR token compression, and git safety gates across supported harnesses.
+
+---
+
+## Switchable Model Profiles
+
+`agentkit` manages cognitive tiering configurations to optimize model intelligence, token quotas, and response latency:
+
+| Profile | Root Orchestrator | Worker Subagents | Primary Use Case |
+|---|---|---|---|
+| **`argon-flash`** | Gemini 4 Argon | Gemini 3.8 Flash | **Default**: Maximum reasoning depth and architectural precision with fast, cost-effective subagent execution. |
+| **`opus-flash`** | Claude Opus 5.5 | Gemini 3.8 Flash | **Token Limit Fallback**: Seamless fallback root planner when Argon hits daily rate limits or token quotas. |
+| **`sonnet-flash`** | Claude Sonnet 3.7 | Gemini 3.8 Flash | Balanced high-speed reasoning and code synthesis with Flash execution. |
+| **`pro-flash`** | Gemini 3.0 Pro | Gemini 3.8 Flash | Balanced Google Gemini multi-model tiering. |
+
+Switch active profiles seamlessly:
+```bash
+agentkit profile list
+agentkit profile set opus-flash
+```
 
 ---
 
 ## Features
 
+- **Harness-Agnostic Governance**: Support for Google Antigravity CLI and extensible harness targets via `--harness`.
+- **Switchable Cognitive Profiles**: Switch between `argon-flash`, `opus-flash`, `sonnet-flash`, and `pro-flash` profiles to navigate token quotas and workload complexity.
 - **Tiered Command Permissions**:
   - Pre-approves safe core inspection tools (`cat`, `grep`, `which`, `ls`, `find`, `file`, `diff`, `fastfetch`).
   - Pre-approves non-destructive file operations (`mkdir`, `touch`, `cp`, `mv`, `chmod`, `ln`) while gating unreviewed deletions.
-  - Pre-approves complete git hygiene and GitHub workflows (`git status`, `git diff`, `git log`, `git checkout`, `gh pr`, `gh-standardise`).
+  - Pre-approves complete git hygiene and GitHub workflows (`git status`, `git diff`, `git log`, `git checkout`, `gh pr`, `repokit`).
   - Pre-approves multi-language test harnesses (`pytest`, `unittest`, `npm test`, `cargo test`, `go test`).
+  - Pre-approves agentkit ecosystem binaries (`agentkit`, `workstation-setup`, `ws-setup`).
+  - Pre-approves provisioned MCP servers and cross-thread memory tools (`memory`, `repomix`, `github`, `fetch`, `sqlite`) and harness invocation tools (`call_mcp_tool`), removing approval fatigue across conversation threads.
+- **Reusable Domain Skills & Utility Tools**:
+  - Distributes consolidated engineering and machine learning skills (`project/skills/`) from `AugursAptitude` (`timeseries-ml`, `feature-engineering`, `model-evaluation`, `duckdb-pipeline`, `llm-structured-output`, `prompt-engineering`).
+  - Provides frictionless project integration via `agentkit skill install <name> [--copy]` and inspection via `agentkit skill info <name>`.
+  - Discovers reusable project scripts and analytical utilities via `agentkit tool list`.
 - **Non-Destructive Set-Union Merging**:
   - `apply` merges missing baseline permissions into `~/.gemini/antigravity-cli/settings.json`.
   - Never clobbers machine-specific `trustedWorkspaces`, model preferences, or custom tool permissions.
@@ -53,18 +90,18 @@ By separating Layer 2 from Layer 1, `agy-standardise` maintains strict focus on 
 - **Snapshot & Learning Sync**:
   - Detects newly approved commands on the local machine (`snapshot`) so you can commit them back to version control.
 - **Universal Agent Directives**:
-  - Deploys canonical developer rules (`templates/GEMINI.md` and `AGENTS.md`) emphasizing Conventional Commits, clean architecture, bash safety, and verification before completion.
+  - Deploys canonical developer rules (`templates/AGENTS.md` and symlinked `GEMINI.md`) emphasizing Conventional Commits, clean architecture, bash safety, and verification before completion.
 - **Declarative MCP Server Management**:
   - Declarative catalog (`config/mcp.json`) for 5 standard Model Context Protocol servers: `github`, `fetch`, `sqlite`, `memory` (cross-repository knowledge graph), and `repomix` (AST-compressed repository code maps).
   - All sensitive credentials decoupled via environment variable interpolations (`${GITHUB_PERSONAL_ACCESS_TOKEN}`, `${SQLITE_DEV_DB}`).
   - Active diagnostics: `audit` and `apply` verify CLI dependencies (`npx`, `uvx`) and inspect `os.environ` and shell profiles (`~/.profile`, `~/.bashrc`), providing actionable setup advisories for missing variables.
-  - Clear architectural boundary: `agy-standardise` audits runtime and environment readiness while delegating OS/toolchain provisioning and shell environment injection to `workstation-setup`.
+  - Clear architectural boundary: `agentkit` audits runtime and environment readiness while delegating OS/toolchain provisioning and shell environment injection to `workstation-setup`.
 - **Project Scaffolding**:
-  - Scaffolds modular project-level `GEMINI.md` files with custom test commands and architecture maps.
+  - Scaffolds modular project-level `AGENTS.md` and `GEMINI.md` files with custom test commands and architecture maps.
 - **Autonomous Orchestrator & Plugin Governance**:
   - Bundles the standard `autonomous-orchestrator` plugin for state-of-the-art multi-model workflows with Gemini 4 Argon and Gemini 3.8 Flash.
   - Automatically deploys and audits standard plugins in `~/.gemini/config/plugins/` with executable lifecycle hook scripts.
-  - **Cognitive Tiering & Subagent Guard**: Enforces root planning via Gemini 4 Argon and code execution via Gemini 3.8 Flash with `PreToolUse` delegation enforcement (`scripts/guard-subagent-delegation.sh`).
+  - **Cognitive Tiering & Subagent Guard**: Enforces root planning via Argon/Opus and code execution via Flash subagents with `PreToolUse` delegation enforcement (`scripts/guard-subagent-delegation.sh`).
   - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`filter-and-wrap.py` -> `headroom-wrap.py`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
   - **Deterministic Hook Gates**: Hard blocks direct pushes and trunk merges to `main` (`guard-git-operations.sh`), gates destructive deletions, and prevents task termination on test failures or dirty trees (`verify-clean-completion.sh`).
   - Pre-approves Git worktree operations (`git worktree`, `git rev-parse`, `git ls-files`) for concurrent subagent isolation.
@@ -75,8 +112,8 @@ By separating Layer 2 from Layer 1, `agy-standardise` maintains strict focus on 
 
 ### Quick Install (Symlink to `~/.local/bin`)
 ```bash
-git clone https://github.com/Cooper-Wallace/antigravity-standardise.git ~/Projects/antigravity-standardise
-cd ~/Projects/antigravity-standardise
+git clone https://github.com/Cooper-Wallace/agentkit.git ~/Projects/agentkit
+cd ~/Projects/agentkit
 bash install.sh
 ```
 
@@ -85,37 +122,41 @@ Ensure `~/.local/bin` is in your `$PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### Dual Command Aliases
-The installer creates two symlinks in `~/.local/bin`:
-- `agy-standardise` (concise CLI alias)
-- `antigravity-standardise` (full name)
+### CLI Executable
+`agentkit` is the exclusive CLI tool. The installer links the executable into `~/.local/bin`:
+- `agentkit` (primary executable)
 
 ---
 
 ## Commands & Usage
 
 ### 1. Audit Current Workstation
-Audit the current machine's `settings.json`, permissions, global directives, and environment:
+Audit the current machine's settings, permissions, global directives, and environment:
 ```bash
-agy-standardise audit
+agentkit audit
 
 # Verbose category breakdown:
-agy-standardise audit -v
+agentkit audit -v
+
+# Target specific harness:
+agentkit audit --harness antigravity
 ```
 
 Example audit report:
 ```text
-Auditing Antigravity CLI Standards
+Auditing AI Agent Standards (harness: antigravity)
 Target Settings: /home/cooper/.gemini/antigravity-cli/settings.json
   ✔ Settings file exists (/home/cooper/.gemini/antigravity-cli/settings.json)
-  ✔ Standard Permissions: All 74 pre-approved commands active
-  ✔ Global Agent Directives installed (/home/cooper/.gemini/GEMINI.md)
+  ✔ Standard Permissions: All pre-approved commands active
+  ✔ Global Agent Directives installed (/home/cooper/.gemini/AGENTS.md)
+  ✔ Directives Symlink (/home/cooper/.gemini/GEMINI.md -> AGENTS.md)
   ✔ Workspace Boundary: 'allowNonWorkspaceAccess' enabled
+  ✔ Active Profile: 'argon-flash' (Gemini 4 Argon -> Gemini 3.8 Flash)
   ✔ UI Theme: 'colorScheme' set to 'dark'
   ✔ Environment PATH includes /home/cooper/.local/bin
 
 ────────────────────────────────────────────────────────────
-[SUCCESS] Antigravity CLI configuration is fully compliant! (6/6 checks passed)
+[SUCCESS] Agent harness configuration is fully compliant! (8/8 checks passed)
 ```
 
 ---
@@ -123,65 +164,130 @@ Target Settings: /home/cooper/.gemini/antigravity-cli/settings.json
 ### 2. Apply Standards to Local Machine
 Merge all standard permissions, create a timestamped backup, and symlink global directives:
 ```bash
-agy-standardise apply
+agentkit apply
 ```
 
 #### Safe Dry-Run Mode
 Simulate changes without writing to disk:
 ```bash
-agy-standardise apply --dry-run
+agentkit apply --dry-run
 ```
 
 #### Also Link into Home Directory
 ```bash
-agy-standardise apply --link-home
+agentkit apply --link-home
 ```
 
 ---
 
-### 3. Diff Local Configuration against Standard Baseline
+### 3. Manage Cognitive Model Profiles
+Inspect and switch cognitive tiering profiles:
+```bash
+# List available model profiles:
+agentkit profile list
+
+# Switch to Claude Opus 5.5 fallback profile:
+agentkit profile set opus-flash
+
+# Switch back to primary Argon profile:
+agentkit profile set argon-flash
+```
+
+---
+
+### 4. Diff Local Configuration against Standard Baseline
 Review which standard permissions are missing or which custom permissions exist locally:
 ```bash
-agy-standardise diff
+agentkit diff
 ```
 
 ---
 
-### 4. Snapshot Local Commands to Sync Back to Git
-When you click **"Always allow"** in Antigravity during ad-hoc sessions, inspect those newly added commands:
+### 5. Snapshot Local Commands to Sync Back to Git
+When you click **"Always allow"** during ad-hoc sessions, inspect those newly added commands:
 ```bash
-agy-standardise snapshot
+agentkit snapshot
 ```
 
 To output as JSON:
 ```bash
-agy-standardise snapshot --json
+agentkit snapshot --json
 ```
 
 Add any commands you wish to standardize to `config/permissions.json` and push to your repository.
 
 ---
 
-### 5. Scaffold Project-Level `GEMINI.md`
-Scaffold project-specific agent directives into any repository:
+### 6. Scaffold Project-Level Directives
+Scaffold project-specific agent directives (`AGENTS.md` and `GEMINI.md` symlink) into any repository:
 ```bash
 cd ~/Projects/my-new-project
-agy-standardise template --name "auth-service" --lang "Python / FastAPI" --test "pytest"
+agentkit template --name "auth-service" --lang "Python / FastAPI" --test "pytest"
 ```
 
 ---
 
-### 6. Install Conventional Commits Git Hook
+### 7. Install Conventional Commits Git Hook
 Install a local `commit-msg` hook to enforce Conventional Commits:
 ```bash
-agy-standardise hook install
+agentkit hook install
 ```
+
+---
+
+### 8. Manage Reusable Project Skills
+Discover, inspect, and install domain engineering and machine learning skills into repositories:
+```bash
+# List available skills:
+agentkit skill list
+
+# Inspect detailed instructions and runbook for a skill:
+agentkit skill info timeseries-ml
+
+# Install skill into current project (symlinked under ./skills/<skill-name>):
+agentkit skill install timeseries-ml
+
+# Install skill as an independent file copy:
+agentkit skill install duckdb-pipeline --copy
+
+# Install into a custom target directory:
+agentkit skill install feature-engineering --target ~/Projects/AugursSaber/skills/feature-engineering
+```
+
+---
+
+### 9. Discover Reusable Project Tools
+Discover and inspect verified utility scripts and helper tools:
+```bash
+# List all available project utility scripts:
+agentkit tool list
+```
+
+---
+
+## Reusable Engineering & ML Skills (`AugursAptitude` Consolidation)
+
+With the consolidation of **`AugursAptitude`** into `agentkit` (`project/skills/`), foundational machine learning and quantitative engineering intelligence is unified into a single repository:
+
+### Core Reusable Skills
+- **`timeseries-ml`**: Production guidelines for non-stationary temporal modeling, walk-forward cross-validation, "as-of" point-in-time joins, and eliminating lookahead bias across sequential datasets.
+- **`feature-engineering`**: Standardized feature transformation, rolling aggregations, lag operators, scaling techniques, and out-of-fold target encoding.
+- **`model-evaluation`**: Adversarial validation, calibration curves, classification/regression metrics under class imbalance, and performance decay monitoring.
+- **`duckdb-pipeline`**: High-performance in-process columnar analytics, Parquet data lake querying, schema lineage, and zero-copy transformations with DuckDB.
+- **`llm-structured-output`**: Deterministic schema extraction, Pydantic validation, instructor patterns, and structured function calling with LLMs.
+- **`prompt-engineering`**: Chain-of-thought orchestration, few-shot prompting patterns, token conservation, and context injection techniques.
+
+### Consumer Project Reuse
+Downstream consumer repositories—including quantitative trading pipelines (**`AugursBazaar`**) and baseball player projection models (**`AugursSaber`**)—share identical temporal modeling, data lake, and feature engineering foundations. Rather than maintaining duplicated copies or drifting implementations:
+- Consumer projects install standardized skills via `agentkit skill install <skill_name>`.
+- Symlink-based installation ensures downstream agents always execute the latest validated engineering standards.
+- Standalone copy installations (`--copy`) support fully air-gapped or self-contained repository distributions without duplicating foundational intelligence across projects.
 
 ---
 
 ## Extensibility: Lifecycle Hooks & Plugin Templates
 
-Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvocation`) and shareable plugin bundles. This repository includes opt-in templates and architectural recommendations without imposing live runtime side-effects prematurely:
+`agentkit` provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvocation`, `Stop`) and shareable plugin bundles. This repository includes opt-in templates and architectural recommendations without imposing live runtime side-effects prematurely:
 
 - **Lifecycle Hooks Template**: [`templates/hooks.json`](templates/hooks.json) (Pre-configured examples: command safety guard, auto-formatting, git status watcher).
 - **Plugin Bundle Archetype**: [`templates/plugin/`](templates/plugin/) (Structure for packaging rules, skills, hooks, and MCP servers).
@@ -198,36 +304,36 @@ Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvoc
 ├── GEMINI.md                     # Symlink to AGENTS.md
 ├── README.md                     # Human-oriented documentation
 ├── LICENSE                       # MIT License
-├── install.sh                    # Symlinks CLI to ~/.local/bin
+├── install.sh                    # Symlinks CLI to ~/.local/bin (agentkit)
 │
 ├── bin/
-│   ├── agy-standardise           # Primary Python 3 CLI executable
-│   └── antigravity-standardise   # Alias symlink
+│   └── agentkit                  # Primary Python 3 CLI executable (audit, apply, diff, snapshot, template, profile, skill, tool)
 │
 ├── config/
 │   ├── permissions.json          # Categorized catalog of pre-approved commands
 │   ├── mcp.json                  # Declarative catalog of standard MCP servers & requirements
+│   ├── profiles.json             # Cognitive model tiering profiles (argon-flash, opus-flash, etc.)
 │   └── settings.default.json     # Standard baseline preferences
 │
-├── plugins/
-│   └── autonomous-orchestrator/  # Multi-model orchestration plugin (Argon + Flash)
-│       ├── hooks.json            # Subagent delegation, Headroom CCR, git safety gates
-│       ├── rules/AGENTS.md       # Cognitive tiering & zero-prompt discipline rules
-│       ├── skills/auto-lifecycle # 4-phase autonomous feature lifecycle runbook
-│       └── scripts/              # Lifecycle hook scripts (headroom-wrap, guard-*)
+├── harness/                      # Harness-level governance, lifecycle hooks, and plugins
+│   ├── plugins/                  # Multi-model orchestration plugin (autonomous-orchestrator)
+│   │   └── autonomous-orchestrator/
+│   │       ├── hooks.json        # Subagent delegation, Headroom CCR, git safety gates
+│   │       ├── rules/AGENTS.md   # Cognitive tiering & zero-prompt discipline rules
+│   │       ├── skills/           # 4-phase autonomous feature lifecycle runbook (auto-lifecycle)
+│   │       └── scripts/          # Lifecycle hook scripts (headroom-wrap, guard-*)
+│   ├── hooks/                    # Standard lifecycle hooks configuration
+│   ├── rules/                    # Universal agent directives (AGENTS.md)
+│   └── skills/                   # Harness operational skills
 │
-├── templates/
-│   ├── GEMINI.md                 # Universal developer agent directives
-│   ├── AGENTS.md                 # Symlink to GEMINI.md
-│   ├── project-GEMINI.md         # Template for project-specific scaffolding
-│   ├── hooks.json                # Template for Antigravity lifecycle hooks
-│   ├── plugins.json              # Template for plugin registration manifest
-│   ├── plugin/                   # Complete archetype bundle for Antigravity plugins
-│   └── rules/                    # Reusable rules (bash-safety.md, conventional-commits.md)
+├── project/                      # Reusable cross-project skills, tools, and scaffolding templates
+│   ├── skills/                   # Consolidated engineering & ML skills (timeseries-ml, feature-engineering, etc.)
+│   ├── tools/                    # Reusable project utility scripts
+│   └── templates/                # Project scaffolding templates (AGENTS.md, project-GEMINI.md, hooks.json)
 │
 ├── docs/                         # Comprehensive documentation
 │   ├── permissions-matrix.md     # Permission classifications and safety tiers
-│   ├── gemini-md-guide.md        # Guide on Antigravity cascading rules
+│   ├── gemini-md-guide.md        # Guide on agent cascading rules
 │   ├── mcp-guide.md              # MCP standardization & decoupled secrets guide
 │   ├── plugins-and-hooks-guide.md# Guide on lifecycle hooks and plugin architectures
 │   ├── replication-guide.md      # Multi-machine setup checklist
@@ -238,23 +344,25 @@ Antigravity CLI provides execution hooks (`PreToolUse`, `PostToolUse`, `PreInvoc
 │       ├── 0003-global-vs-workspace-rules.md
 │       ├── 0004-plugin-and-hook-templating.md
 │       ├── 0005-declarative-mcp-management-and-env-advisories.md
-│       └── 0006-token-compression-and-cross-repo-memory.md
+│       ├── 0006-token-compression-and-cross-repo-memory.md
+│       ├── 0007-agentkit-harness-agnostic-standardisation.md
+│       └── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
 │
 └── tests/
-    └── test_cli.py               # 27 automated unit tests
+    └── test_cli.py               # Automated unit tests
 ```
 
 ---
 
 ## Multi-Machine Replication & RKO Integration
 
-For machines provisioned with **`riced-kubuntu-os` (RKO)**, `agy-standardise` integrates seamlessly into Stage `03` (`dotfiles`):
+For machines provisioned with **`riced-kubuntu-os` (RKO)**, `agentkit` integrates seamlessly into Stage `03` (`dotfiles`):
 
 ```bash
 # Clone and configure in 2 commands:
-git clone https://github.com/Cooper-Wallace/antigravity-standardise.git ~/Projects/antigravity-standardise
-bash ~/Projects/antigravity-standardise/install.sh
-agy-standardise apply
+git clone https://github.com/Cooper-Wallace/agentkit.git ~/Projects/agentkit
+bash ~/Projects/agentkit/install.sh
+agentkit apply
 ```
 
 See [docs/replication-guide.md](docs/replication-guide.md) for full details.

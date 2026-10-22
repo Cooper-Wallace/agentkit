@@ -1,12 +1,17 @@
-# Antigravity Developer Directives & Cross-Machine Standards
+# Agent Developer Directives & Cross-Machine Standards
 
-Welcome to Cooper Wallace's development workspace. This document establishes universal behavioral guidelines, git hygiene rules, safety protocols, and verification standards for AI pair programming sessions across all workstations.
+Welcome to Cooper Wallace's development workspace. This document establishes universal behavioral guidelines, git hygiene rules, safety protocols, and verification standards for AI pair programming sessions across all workstations (managed via `agentkit` and `repokit`).
 
 ---
 
 ## 1. Engineering Philosophy & Persona
 
 - **Clean Architecture & Minimal Dependencies**: Favor clear, maintainable solutions over complex abstractions. Use standard library capabilities when appropriate before adding external dependencies.
+- **Standardized Repository Architecture**:
+  - `bin/` or `src/`: Core executables and application logic.
+  - `tests/`: Automated unit and integration test suite.
+  - `docs/`: Architecture documentation and Architecture Decision Records (ADRs).
+  - Agent Harness Repositories: Bifurcated into `harness/` (`plugins/`, `hooks/`, `rules/`, `skills/`) for harness-level governance and runtime hooks, and `project/` (`skills/`, `tools/`, `templates/`) for reusable cross-project domain skills, utility tools, and scaffolding templates.
 - **Idempotent Automation**: All shell scripts and automation tools must be safe to execute multiple times without causing side effects, duplicated lines, or state corruption. Include a `--dry-run` flag wherever files are modified or external services are called.
 - **Documentation Integrity**: Maintain existing comments, type hints, and docstrings. When refactoring or updating code, ensure documentation accurately mirrors the new behavior.
 
@@ -27,7 +32,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
   - Use imperative, present-tense verbs ("add", "fix", "update", not "added" or "fixes").
   - Scope is optional but encouraged for modular repositories.
 - **Trunk Hygiene & Merge Governance**:
-  - Repositories follow the **Squash and Merge** model governed by `gh-standardise`.
+  - Repositories follow the **Squash and Merge** model governed by `repokit`.
   - Squash titles default to `PR_TITLE` and bodies to `PR_BODY`.
 
 ---
@@ -63,6 +68,6 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ## 5. Tooling & Ecosystem Awareness
 
-- **`gh-standardise`**: Automates GitHub branch protection rulesets, squash merge enforcement, and semantic PR checks.
+- **`repokit`**: Automates GitHub repository governance, branch protection rulesets, squash merge enforcement, and semantic PR checks.
 - **`riced-kubuntu-os` (RKO)**: Manages Kubuntu OS packages, KDE Plasma 6 configurations, and system-level dotfiles.
-- **`antigravity-standardise` / `agy-standardise`**: Audits and synchronizes Antigravity CLI settings, command permissions, and agent directives across machines.
+- **`agentkit`**: Audits and synchronizes agent harness settings, command permissions, model profiles, and developer directives across machines.

@@ -1,6 +1,6 @@
-# Antigravity Plugins & Lifecycle Hooks Guide
+# AI Agent Plugins & Lifecycle Hooks Guide
 
-This guide details the architecture of Antigravity **Plugins** and **Lifecycle Hooks**, provides templates for creating them, and outlines standard plugins, lifecycle hooks, and advanced execution patterns recommended across developer workstations.
+This guide details the architecture of **Plugins** and **Lifecycle Hooks** in AI developer harnesses, provides templates for creating them, and outlines standard plugins, lifecycle hooks, and advanced execution patterns recommended across developer workstations under **`agentkit`** (Layer 2) and **`repokit`** (Layer 3).
 
 ---
 
@@ -9,7 +9,7 @@ This guide details the architecture of Antigravity **Plugins** and **Lifecycle H
 | Concept | File / Manifest | Purpose | Trigger / Lifecycle Point |
 | :--- | :--- | :--- | :--- |
 | **Lifecycle Hooks** | `.agents/hooks.json` | Runs arbitrary shell commands at agent loop milestones. | `PreInvocation`, `PostInvocation`, `PreToolUse`, `PostToolUse`, `Stop` |
-| **Plugins** | `.agents/plugins/<name>/plugin.json` | Self-contained bundles uniting rules, skills, hooks, and MCP servers. | Loaded on workspace launch; toggleable via `agy plugin {enable,disable}`. |
+| **Plugins** | `.agents/plugins/<name>/plugin.json` | Self-contained bundles uniting rules, skills, hooks, and MCP servers. | Loaded on workspace launch; toggleable via harness CLI or configuration. |
 | **Plugin Registry** | `plugins.json` | Explicit registration of external plugin directories. | Loaded globally (`~/.gemini/config/`) or locally (`.agents/`). |
 
 ---
@@ -21,7 +21,7 @@ The following lifecycle hooks represent core automation and safety components im
 ### A. PreToolUse Subagent Delegation Guard
 - **Lifecycle Event**: `PreToolUse` matching `edit_file|write_file`
 - **Script**: `scripts/guard-subagent-delegation.sh`
-- **Purpose**: Enforces cognitive tiering by blocking the Root Orchestrator (Gemini 4 Argon) from directly editing project code, tests, or UI files, ensuring implementation work is delegated to Gemini 3.8 Flash subagents.
+- **Purpose**: Enforces cognitive tiering by blocking the Root Orchestrator (Gemini 4 Argon / Claude Opus 5.5) from directly editing project code, tests, or UI files, ensuring implementation work is delegated to Gemini 3.8 Flash subagents.
 
 ### B. PreToolUse Git & Filesystem Safety Gate
 - **Lifecycle Event**: `PreToolUse` matching `run_command`
@@ -49,13 +49,13 @@ The following lifecycle hooks represent core automation and safety components im
 
 In autonomous coding loops, verbose commands (such as full test suite executions via `pytest` or `npm test`, voluminous `git diff` outputs, package listings, and directory trees) can emit tens of thousands of tokens per turn into `transcript.jsonl`. This rapidly exhausts the LLM context window and forces premature compaction.
 
-Standard compression approaches fail in Antigravity CLI due to two hard constraints:
-1. **`PostToolUse` Hook Immutability**: Under Antigravity's lifecycle contract, `PostToolUse` handlers can only return `{}` on stdout. They can trigger asynchronous notifications or logging, but they **cannot mutate, truncate, or rewrite** the tool output buffer after execution has completed.
-2. **Network Proxy Incompatibility**: External HTTP/REST proxy layers (e.g., `headroom proxy --port 8787`) are incompatible with Antigravity's native Google Gemini backend transport, authentication channels, and internal RPC protocols.
+Standard compression approaches fail in modern harnesses due to two hard constraints:
+1. **`PostToolUse` Hook Immutability**: Under standard lifecycle contracts, `PostToolUse` handlers can only return `{}` on stdout. They can trigger asynchronous notifications or logging, but they **cannot mutate, truncate, or rewrite** the tool output buffer after execution has completed.
+2. **Network Proxy Incompatibility**: External HTTP/REST proxy layers (e.g., `headroom proxy --port 8787`) are incompatible with native backend transports, authentication channels, and internal RPC protocols.
 
 ### The Solution: Transparent `PreToolUse` Overwrite
 
-To achieve token compression without violating Antigravity's lifecycle constraints, `antigravity-standardise` employs the **`PreToolUse` `overwrite` pattern** via `scripts/filter-and-wrap.py` and `scripts/headroom-wrap.py`:
+To achieve token compression without violating lifecycle constraints, **`agentkit`** employs the **`PreToolUse` `overwrite` pattern** via `scripts/filter-and-wrap.py` and `scripts/headroom-wrap.py`:
 
 ```mermaid
 flowchart TD
@@ -65,7 +65,7 @@ flowchart TD
     C -->|No| E{Verbose inspection / test command?}
     E -->|No / Daemon / Pipe| F["Allow original command unchanged"]
     E -->|Yes| G["Emit overwrite payload:<br/>headroom-wrap.py -- &lt;cmd&gt;"]
-    G --> H["Antigravity executes headroom-wrap.py"]
+    G --> H["Harness executes headroom-wrap.py"]
     H --> I["Subprocess executes target command"]
     I --> J{Output &gt; 1,500 chars?}
     J -->|No| K["Pass raw output through"]
@@ -102,25 +102,25 @@ When a candidate command is intercepted, `filter-and-wrap.py` returns an `overwr
 
 ---
 
-## 4. Potential Standard Plugins (Recommendations)
+## 4. Workstation Stack Plugins (Architecture)
 
-The following modular plugins can be bundled into `antigravity-standardise` and registered across workstations:
+The following modular plugins coordinate across the 4-layer workstation stack:
 
-### 1. `rko-workstation-companion`
-- **Purpose**: Integrates Antigravity with Cooper Wallace's Kubuntu rice ([`riced-kubuntu-os`](file:///home/cooper/Projects/riced-kubuntu-os)).
+### 1. `rko-workstation-companion` (Layer 0 Integration)
+- **Purpose**: Integrates the AI agent harness with Cooper Wallace's Kubuntu rice ([`riced-kubuntu-os`](file:///home/cooper/Projects/riced-kubuntu-os)).
 - **Components**:
   - **Skills**: `snapshot-plasma` (sanitizes and exports KDE Plasma 6 configs), `audit-packages` (diffs manual apt/flatpak installs against manifests).
   - **Rules**: OS baseline specifications (Kubuntu 26.04 LTS, KDE Plasma 6, Wayland).
   - **Hooks**: Auto-verifies dotfile symlink integrity after workstation provisioning.
 
-### 2. `gh-devops-governance`
-- **Purpose**: Integrates Antigravity with repository DevOps standards ([`gh-standardise`](file:///home/cooper/Projects/gh-standardise)).
+### 2. `repokit-devops-governance` (Layer 3 Integration)
+- **Purpose**: Integrates the AI agent harness with repository DevOps standards ([`repokit`](file:///home/cooper/Projects/repokit)).
 - **Components**:
-  - **Skills**: `audit-repo-standards` (runs `gh-standardise audit` on active workspace), `configure-ruleset` (applies GitHub branch protection).
+  - **Skills**: `audit-repo-standards` (runs `repokit audit` on active workspace), `configure-ruleset` (applies GitHub branch protection).
   - **Rules**: Conventional Commits specification rules, PR title formatting guidelines.
   - **Hooks**: `PreToolUse` check ensuring branches follow `feat/`, `fix/`, `docs/`, `refactor/` naming conventions.
 
-### 3. `developer-safety-kit`
+### 3. `agentkit-safety-kit` (Layer 2 Governance)
 - **Purpose**: Comprehensive workstation defense-in-depth bundle.
 - **Components**:
   - **Rules**: Strict dynamic path enforcement, forbidden disk commands.
@@ -150,12 +150,12 @@ When you are ready to implement a specific plugin or hook:
 
 ### To activate a project hook:
 ```bash
-cp ~/Projects/antigravity-standardise/templates/hooks.json .agents/hooks.json
+cp ~/Projects/agentkit/templates/hooks.json .agents/hooks.json
 # Edit .agents/hooks.json to set "enabled": true for desired hooks
 ```
 
 ### To scaffold a new plugin:
 ```bash
-cp -r ~/Projects/antigravity-standardise/templates/plugin .agents/plugins/my-custom-plugin
+cp -r ~/Projects/agentkit/templates/plugin .agents/plugins/my-custom-plugin
 # Edit .agents/plugins/my-custom-plugin/plugin.json and set "disabled": false
 ```

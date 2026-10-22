@@ -1,8 +1,8 @@
-# Antigravity MCP Server Standardization Guide
+# AI Agent MCP Server Standardization Guide
 
-The **Model Context Protocol (MCP)** enables Antigravity to connect with external tools, databases, and services (such as GitHub, SQLite, DevTools, or internal APIs). 
+The **Model Context Protocol (MCP)** enables AI agents to connect with external tools, databases, and services (such as GitHub, SQLite, DevTools, or internal APIs). 
 
-This guide explains how `antigravity-standardise` manages MCP servers declaratively while keeping credentials strictly decoupled and secure.
+This guide explains how **`agentkit`** manages MCP servers declaratively as Layer 2 of the workstation ecosystem while keeping credentials strictly decoupled and secure.
 
 ---
 
@@ -27,13 +27,13 @@ Instead of hardcoding sensitive secrets in git, `config/mcp.json` references env
 }
 ```
 
-When Antigravity spawns the MCP server process, it inherits your workstation shell environment, passing the exported token securely to the server.
+When the AI developer harness spawns the MCP server process, it inherits your workstation shell environment, passing the exported token securely to the server.
 
 ---
 
 ## 2. Declarative Catalog & Standard Servers
 
-`antigravity-standardise` provides a declarative catalog in `config/mcp.json` establishing **5 standard MCP servers** across all developer workstations:
+`agentkit` provides a declarative catalog in `config/mcp.json` establishing **5 standard MCP servers** across all developer workstations:
 
 | Server | Binary / Package | Role & Scope | Dependencies |
 | :--- | :--- | :--- | :--- |
@@ -72,10 +72,10 @@ Each server configuration in `config/mcp.json` is paired with diagnostic require
 
 ---
 
-## 3. Active Diagnostics via `agy-standardise`
+## 3. Active Diagnostics via `agentkit` (`ak`)
 
-When you run `agy-standardise audit` or `agy-standardise apply`, the tool:
-1. Verifies that `~/.gemini/config/mcp_config.json` contains all 5 standard server definitions.
+When you run `agentkit audit` (or `ak audit`) and `agentkit apply` (or `ak apply`), the tool:
+1. Verifies that the harness MCP configuration (e.g. `~/.gemini/config/mcp_config.json`) contains all 5 standard server definitions.
 2. Checks whether required command-line binaries (e.g. `npx`, `uvx`) are present in `$PATH` (`shutil.which`).
 3. Checks whether required environment variables are set in your current shell (`os.environ`).
 4. Prints clear, actionable setup advisories for any missing variables.
@@ -100,7 +100,13 @@ Example Diagnostic Output:
 
 ## 4. Cross-Repository Memory & AST Token Optimization
 
-In modular architectures spanning multiple projects (such as `antigravity-standardise`, `riced-kubuntu-os`, `gh-standardise`, and `workstation-setup`), agents frequently suffer from context compaction and token bloat when cross-referencing codebases. The `memory` and `repomix` MCP servers solve these problems:
+In the 4-layer workstation stack:
+- **Layer 0**: `riced-kubuntu-os` (RKO)
+- **Layer 1**: `workstation-setup`
+- **Layer 2**: `agentkit` (CLI: `agentkit` / `ak`)
+- **Layer 3**: `repokit`
+
+Agents frequently navigate across these modular projects. Without coordination, agents suffer from context compaction and token bloat when cross-referencing codebases. The `memory` and `repomix` MCP servers solve these problems:
 
 ### A. Perpetual Cross-Repo Knowledge Graph (`memory`)
 The `@modelcontextprotocol/server-memory` server runs locally to maintain an enduring knowledge graph of entities, relations, architectural contracts, and historical decisions.
@@ -120,12 +126,14 @@ To enable your pre-configured MCP servers on any machine:
 
 1. **Apply Configuration**:
    ```bash
-   agy-standardise apply
+   agentkit apply
+   # or:
+   ak apply
    ```
 2. **Review Advisories**:
    Inspect the advisory output or run:
    ```bash
-   agy-standardise audit -v
+   ak audit -v
    ```
 3. **Export Required Environment Variables**:
    Add the requested tokens to your `~/.bashrc` or `~/.zshrc`:
@@ -147,7 +155,7 @@ To standardize a new MCP server across all your machines:
 1. Open [`config/mcp.json`](../config/mcp.json).
 2. Add the server entry to `"mcpServers"` (using `${ENV_VAR}` for any sensitive values).
 3. Add the diagnostic requirements and actionable setup hint to `"_requirements"`.
-4. Run `agy-standardise apply` to sync to your local `~/.gemini/config/mcp_config.json`.
+4. Run `ak apply` to sync to your local configuration.
 5. Commit and push:
    ```bash
    git add config/mcp.json

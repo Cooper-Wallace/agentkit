@@ -1,5 +1,0 @@
-{
-  "name": "autonomous-orchestrator",
-  "version": "1.1.0",
-  "description": "Enterprise multi-model orchestrator enforcing Argon planning, Flash execution, Headroom CCR token compression, cross-repo persistent memory, and deterministic git gates."
-}

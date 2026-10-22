@@ -2,10 +2,19 @@
 # verify-clean-completion.sh: Stop hook to prevent autonomous agent termination on dirty git status or failing tests.
 set -euo pipefail
 
+# Recursion circuit breaker: prevent infinite test invocation loops
+if [[ "${AGY_VERIFY_RUNNING:-0}" == "1" ]]; then
+  echo '{"decision": "stop", "reason": "Recursion circuit breaker: verification already running"}'
+  exit 0
+fi
+export AGY_VERIFY_RUNNING=1
+
 # Support CLI test / dry-run mode
 if [[ "${1:-}" == "--dry-run" ]]; then
-  echo "Running verify-clean-completion.sh in dry-run mode..."
-  INPUT_JSON='{"terminationReason": "NO_TOOL_CALL"}'
+  echo '{"status": "dry-run", "decision": "stop", "message": "verify-clean-completion.sh is operational"}'
+  exit 0
+elif [[ "${1:-}" == "--test" && -n "${2:-}" ]]; then
+  INPUT_JSON="$2"
 else
   INPUT_JSON="$(cat)"
 fi

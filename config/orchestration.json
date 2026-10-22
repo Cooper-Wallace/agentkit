@@ -1,0 +1,29 @@
+{
+  "default_profile": "argon-flash",
+  "profiles": {
+    "argon-flash": {
+      "description": "Gemini 4 Argon Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Default high-reasoning tier)",
+      "root_model": "Gemini 4 Argon",
+      "worker_model": "flash",
+      "root_slug": "argon"
+    },
+    "opus-flash": {
+      "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
+      "root_model": "Claude Opus 5.5",
+      "worker_model": "flash",
+      "root_slug": "opus"
+    },
+    "sonnet-flash": {
+      "description": "Claude Sonnet 3.7 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (High-throughput engineering tier)",
+      "root_model": "Claude Sonnet 3.7",
+      "worker_model": "flash",
+      "root_slug": "sonnet"
+    },
+    "pro-flash": {
+      "description": "Gemini 3.0 Pro Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Standard polyglot tier)",
+      "root_model": "Gemini 3.0 Pro",
+      "worker_model": "flash",
+      "root_slug": "pro"
+    }
+  }
+}

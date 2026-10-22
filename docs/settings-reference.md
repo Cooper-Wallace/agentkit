@@ -60,8 +60,8 @@ Inside the Antigravity TUI:
 - `/permissions`: Interactive editor to view, add, or revoke command permissions.
 - `/settings`: Interactive viewer and toggle for user preferences (such as theme and copyOnSelect).
 
-Using `agy-standardise`:
-- `agy-standardise audit`: Validates current `settings.json` against the standard baseline.
-- `agy-standardise apply`: Merges missing baseline permissions while preserving custom workspaces.
-- `agy-standardise diff`: Compares active permissions with the baseline.
-- `agy-standardise snapshot`: Lists permissions approved on the machine that are not yet tracked in git.
+Using `agentkit` (or `ak`):
+- `agentkit audit`: Validates current `settings.json` against the standard baseline.
+- `agentkit apply`: Merges missing baseline permissions while preserving custom workspaces.
+- `agentkit diff`: Compares active permissions with the baseline.
+- `agentkit snapshot`: Lists permissions approved on the machine that are not yet tracked in git.

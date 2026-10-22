@@ -58,13 +58,14 @@
       ]
     },
     "github_governance": {
-      "description": "GitHub CLI automation and repository standardisation tools.",
+      "description": "GitHub CLI automation and repository governance tools.",
       "commands": [
         "gh",
         "gh pr",
         "gh issue",
         "gh repo",
         "gh auth",
+        "repokit",
         "gh-standardise",
         "gh-standardize"
       ]
@@ -109,15 +110,14 @@
       ]
     },
     "local_workflows": {
-      "description": "Workstation provisioning scripts and Antigravity standardisation tooling.",
+      "description": "Workstation provisioning scripts, agent harness standardisation, and agentkit tooling.",
       "commands": [
         "./bootstrap.sh",
         "./install.sh",
         "./plasma/restore-kde.sh",
         "konsole",
         "agy",
-        "agy-standardise",
-        "antigravity-standardise",
+        "agentkit",
         "workstation-setup",
         "ws-setup"
       ]
@@ -127,6 +127,101 @@
       "commands": [
         "headroom",
         "repomix"
+      ]
+    }
+  },
+  "mcp_tools": {
+    "memory": {
+      "description": "Cross-thread and cross-repository persistent memory knowledge graph.",
+      "permissions": [
+        "mcp(memory)",
+        "mcp(memory/*)",
+        "mcp(memory/create_entities)",
+        "mcp(memory/create_relations)",
+        "mcp(memory/add_observations)",
+        "mcp(memory/delete_entities)",
+        "mcp(memory/delete_observations)",
+        "mcp(memory/delete_relations)",
+        "mcp(memory/read_graph)",
+        "mcp(memory/search_nodes)",
+        "mcp(memory/open_nodes)"
+      ]
+    },
+    "repomix": {
+      "description": "AST-compressed repository packing and analysis.",
+      "permissions": [
+        "mcp(repomix)",
+        "mcp(repomix/*)",
+        "mcp(repomix/pack_codebase)",
+        "mcp(repomix/read_repomix_output)",
+        "mcp(repomix/grep_repomix_output)",
+        "mcp(repomix/pack_remote_repository)",
+        "mcp(repomix/generate_skill)",
+        "mcp(repomix/attach_packed_output)"
+      ]
+    },
+    "github": {
+      "description": "GitHub MCP integration for issues, pull requests, and repository operations.",
+      "permissions": [
+        "mcp(github)",
+        "mcp(github/*)",
+        "mcp(github/create_or_update_file)",
+        "mcp(github/list_commits)",
+        "mcp(github/search_code)",
+        "mcp(github/get_pull_request)",
+        "mcp(github/list_pull_requests)",
+        "mcp(github/create_issue)",
+        "mcp(github/update_issue)",
+        "mcp(github/list_issues)",
+        "mcp(github/push_files)",
+        "mcp(github/merge_pull_request)",
+        "mcp(github/get_file_contents)",
+        "mcp(github/create_pull_request)",
+        "mcp(github/create_branch)",
+        "mcp(github/fork_repository)",
+        "mcp(github/search_issues)",
+        "mcp(github/get_issue)",
+        "mcp(github/search_repositories)",
+        "mcp(github/create_repository)",
+        "mcp(github/search_users)",
+        "mcp(github/add_issue_comment)",
+        "mcp(github/create_pull_request_review)",
+        "mcp(github/get_pull_request_files)",
+        "mcp(github/get_pull_request_status)",
+        "mcp(github/update_pull_request_branch)",
+        "mcp(github/get_pull_request_comments)",
+        "mcp(github/get_pull_request_reviews)"
+      ]
+    },
+    "fetch": {
+      "description": "Web fetch and content conversion tool.",
+      "permissions": [
+        "mcp(fetch)",
+        "mcp(fetch/*)",
+        "mcp(fetch/fetch)"
+      ]
+    },
+    "sqlite": {
+      "description": "Local SQLite database queries and schema inspection.",
+      "permissions": [
+        "mcp(sqlite)",
+        "mcp(sqlite/*)",
+        "mcp(sqlite/read_query)",
+        "mcp(sqlite/write_query)",
+        "mcp(sqlite/create_table)",
+        "mcp(sqlite/list_tables)",
+        "mcp(sqlite/describe_table)"
+      ]
+    }
+  },
+  "tools": {
+    "provisioned_tools": {
+      "description": "Core harness tools for MCP interactions and resource access.",
+      "permissions": [
+        "call_mcp_tool",
+        "call_mcp_tool(*)",
+        "list_resources",
+        "read_resource"
       ]
     }
   }

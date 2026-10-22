@@ -19,7 +19,7 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
 
 - **Branching Model**: Use short-lived feature branches (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`).
 - **Commit Format**: Conventional Commits 1.0.0 (`type(scope): summary`).
-- **Merge Standard**: Squash & Merge only via GitHub Pull Requests, governed by `gh-standardise`.
+- **Merge Standard**: Squash & Merge only via GitHub Pull Requests, governed by `repokit`.
 
 ---
 
@@ -37,3 +37,4 @@ Before submitting changes or marking tasks complete, run the project test suite:
 - Do not hardcode absolute system paths; resolve paths relative to the project root or use `$HOME`.
 - Scripts and tooling must support `--dry-run` and be fully idempotent.
 - Sensitive environment variables and secrets must remain in untracked `.env` files.
+- Agent harness configuration and directives are governed by `agentkit` / `ak`.

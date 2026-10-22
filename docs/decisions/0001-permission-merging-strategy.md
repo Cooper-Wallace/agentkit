@@ -6,7 +6,7 @@ When standardizing developer settings across multiple workstations, overwriting 
 - The user may have manually approved unique local scripts or third-party tools during active pair-programming sessions.
 
 ## Decision
-`agy-standardise apply` employs a **non-destructive set-union merge strategy**:
+`agentkit apply` employs a **non-destructive set-union merge strategy**:
 1. Reads existing `settings.json` into memory.
 2. Identifies all standard permissions from `config/permissions.json` not currently present in `permissions.allow`.
 3. Appends only missing permissions to `permissions.allow`, preserving existing order and local entries.

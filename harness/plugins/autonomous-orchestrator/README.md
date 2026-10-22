@@ -19,4 +19,4 @@ An opinionated Antigravity plugin enabling state-of-the-art autonomous agent wor
 - **Cross-Repository Memory & AST Code Compression**:
   - **Perpetual Memory (`memory` MCP)**: Integrates `@modelcontextprotocol/server-memory` to maintain a persistent knowledge graph of entities, relations, and architectural constraints across modular repositories.
   - **AST Structural Packing (`repomix` MCP)**: Integrates `repomix --mcp` to generate token-efficient codebase skeletons and interface signatures without reading monolithic raw source trees.
-- **DevOps Integration**: Works seamlessly with `antigravity-standardise` for workstation permissions and `gh-standardise` for GitHub repository rulesets and squash merge enforcement.
+- **DevOps Integration**: Works seamlessly with `agentkit` for workstation permissions and `repokit` for GitHub repository rulesets and squash merge enforcement.

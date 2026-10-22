@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# guard-subagent-delegation.sh: PreToolUse hook enforcing subagent delegation for project code edits.
+# guard-subagent-delegation.sh: PreToolUse hook enforcing subagent delegation for project code edits (agentkit).
 set -euo pipefail
 
 # Support CLI test / dry-run mode
@@ -25,9 +25,9 @@ else
   MODEL_NAME="$(python3 -c 'import sys, json; print(json.load(sys.stdin).get("modelName", ""))' <<< "$INPUT_JSON" 2>/dev/null || true)"
 fi
 
-# 1. Developer bypass override
-if [[ "${AGY_ALLOW_ROOT_EDIT:-0}" == "1" ]]; then
-  echo '{"decision": "allow", "reason": "Bypassed via AGY_ALLOW_ROOT_EDIT=1"}'
+# 1. Developer bypass override (supports AGY_ALLOW_ROOT_EDIT or AGENTKIT_ALLOW_ROOT_EDIT)
+if [[ "${AGY_ALLOW_ROOT_EDIT:-0}" == "1" || "${AGENTKIT_ALLOW_ROOT_EDIT:-0}" == "1" ]]; then
+  echo '{"decision": "allow", "reason": "Bypassed via AGY_ALLOW_ROOT_EDIT=1 or AGENTKIT_ALLOW_ROOT_EDIT=1"}'
   exit 0
 fi
 
@@ -72,7 +72,8 @@ except Exception:
 ' "$TRANSCRIPT_PATH" 2>/dev/null || true)"
   fi
 
-  if echo "$FIRST_INPUT" | grep -Eiq '(You are|Worker|Subagent|pure-edit|Flash|<SUBAGENT)'; then
+  # Helper regex: detect subagent role indicators, worker identities, or agentkit subagent markers
+  if echo "$FIRST_INPUT" | grep -Eiq '(You are|Worker|Subagent|pure-edit|Flash|<SUBAGENT|agentkit)'; then
     IS_SUBAGENT=1
   fi
 fi
@@ -82,10 +83,10 @@ if [[ "$IS_SUBAGENT" -eq 1 ]]; then
   exit 0
 fi
 
-# 5. Root Orchestrator Gatekeeping
+# 5. Root Orchestrator Gatekeeping (switchable root orchestrators: Argon 4, Opus 5.5, Sonnet 3.7, Pro)
 # Strict deny mode
-if [[ "${AGY_STRICT_SUBAGENT_DENY:-0}" == "1" ]]; then
-  echo '{"decision": "deny", "reason": "ORCHESTRATOR VIOLATION: Root session (Argon) must not call edit_file/write_file on project files directly. Delegate implementation to a Flash subagent via invoke_subagent(Model=\"flash\")."}'
+if [[ "${AGY_STRICT_SUBAGENT_DENY:-0}" == "1" || "${AGENTKIT_STRICT_SUBAGENT_DENY:-0}" == "1" ]]; then
+  echo '{"decision": "deny", "reason": "ORCHESTRATOR VIOLATION: Root session (Argon 4 / Opus 5.5 / Sonnet 3.7) must not call edit_file/write_file on project files directly. Delegate implementation to a Flash subagent via invoke_subagent(Model=\"flash\")."}'
   exit 0
 fi
 
@@ -125,7 +126,7 @@ except Exception:
 fi
 
 if [[ "$HAS_SUBAGENT_SINCE_INPUT" -eq 0 ]]; then
-  echo '{"decision": "deny", "reason": "SUBAGENT DELEGATION GATE: Direct root edits on project files are blocked by autonomous-orchestrator. Delegate code/test changes to a Gemini 3.8 Flash subagent via invoke_subagent(Model=\"flash\", Workspace=\"inherit\", ...)."}'
+  echo '{"decision": "deny", "reason": "ORCHESTRATOR VIOLATION: Root session (Argon 4 / Opus 5.5 / Sonnet 3.7) must not call edit_file/write_file on project files directly. Delegate implementation to a Flash subagent via invoke_subagent(Model=\"flash\")."}'
   exit 0
 fi
 

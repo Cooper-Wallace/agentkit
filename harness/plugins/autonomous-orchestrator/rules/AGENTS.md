@@ -6,16 +6,21 @@ Welcome to the enterprise autonomous development environment. These directives g
 
 ## 1. Cognitive Architecture & Model Tiering
 
-- **Root Orchestrator (Gemini 4 Argon)**:
-  - The root session operates under Gemini 4 Argon. It is responsible for high-level requirement analysis, architectural contracts, task DAG generation, and adversarial reviews.
-  - The root session MUST NEVER directly edit project source code, tests, or UI files (via edit_file or write_file) — only artifact files in the session brain directory (e.g. plan.md) may be written directly by the root orchestrator. All code implementation, post-review bugfixes, threshold tuning, and test updates — even single-file follow-up adjustments after user feedback — MUST be delegated to Flash worker subagents.
+- **Root Orchestrator (Switchable High-Tier Profiles)**:
+  - The root session operates under a high-capability reasoning model with switchable profiles:
+    - **Default**: Gemini 4 Argon (`Model: "pro"` / `"inherit"`)
+    - **Quota / Token Limit Fallback**: Claude Opus 5.5 (`Model: "opus"` / `"claude-opus-5.5"` / `"inherit"`)
+    - **High-Throughput Profile**: Claude Sonnet 3.7
+    - **Standard Profile**: Gemini 3.0 Pro
+  - The Root Orchestrator (Argon 4 / Opus 5.5 / Sonnet 3.7 / Pro) is responsible for high-level requirement analysis, architectural contracts, task DAG generation (Phase 1 planning), and adversarial reviews (Phase 4 review).
+  - The Root Orchestrator MUST NEVER directly edit project source code, tests, or UI files (via `edit_file` or `write_file`) — only artifact files in the session brain directory (e.g., `plan.md`) may be written directly by the root orchestrator. All code implementation, post-review bugfixes, threshold tuning, and test updates — even single-file follow-up adjustments after user feedback — MUST be delegated to Flash worker subagents.
 - **Worker Subagents (Gemini 3.8 Flash)**:
   - Code implementation, localized refactoring, documentation syncing, and test runs MUST be delegated to subagents launched with `Model: "flash"` and `Workspace: "share"` (or `Workspace: "inherit"` when the active workspace is `$HOME` rather than a VCS repository root).
   - **Disjoint-File Parallel Worker Partitioning**: Multi-component tasks (e.g., backend logic, frontend UI, documentation, and unit tests) MUST be partitioned across concurrent Flash subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
-- **Adversarial Auditor (Gemini 4 Argon)**:
+- **Adversarial Auditor (Argon 4 / Opus 5.5 / Sonnet 3.7 / Pro)**:
   - Before requesting task completion or submitting a Pull Request, an adversarial review must evaluate the `git diff` against the initial specification.
 - **Crash & Compaction Recovery Protocol**:
-  - Whenever resuming after a crash, context compaction, or interrupted turn, the Root Orchestrator MUST check subagent completeness via manage_subagents(Action="list"), transcript.jsonl, and git status before dispatching new work.
+  - Whenever resuming after a crash, context compaction, or interrupted turn, the Root Orchestrator MUST check subagent completeness via `manage_subagents(Action="list")`, `transcript.jsonl`, and `git status` before dispatching new work.
 
 ---
 
@@ -32,7 +37,7 @@ Welcome to the enterprise autonomous development environment. These directives g
   - Verbose test, log, and diff commands executed via `run_command` are automatically intercepted by `PreToolUse` (`filter-and-wrap.py` -> `headroom-wrap.py`), compressing outputs >= 1,500 chars by 60-90%.
   - **Reversible CCR Retrieval**: Full uncompressed outputs are cached locally at `~/.cache/antigravity-headroom/<hash>.txt`. If an agent needs raw stack trace lines omitted by compression, it MUST read the cached file slice via `read_file` rather than re-running the test suite.
 - **Perpetual Cross-Repository Memory (`memory` MCP)**:
-  - Maintain cross-repo architectural contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `antigravity-standardise`, `gh-standardise`) in the persistent `memory` knowledge graph.
+  - Maintain cross-repo architectural contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit` / `ak`], `repokit`) in the persistent `memory` knowledge graph.
   - The Root Orchestrator queries the knowledge graph during Phase 1 planning and injects relevant cross-repo constraints into Flash worker prompts, avoiding redundant multi-repo file exploration.
 - **Cross-Repo Structural AST Compression (`repomix` MCP)**:
   - When inspecting sibling repositories, prefer AST-compressed structural skeletons (`repomix` MCP or `repomix --compress`) over raw multi-file reads to reduce cross-repo token ingestion by ~70%.
@@ -71,3 +76,12 @@ Welcome to the enterprise autonomous development environment. These directives g
   - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
 - **Test Before Completion**:
   - Never mark work complete without running automated tests. The harness `Stop` hook will reject termination if tests fail or if the working tree is dirty.
+
+---
+
+## 5. Tooling & Ecosystem Awareness
+
+- **Layer 0**: `riced-kubuntu-os` (RKO) - Kubuntu OS packages, KDE Plasma 6 configurations, and system-level dotfiles.
+- **Layer 1**: `workstation-setup` - Developer toolchains (Node.js, Python, uv), shell profiles (`~/.profile`, `~/.bashrc`), keyrings, and environment bridging.
+- **Layer 2**: `agentkit` (CLI `agentkit` / `ak`) - Audits and synchronizes agent harness settings, command permissions, global agent directives (`AGENTS.md`), MCP server catalogs, and plugin lifecycle hooks.
+- **Layer 3**: `repokit` - Automates GitHub repository governance, branch protection rulesets, squash merge enforcement, and semantic PR checks.

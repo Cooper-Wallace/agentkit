@@ -10,10 +10,10 @@ Model Context Protocol (MCP) servers extend Antigravity with external capabiliti
    Configurations are tracked in git, but all tokens and secrets are decoupled using environment variable interpolations (e.g. `${GITHUB_PERSONAL_ACCESS_TOKEN}`).
 2. **Metadata Requirements & Actionable Advisories**:
    Each MCP server includes metadata in `_requirements` declaring required binaries and environment variables, along with a human-readable setup hint.
-3. **Active Diagnostic Engine in `agy-standardise`**:
+3. **Active Diagnostic Engine in `agentkit`**:
    The CLI audits both the registration of the server in `~/.gemini/config/mcp_config.json` and the presence of binaries (`shutil.which`) and environment variables (`os.environ`).
 4. **Idempotent Set-Union Merging with Backups**:
-   `agy-standardise apply` merges standard servers into `~/.gemini/config/mcp_config.json`, preserving any custom local servers and backing up existing configurations (`.bak.<timestamp>`).
+   `agentkit apply` merges standard servers into `~/.gemini/config/mcp_config.json`, preserving any custom local servers and backing up existing configurations (`.bak.<timestamp>`).
 
 ## Consequences
 - **Positive**: Zero secret exposure in git history.

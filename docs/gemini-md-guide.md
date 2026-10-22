@@ -54,13 +54,13 @@ graph TD
 1. **Global Baseline**:
    Deploy the canonical developer guidelines to `~/.gemini/GEMINI.md` using:
    ```bash
-   agy-standardise apply
+   agentkit apply
    ```
    This ensures that any scratch folder, ad-hoc terminal session, or unmanaged directory inherits Cooper Wallace's core engineering principles (Conventional Commits, bash safety, dynamic paths).
 
 2. **Project Scaffolding**:
    When creating or standardizing a repository, scaffold a project-specific `GEMINI.md`:
    ```bash
-   agy-standardise template --name my-repo --lang Python --test "pytest"
+   agentkit template --name my-repo --lang Python --test "pytest"
    ```
    This provides architecture maps, local test commands, and project constraints tailored to that specific repository.

@@ -15,8 +15,11 @@
       "args": ["-y", "@modelcontextprotocol/server-fetch"]
     },
     "sqlite": {
-      "command": "uvx",
-      "args": ["mcp-server-sqlite", "--db-path", "${SQLITE_DEV_DB}"]
+      "command": "bash",
+      "args": [
+        "-c",
+        "exec uvx mcp-server-sqlite --db-path \"${SQLITE_DEV_DB:-$HOME/dev.db}\""
+      ]
     },
     "memory": {
       "command": "npx",

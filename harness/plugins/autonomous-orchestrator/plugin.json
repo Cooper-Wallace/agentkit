@@ -1,0 +1,12 @@
+{
+  "name": "autonomous-orchestrator",
+  "version": "1.1.0",
+  "description": "Enterprise multi-model orchestrator for agentkit enforcing Argon/Opus planning, Flash execution, Headroom CCR token compression, cross-repo persistent memory, and deterministic git gates.",
+  "harnesses": [
+    "antigravity",
+    "*"
+  ],
+  "homepage": "https://github.com/cooperwallace/agentkit",
+  "documentation": "https://github.com/cooperwallace/agentkit#readme",
+  "repository": "https://github.com/cooperwallace/agentkit"
+}
