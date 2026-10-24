@@ -13,16 +13,17 @@ This skill teaches the Root Orchestrator (Gemini 4 Argon, Gemini 3.8 Flash High,
 
 ```mermaid
 flowchart LR
-    P1["Phase 1: Contract Freeze & DAG<br/>(Argon 4 / Flash High / Opus 5.5)"] --> P2A["Phase 2: Worker A [complexity: med]<br/>(Backend & Tests)"]
+    P1["Phase 1: Ingest & Task DAG<br/>(Argon 4 / Flash High / Opus 5.5)"] --> P2A["Phase 2: Worker A [complexity: med]<br/>(Backend & Tests)"]
     P1 --> P2B["Phase 2: Worker B [complexity: low]<br/>(Pure-Edit UI/Docs)"]
     P2A --> P3["Phase 3: Adversarial Review<br/>(Argon 4 / Flash High / Opus 5.5)"]
     P2B --> P3
-    P3 --> P4["Phase 4: Remote Promotion & Cleanup<br/>(PR + Memory + kill_all)"]
+    P3 --> P4["Phase 4: Promotion & Vault Handoff<br/>(PR + Vault + kill_all)"]
 ```
 
-### Phase 1: Contract Freeze & Task DAG (Root Orchestrator)
-1. **Analyze Requirements & Cross-Repo Context**:
-   - Query the `memory` MCP knowledge graph for relevant cross-repo contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit`], `repokit`).
+### Phase 1: Contract Freeze, Offline Ingestion & Task DAG (Root Orchestrator)
+1. **Analyze Requirements, Offline User Directives & Cross-Repo Context**:
+   - **Offline User Input Ingestion**: Inspect the Obsidian Perpetual Knowledge Vault at `$HOME/Documents/Vault` (or `$HOME/Vault`) via `agentkit vault ingest` or by reading `User-Input/pending/` and `Projects/<project>.md`. Ingest any offline user feedback, tasks, or directives left between agent conversations, and incorporate them directly into `plan.md`. Move processed input notes to `User-Input/processed/`.
+   - **Cross-Repo Contracts & Project Context**: Read `$VAULT/Projects/<project>.md` for living architecture constraints and active task status. Query cross-repo contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit`], `repokit`).
    - When inspecting sibling repositories, use `repomix` AST compression (`repomix` MCP or `repomix --compress`) to retrieve structural skeletons without bloating context.
    - Inspect local project files, existing tests, and architecture constraints.
 2. **Quota Headroom Pre-Check**:
@@ -65,9 +66,12 @@ flowchart LR
    - Verify that commit messages comply with Conventional Commits 1.0.0.
 3. **Self-Healing & User Review Feedback Loop**: When either the adversarial review OR the user reports a regression, tuning issue, or requested adjustment: the Root Orchestrator diagnoses the logs/diff and updates `plan.md`, but **MUST dispatch a subagent (`Model: "flash"`)** to implement the fix and update unit tests — never editing project files directly in the root session.
 
-### Phase 4: Verification, Memory Sync & PR Promotion Gate
+### Phase 4: Verification, Vault Memory Persistence & PR Promotion Gate
 1. **Deterministic Quality Gate**: Verify that the test suite passes locally. The `Stop` hook will reject session termination if tests fail or if the worktree is dirty.
-2. **Knowledge Graph Persistence**: Persist newly established cross-repo architectural contracts, entity relationships, shared schemas, or invariants to the `memory` MCP knowledge graph so future sessions and sibling repos maintain alignment.
+2. **Obsidian Perpetual Knowledge Vault Persistence**:
+   - Author a structured session handoff note to `$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-<topic>.md` (or run `agentkit vault handoff --topic <topic>`), detailing completed deliverables, active branch, test verification status, and next steps for offline review.
+   - Update the target project knowledge base in `$HOME/Documents/Vault/Projects/<project>.md`: check off completed tasks (`- [x]`), record newly discovered backlog items (`- [ ]`), and update the "Current State" summary.
+   - If cross-repo contracts or architectural boundaries were modified, update `$VAULT/Architecture/` notes and visual JSON Canvas diagrams (`[[Architecture/Workstation-Stack.canvas]]`).
 3. **Subagent Pool Cleanup**: Terminate all idle worker subagents via `manage_subagents(Action="kill_all")` before finalizing the session.
 4. **Push Feature Branch**:
    ```bash

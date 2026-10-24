@@ -49,7 +49,7 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
     1. Cease spawning new subagents.
     2. Run local test suites to verify system stability.
     3. Create a clean WIP commit on the active feature branch (`git commit -m "chore(wip): save state prior to quota wrap-up"`).
-    4. Generate a comprehensive `handoff.md` detailing finished deliverables, pending DAG items, and resumption commands.
+    4. Generate a comprehensive handoff note in the Obsidian Perpetual Knowledge Vault (`$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and mirror `handoff.md` in conversation artifacts.
     5. Advise the user of the exact quota reset timestamp and recommend an advisory root model switch.
 - **Advisory Root Model Switching**:
   - The root session model cannot be switched programmatically via API during an active session.
@@ -57,7 +57,19 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
 
 ---
 
-## 4. Engineering & Git Hygiene
+## 4. Perpetual Long-Term Memory & Offline Collaboration (Obsidian Vault)
+
+- **Local Obsidian Knowledge Vault**:
+  - The local Obsidian Vault (`$HOME/Documents/Vault` or `$HOME/Vault`, configurable via `$AGENTKIT_VAULT_PATH`) serves as the long-term, human-in-the-loop memory store across sessions, adhering to the open Obsidian Skills standard and "files over apps" philosophy.
+- **Offline Human-Agent Collaboration Protocol**:
+  - **Ingest at Session Start (Phase 1)**: Check `User-Input/pending/` at session start (or run `agentkit vault ingest`) to process offline user directives, feedback, and backlog notes written between conversations. Archive processed directives to `User-Input/processed/`.
+  - **Project Living Notes**: Maintain project knowledge base in `Projects/<project>.md`, keeping architecture, current branch/commit, and task checklists aligned.
+  - **Handoff at Session Wrap-Up (Phase 4)**: Write structured handoff notes to `Sessions/handoff-YYYY-MM-DD-<topic>.md`, capturing completed deliverables, test verification results, and offline tasks.
+  - **Visual Architecture with JSON Canvas**: Visual architecture maps and multi-agent DAGs are maintained in `Architecture/` using the open JSON Canvas specification (`.canvas`).
+
+---
+
+## 5. Engineering & Git Hygiene
 
 - **Branching Model**: Use short-lived feature branches (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`).
 - **Commit Format**: Conventional Commits 1.0.0 (`type(scope): summary`).
@@ -65,7 +77,7 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
 
 ---
 
-## 5. Testing & Verification
+## 6. Testing & Verification
 
 Before submitting changes or marking tasks complete, run the project test suite:
 ```bash
@@ -74,7 +86,7 @@ Before submitting changes or marking tasks complete, run the project test suite:
 
 ---
 
-## 6. Safety & Environment Rules
+## 7. Safety & Environment Rules
 
 - Do not hardcode absolute system paths; resolve paths relative to the project root or use `$HOME`.
 - Scripts and tooling must support `--dry-run` and be fully idempotent.

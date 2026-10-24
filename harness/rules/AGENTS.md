@@ -54,7 +54,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
     1. Cease spawning new subagents.
     2. Run local test suites to verify system stability.
     3. Create a clean WIP commit on the active feature branch (`git commit -m "chore(wip): save state prior to quota wrap-up"`).
-    4. Generate a comprehensive `handoff.md` detailing finished deliverables, pending DAG items, and resumption commands.
+    4. Generate a comprehensive handoff note in the Obsidian Perpetual Knowledge Vault (`$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and mirror `handoff.md` in conversation artifacts.
     5. Advise the user of the exact quota reset timestamp and recommend an advisory root model switch.
 - **Advisory Root Model Switching**:
   - The root session model cannot be switched programmatically via API during an active session.
@@ -62,7 +62,19 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 4. Git Workflow & Version Control Standards
+## 4. Perpetual Long-Term Memory & Offline Collaboration (Obsidian Vault)
+
+- **Local Obsidian Knowledge Vault**:
+  - The local Obsidian Vault (`$HOME/Documents/Vault` or `$HOME/Vault`, configurable via `$AGENTKIT_VAULT_PATH`) serves as the durable, human-in-the-loop long-term memory layer across agent conversations, adhering to the open Obsidian Skills standard and "files over apps" philosophy.
+- **Offline Human-Agent Collaboration Protocol**:
+  - **Ingest at Session Start (Phase 1)**: Agents must check `User-Input/pending/` at the beginning of each session (or run `agentkit vault ingest`) to process offline user directives, feedback, and backlog notes written between conversations. Processed directives are archived to `User-Input/processed/`.
+  - **Project Living Notes**: Agents maintain project knowledge bases in `Projects/<project>.md` (e.g. `agentkit.md`, `repokit.md`), keeping active architecture, current branch/commit, and task checklists synchronized.
+  - **Handoff at Session Wrap-Up (Phase 4)**: Agents author structured handoff notes to `Sessions/handoff-YYYY-MM-DD-<topic>.md`, capturing completed deliverables, test verification results, and offline tasks.
+  - **Visual Architecture with JSON Canvas**: Visual architecture maps and multi-agent DAGs are maintained in `Architecture/` using the open JSON Canvas specification (`.canvas`).
+
+---
+
+## 5. Git Workflow & Version Control Standards
 
 - **Branching Strategy**:
   - Always work in short-lived feature branches branched from `main`:
@@ -82,7 +94,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 5. Safety Protocols & System Boundaries
+## 6. Safety Protocols & System Boundaries
 
 - **Dynamic Path Resolution**:
   - Never hardcode the absolute home directory (`/home/cooper`).
@@ -96,7 +108,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 6. Verification & Testing Standards
+## 7. Verification & Testing Standards
 
 - **Test Before Completion**:
   - Never mark a feature, fix, or refactor complete without verifying functionality through automated tests or deterministic manual validation steps.
@@ -111,7 +123,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 7. Tooling & Ecosystem Awareness
+## 8. Tooling & Ecosystem Awareness
 
 - **`repokit`**: Automates GitHub repository governance, branch protection rulesets, squash merge enforcement, and semantic PR checks.
 - **`riced-kubuntu-os` (RKO)**: Manages Kubuntu OS packages, KDE Plasma 6 configurations, and system-level dotfiles.

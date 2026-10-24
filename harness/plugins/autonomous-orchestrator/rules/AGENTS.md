@@ -66,9 +66,9 @@ Welcome to the enterprise autonomous development environment. These directives g
 - **Automated Tool Output Token Suppression (Headroom CCR)**:
   - Verbose test, log, and diff commands executed via `run_command` are automatically intercepted by `PreToolUse` (`filter-and-wrap.py` -> `headroom-wrap.py`), compressing outputs >= 1,500 chars by 60-90%.
   - **Reversible CCR Retrieval**: Full uncompressed outputs are cached locally at `~/.cache/antigravity-headroom/<hash>.txt`. If an agent needs raw stack trace lines omitted by compression, it MUST read the cached file slice via `read_file` rather than re-running the test suite.
-- **Perpetual Cross-Repository Memory (`memory` MCP)**:
-  - Maintain cross-repo architectural contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit`], `repokit`) in the persistent `memory` knowledge graph.
-  - The Root Orchestrator queries the knowledge graph during Phase 1 planning and injects relevant cross-repo constraints into Flash worker prompts, avoiding redundant multi-repo file exploration.
+- **Perpetual Cross-Repository Memory (Obsidian Knowledge Vault)**:
+  - Maintain cross-repo architectural contracts, living project documentation, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit`], `repokit`) in the local **Obsidian Perpetual Knowledge Vault** (`$HOME/Documents/Vault` or `$HOME/Vault`).
+  - **Offline Human-Agent Collaboration Protocol**: The Root Orchestrator inspects `User-Input/pending/` and target project notes in `Projects/<project>.md` during Phase 1 planning to ingest offline user feedback and directives, and writes structured session summaries to `Sessions/handoff-YYYY-MM-DD-<topic>.md` at Phase 4 wrap-up. Visual architecture diagrams are maintained using JSON Canvas (`.canvas`) in `Architecture/`.
 - **Cross-Repo Structural AST Compression (`repomix` MCP)**:
   - When inspecting sibling repositories, prefer AST-compressed structural skeletons (`repomix` MCP or `repomix --compress`) over raw multi-file reads to reduce cross-repo token ingestion by ~70%.
 

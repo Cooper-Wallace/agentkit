@@ -89,6 +89,11 @@ agentkit profile set opus-flash
   - Distributes consolidated engineering and machine learning skills (`project/skills/`) from `AugursAptitude` (`timeseries-ml`, `feature-engineering`, `model-evaluation`, `duckdb-pipeline`, `llm-structured-output`, `prompt-engineering`).
   - Provides frictionless project integration via `agentkit skill install <name> [--copy]` and inspection via `agentkit skill info <name>`.
   - Discovers reusable project scripts and analytical utilities via `agentkit tool list`.
+- **Obsidian Perpetual Knowledge Vault & Offline Collaboration**:
+  - Replaces opaque MCP memory stores with a durable, human-readable local Obsidian Markdown vault (`~/Documents/Vault` or `~/Vault`) adhering to the open **Obsidian Skills** specification by Steph Ango (kepano).
+  - Enables asynchronous offline collaboration: developers review session handoffs, refine project living notes, and drop offline directives into `User-Input/pending/` during conversation breaks.
+  - Generates visual architecture maps and multi-agent workflows using the open **JSON Canvas** (`.canvas`) specification (`jsoncanvas.org`).
+  - Integrated CLI commands (`agentkit vault init`, `agentkit vault ingest`, `agentkit vault handoff`, `agentkit vault status`).
 - **Non-Destructive Set-Union Merging**:
   - `apply` merges missing baseline permissions into `~/.gemini/antigravity-cli/settings.json`.
   - Never clobbers machine-specific `trustedWorkspaces`, model preferences, or custom tool permissions.
@@ -295,6 +300,28 @@ agentkit tool list
 
 ---
 
+### 11. Obsidian Perpetual Knowledge Vault Management
+Initialize, audit, and orchestrate long-term agent memory and offline human-agent collaboration via the local Obsidian Perpetual Knowledge Vault (`~/Documents/Vault` or `~/Vault`, configurable via `$AGENTKIT_VAULT_PATH`):
+
+```bash
+# Initialize standard vault directory layout and baseline project notes:
+agentkit vault init
+
+# Inspect vault status, location, pending directive count, and recent sessions:
+agentkit vault status
+
+# Ingest and display pending offline directives from User-Input/pending/:
+agentkit vault ingest
+
+# Ingest and archive pending directives to User-Input/processed/:
+agentkit vault ingest --process
+
+# Generate a structured session handoff note in Sessions/:
+agentkit vault handoff --topic "auth-migration"
+```
+
+---
+
 ## Reusable Engineering & ML Skills (`AugursAptitude` Consolidation)
 
 With the consolidation of **`AugursAptitude`** into `agentkit` (`project/skills/`), foundational machine learning and quantitative engineering intelligence is unified into a single repository:
@@ -374,7 +401,8 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │       ├── 0006-token-compression-and-cross-repo-memory.md
 │       ├── 0007-agentkit-harness-agnostic-standardisation.md
 │       ├── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
-│       └── 0009-quota-aware-model-routing.md
+│       ├── 0009-quota-aware-model-routing.md
+│       └── 0010-obsidian-perpetual-knowledge-vault.md
 │
 └── tests/
     └── test_cli.py               # Automated unit tests

@@ -118,6 +118,8 @@
         "konsole",
         "agy",
         "agentkit",
+        "agentkit vault",
+        "agentkit vault *",
         "workstation-setup",
         "ws-setup"
       ]

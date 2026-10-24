@@ -47,23 +47,25 @@ python3 -m unittest discover tests -v
 
 ---
 
-## Phase 4: Generate Handoff Artifact (`handoff.md`)
+## Phase 4: Generate Handoff Artifact & Vault Note
 
-Create a `handoff.md` artifact in the active conversation directory or project root detailing:
+Create a structured handoff note directly in the Obsidian Perpetual Knowledge Vault at `$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md` (and mirror to the conversation artifact directory as `handoff.md`) detailing:
 
-1. **Quota Status**: Current remaining quota percentage per group and earliest reset timestamp (`agentkit quota status`).
-2. **Completed Tasks**: Tasks finished during this session with references to modified files.
-3. **In-Flight Work**: Unfinished or partially tested modules.
-4. **Remaining Backlog**: Items next in sequence for execution.
-5. **Resume Command**: Recommended command or model profile to continue when quotas reset or under fallback models.
+1. **Frontmatter Properties**: Set `type: session-handoff`, `date: YYYY-MM-DD`, `project: <project>`, `status: pending`, `tags: [quota-wrapup, <project>]`.
+2. **Quota Telemetry**: Current remaining quota percentage per group and earliest reset timestamp (`agentkit quota status`).
+3. **Completed Tasks**: Tasks finished during this session with references to modified files and wikilinks.
+4. **In-Flight Work**: Unfinished or partially tested modules.
+5. **Remaining Backlog**: Items next in sequence for execution.
+6. **Resume Command**: Recommended command or model profile to continue when quotas reset or under fallback models.
 
 ---
 
-## Phase 5: Knowledge Graph Persistence (`memory` MCP)
+## Phase 5: Update Project Knowledge Base in Vault
 
-Store session state in the persistent knowledge graph:
-- Update entities: `HandoffState`, `ActiveBranch`, `QuotaResetSchedule`.
-- Add observation: Current branch name, commit hash, failing/passing test count, and target model profile.
+Update `$HOME/Documents/Vault/Projects/<project>.md` to maintain long-term alignment across conversations:
+- Update the "Current State" section with the active feature branch name, WIP commit hash, and quota reset timestamp.
+- Record passing/failing test counts.
+- Add unfinished DAG items to the project checklist (`- [ ]`) for offline review in Obsidian.
 
 ---
 
@@ -73,4 +75,4 @@ Notify the user in the conversation summary:
 - The exact reset time (from `agentkit quota status`).
 - Recommended profile or model switch:
   - If Gemini/Argon is exhausted, suggest switching to Claude profile: `/model opus` or `agentkit apply --model-profile opus-flash`.
-- Link to the generated `handoff.md`.
+- Path to the generated Obsidian vault handoff note (`$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`) and conversational `handoff.md`.

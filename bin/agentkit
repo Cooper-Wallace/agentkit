@@ -14,6 +14,7 @@ Features:
 - Install local Conventional Commits git hooks.
 - Manage reusable project skills (list, inspect info, and install via symlink or copy).
 - Discover and list reusable project utility tools and scripts.
+- Manage Obsidian knowledge vault, offline directives ingestion, and knowledge graph sync.
 """
 
 import argparse
@@ -1582,6 +1583,852 @@ def _print_subparser_help(parser_obj: argparse.ArgumentParser):
 
 
 # ==============================================================================
+# Obsidian Vault CLI Engine & Knowledge Graph Integration
+# ==============================================================================
+
+DEFAULT_VAULT_PATH = Path.home() / "Documents" / "Vault"
+
+
+def resolve_vault_path(explicit_path: Optional[str] = None) -> Path:
+    """Resolve Obsidian vault root path from CLI args, environment variables, or standard default."""
+    if explicit_path:
+        return Path(explicit_path).expanduser().resolve()
+    env = os.environ.get("AGENTKIT_VAULT_PATH") or os.environ.get("OBSIDIAN_VAULT_PATH")
+    if env:
+        return Path(env).expanduser().resolve()
+    return DEFAULT_VAULT_PATH.resolve()
+
+
+def parse_frontmatter_and_body(text: str) -> Tuple[Dict[str, Any], str]:
+    """Parse YAML frontmatter and markdown body."""
+    if not text.startswith("---"):
+        return {}, text
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {}, text
+    raw_fm = parts[1].strip()
+    body = parts[2].lstrip("\n")
+    meta: Dict[str, Any] = {}
+    current_key: Optional[str] = None
+    for line in raw_fm.splitlines():
+        line_str = line.strip()
+        if not line_str or line_str.startswith("#"):
+            continue
+        if line_str.startswith("- ") and current_key:
+            val = line_str[2:].strip()
+            if not isinstance(meta.get(current_key), list):
+                meta[current_key] = []
+            meta[current_key].append(val)
+        elif ":" in line:
+            k, v = line.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            current_key = k
+            if v:
+                meta[k] = v
+            else:
+                meta[k] = []
+        else:
+            current_key = None
+    return meta, body
+
+
+def format_frontmatter(
+    tags: List[str],
+    note_type: str,
+    updated_by: str = "agentkit",
+    extra: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Format clean YAML frontmatter with tags, type, last_updated, and updated_by."""
+    today_iso = datetime.date.today().isoformat()
+    lines = ["---"]
+    if tags:
+        lines.append("tags:")
+        for t in tags:
+            lines.append(f"  - {t}")
+    lines.append(f"type: {note_type}")
+    lines.append(f"last_updated: {today_iso}")
+    lines.append(f"updated_by: {updated_by}")
+    if extra:
+        for k, v in extra.items():
+            if k in ("tags", "type", "last_updated", "updated_by"):
+                continue
+            if isinstance(v, list):
+                lines.append(f"{k}:")
+                for item in v:
+                    lines.append(f"  - {item}")
+            else:
+                lines.append(f"{k}: {v}")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def write_vault_note_if_missing(file_path: Path, content: str) -> bool:
+    """Write content to file_path if it doesn't already exist. Returns True if created."""
+    if file_path.exists():
+        return False
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
+    return True
+
+
+def get_dashboard_template() -> str:
+    """Return dataview-friendly Dashboard.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - dashboard
+  - hub
+type: dashboard
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# 🌌 Workstation Knowledge Vault
+
+> [!info] Autonomous Workstation Knowledge Graph
+> Central intelligence repository linking the 4-layer developer workstation stack, active applications, architecture contracts, and agent session history.
+
+## 🚀 Active Projects
+
+```dataview
+TABLE type, status, last_updated
+FROM "Projects"
+SORT file.name ASC
+```
+
+- [[Projects/agentkit|agentkit]] — Layer 2: Agent Harness Governance & Directive Standards
+- [[Projects/repokit|repokit]] — Layer 3: GitHub Governance, Squash Merges & PR Automation
+- [[Projects/riced-kubuntu-os|riced-kubuntu-os]] — Layer 0: Kubuntu OS Packages & KDE Plasma System Config
+- [[Projects/workstation-setup|workstation-setup]] — Layer 1: Developer Toolchains & Environment Bridging
+- [[Projects/augurs-bazaar|augurs-bazaar]] — Cross-exchange prediction market trading platform
+- [[Projects/augurs-saber|augurs-saber]] — Algorithmic execution & market making engine
+
+## 🏛️ Architecture & Governance
+
+- [[Architecture/00-Overview|Architecture Overview]] — 4-layer workstation stack & component interactions
+- [[Architecture/contracts|System Contracts]] — Model tiering, zero-prompt discipline, quota rules
+- [[Architecture/decisions/README|Architecture Decision Records (ADRs)]] — Record of architectural choices
+
+## 📥 Directives & User Inputs
+
+> [!todo] User Input Queue
+> Place notes, tasks, and directives into `User-Input/pending/` for ingestion into active agent contexts.
+- [[User-Input/README|User Input Guide]]
+
+## 📜 Recent Sessions
+
+```dataview
+TABLE date, summary
+FROM "Sessions"
+SORT file.ctime DESC
+LIMIT 5
+```
+- [[Sessions/README|Sessions Archive]]
+"""
+
+
+def get_user_input_readme_template() -> str:
+    """Return User-Input/README.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - user-input
+  - directives
+type: reference
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# User Input & Offline Directives Inbox
+
+> [!info] Purpose
+> This directory serves as an offline inbox for user guidance, prompt drafts, task requests, and backlog directives.
+
+## Workflow
+
+1. **Write**: Place your markdown file in `User-Input/pending/<your-note>.md`.
+2. **Ingest**: The agent runs `agentkit vault ingest` (or `agentkit vault ingest --project <name>`).
+3. **Archive**: Processed notes are automatically moved to `User-Input/processed/YYYY-MM-DD-<your-note>.md` with an audit stamp:
+   > [!check] Ingested by agentkit on <iso_timestamp>
+
+> [!note] Project-Specific Inputs
+> You can also write offline notes directly inside project notes like [[Projects/agentkit|agentkit]] under the `## Offline User Input & Notes` section.
+"""
+
+
+def get_architecture_overview_template() -> str:
+    """Return Architecture/00-Overview.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - architecture
+  - overview
+type: architecture
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# Workstation Stack Architecture Overview
+
+> [!info] 4-Layer Workstation Stack
+> The developer workstation environment is strictly partitioned into 4 distinct layers:
+> - **Layer 0**: [[Projects/riced-kubuntu-os|riced-kubuntu-os]] (OS packages, KDE Plasma dotfiles)
+> - **Layer 1**: [[Projects/workstation-setup|workstation-setup]] (Language toolchains, shell profiles)
+> - **Layer 2**: [[Projects/agentkit|agentkit]] (Agent harness standards, permissions, quota governance)
+> - **Layer 3**: [[Projects/repokit|repokit]] (GitHub governance, squash merges, semantic checks)
+
+## System Boundaries
+See [[Architecture/contracts|System Contracts]] for operational guarantees and model tiering specifications.
+"""
+
+
+def get_architecture_contracts_template() -> str:
+    """Return Architecture/contracts.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - architecture
+  - contracts
+type: architecture
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# System Architecture Contracts & Standards
+
+> [!note] Architectural Invariants
+> Directives governing cognitive tiering, zero-prompt command discipline, and quota wrap-up.
+
+## 1. Cognitive Architecture & Model Tiering
+- **Root Orchestrator**: Gemini 4 Argon (`pro`) / Flash High (`flash`) / Claude Opus 5.5 (`opus`).
+- **Subagent Workers**: Partitioned by complexity (`low`: `flash_lite`, `med`: `flash`, `high`: `flash`/`pro`).
+- Zero project editing by Root Orchestrator: All code implementation delegated to worker subagents.
+
+## 2. Quota Awareness & Graceful Wrap-Up
+- Automated fallback routing when provider quota falls below 15%.
+- Circuit breaker and graceful wrap-up when all provider quotas reach critical levels (<5%).
+
+## 3. Tooling & Ecosystem Links
+- [[Projects/agentkit|agentkit]]
+- [[Projects/repokit|repokit]]
+- [[Projects/riced-kubuntu-os|riced-kubuntu-os]]
+- [[Projects/workstation-setup|workstation-setup]]
+"""
+
+
+def get_architecture_decisions_readme_template() -> str:
+    """Return Architecture/decisions/README.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - architecture
+  - adr
+type: reference
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# Architecture Decision Records (ADRs)
+
+> [!info] ADR Repository
+> Stores records of significant architectural choices and structural contracts.
+"""
+
+
+def get_sessions_readme_template() -> str:
+    """Return Sessions/README.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - sessions
+  - history
+type: reference
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# Agent Session Archive
+
+> [!info] Session Logs
+> Completed agent pair-programming summaries, handoffs, and audit trails are logged here.
+"""
+
+
+def get_project_template(project_name: str) -> str:
+    """Return markdown template for a project note."""
+    today_iso = datetime.date.today().isoformat()
+    project_meta = {
+        "agentkit": {
+            "tags": ["project", "layer-2", "agentkit"],
+            "title": "agentkit",
+            "desc": "Layer 2: Agent Harness Governance & Directive Standards",
+            "long_desc": "Audits, enforces, and standardizes harness-agnostic AI agent permissions, directives, cognitive model profiles, and quota governance across workstations.",
+            "layer": "Layer 2 (Agent Harness Governance)",
+            "siblings": "[[Projects/riced-kubuntu-os|riced-kubuntu-os]] (Layer 0), [[Projects/workstation-setup|workstation-setup]] (Layer 1), [[Projects/repokit|repokit]] (Layer 3)",
+            "tasks": [
+                "Maintain pre-approved permissions catalog",
+                "Enforce quota guardian thresholds and fallback routing",
+                "Expand Obsidian vault synchronization and ingest workflows",
+            ],
+        },
+        "repokit": {
+            "tags": ["project", "layer-3", "repokit"],
+            "title": "repokit",
+            "desc": "Layer 3: GitHub Governance, Squash Merges & PR Automation",
+            "long_desc": "Automates GitHub repository governance, branch protection rulesets, squash merge enforcement, and semantic PR checks.",
+            "layer": "Layer 3 (GitHub Repository Governance)",
+            "siblings": "[[Projects/agentkit|agentkit]] (Layer 2)",
+            "tasks": [
+                "Automate branch protection rulesets across repositories",
+                "Enforce Conventional Commits 1.0.0 squash merge titles",
+            ],
+        },
+        "riced-kubuntu-os": {
+            "tags": ["project", "layer-0", "riced-kubuntu-os"],
+            "title": "riced-kubuntu-os",
+            "desc": "Layer 0: Kubuntu OS Packages & KDE Plasma System Config",
+            "long_desc": "Manages Kubuntu base packages, KDE Plasma 6 configurations, and system-level dotfiles.",
+            "layer": "Layer 0 (Base Operating System)",
+            "siblings": "[[Projects/workstation-setup|workstation-setup]] (Layer 1)",
+            "tasks": [
+                "Maintain declarative package manifests",
+                "Sync KDE Plasma configuration snapshots",
+            ],
+        },
+        "workstation-setup": {
+            "tags": ["project", "layer-1", "workstation-setup"],
+            "title": "workstation-setup",
+            "desc": "Layer 1: Developer Toolchains & Environment Bridging",
+            "long_desc": "Configures language runtimes (Node.js, Python, uv), shell profiles (~/.profile, ~/.bashrc), keyrings, and environment bridging.",
+            "layer": "Layer 1 (Developer Toolchains)",
+            "siblings": "[[Projects/riced-kubuntu-os|riced-kubuntu-os]] (Layer 0), [[Projects/agentkit|agentkit]] (Layer 2)",
+            "tasks": [
+                "Manage developer SDK and CLI installations",
+                "Provide idempotent bootstrap and setup scripts",
+            ],
+        },
+        "augurs-bazaar": {
+            "tags": ["project", "augurs-bazaar"],
+            "title": "augurs-bazaar",
+            "desc": "Cross-Exchange Prediction Market Trading Platform",
+            "long_desc": "Decentralized and multi-exchange prediction market data ingestion, cross-venue pricing, and order routing platform.",
+            "layer": "Application Layer",
+            "siblings": "[[Projects/augurs-saber|augurs-saber]]",
+            "tasks": [
+                "Real-time market feed ingestion",
+                "Liquidity pool indexing and pricing models",
+            ],
+        },
+        "augurs-saber": {
+            "tags": ["project", "augurs-saber"],
+            "title": "augurs-saber",
+            "desc": "Algorithmic Execution & Market Making Engine",
+            "long_desc": "High-throughput order execution, risk management, and market making engine paired with augurs-bazaar.",
+            "layer": "Application Layer",
+            "siblings": "[[Projects/augurs-bazaar|augurs-bazaar]]",
+            "tasks": [
+                "Market making latency optimization",
+                "Execution risk limits and circuit breakers",
+            ],
+        },
+    }
+
+    meta = project_meta.get(
+        project_name,
+        {
+            "tags": ["project", project_name],
+            "title": project_name,
+            "desc": f"Project {project_name}",
+            "long_desc": f"Workspace project note for {project_name}.",
+            "layer": "Application",
+            "siblings": "None",
+            "tasks": ["Initialize project tasks"],
+        },
+    )
+
+    tasks_md = "\n".join(f"- [ ] {t}" for t in meta["tasks"])
+    tags_yaml = "\n".join(f"  - {t}" for t in meta["tags"])
+
+    return f"""---
+tags:
+{tags_yaml}
+type: project
+last_updated: {today_iso}
+updated_by: agentkit
+status: active
+---
+
+# {meta["title"]}
+
+> [!info] {meta["desc"]}
+> {meta["long_desc"]}
+
+## Architecture & Contracts
+- Layer: {meta["layer"]}
+- Sibling Systems: {meta["siblings"]}
+- Specification: [[Architecture/contracts|System Contracts]]
+- Decisions: [[Architecture/decisions/README|ADRs]]
+
+## Active Tasks
+{tasks_md}
+
+## Offline User Input & Notes
+> [!todo] Pending Notes
+> Add task requests or design considerations here for automatic ingestion.
+"""
+
+
+def cmd_vault_init(args: argparse.Namespace) -> int:
+    """Idempotently initialize Obsidian vault directory tree, Dashboard, and initial projects."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    print_step(f"Initializing Obsidian Agent Knowledge Vault at {vault_path}")
+
+    # 1. Directories
+    vault_path.mkdir(parents=True, exist_ok=True)
+    (vault_path / ".obsidian").mkdir(exist_ok=True)
+    (vault_path / "00-Inbox").mkdir(exist_ok=True)
+    (vault_path / "User-Input" / "pending").mkdir(parents=True, exist_ok=True)
+    (vault_path / "User-Input" / "processed").mkdir(parents=True, exist_ok=True)
+    (vault_path / "Projects").mkdir(exist_ok=True)
+    (vault_path / "Architecture" / "decisions").mkdir(parents=True, exist_ok=True)
+    (vault_path / "Sessions").mkdir(exist_ok=True)
+
+    # 2. Markers & gitkeeps
+    for keep_dir in [
+        vault_path / "00-Inbox",
+        vault_path / "User-Input" / "pending",
+        vault_path / "User-Input" / "processed",
+        vault_path / "Architecture" / "decisions",
+    ]:
+        gitkeep = keep_dir / ".gitkeep"
+        if not gitkeep.exists():
+            gitkeep.touch()
+
+    # 3. Root notes
+    write_vault_note_if_missing(vault_path / "Dashboard.md", get_dashboard_template())
+    write_vault_note_if_missing(vault_path / "User-Input" / "README.md", get_user_input_readme_template())
+    write_vault_note_if_missing(vault_path / "Architecture" / "00-Overview.md", get_architecture_overview_template())
+    write_vault_note_if_missing(vault_path / "Architecture" / "contracts.md", get_architecture_contracts_template())
+    write_vault_note_if_missing(vault_path / "Architecture" / "decisions" / "README.md", get_architecture_decisions_readme_template())
+    write_vault_note_if_missing(vault_path / "Sessions" / "README.md", get_sessions_readme_template())
+
+    # 4. Initial project notes
+    initial_projects = [
+        "agentkit",
+        "repokit",
+        "riced-kubuntu-os",
+        "workstation-setup",
+        "augurs-bazaar",
+        "augurs-saber",
+    ]
+    for proj in initial_projects:
+        write_vault_note_if_missing(vault_path / "Projects" / f"{proj}.md", get_project_template(proj))
+
+    # 5. Maintain convenient symlink: Path.home() / "Vault" -> vault_path
+    convenient_link = Path.home() / "Vault"
+    if convenient_link != vault_path:
+        try:
+            if convenient_link.is_symlink():
+                if convenient_link.resolve() != vault_path:
+                    convenient_link.unlink()
+                    convenient_link.symlink_to(vault_path)
+            elif not convenient_link.exists():
+                convenient_link.symlink_to(vault_path)
+        except OSError:
+            pass
+
+    print_success(f"Vault initialized successfully: {vault_path}")
+    print_info(f"Dashboard available at: {vault_path / 'Dashboard.md'}")
+    return 0
+
+
+def cmd_vault_status(args: argparse.Namespace) -> int:
+    """Report status and note inventory of Obsidian vault."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists() or not (vault_path / ".obsidian").is_dir():
+        if is_json:
+            print(json.dumps({
+                "exists": False,
+                "path": str(vault_path),
+                "error": "Obsidian vault does not exist or is not initialized."
+            }, indent=2))
+        else:
+            print_failure(f"Obsidian vault not found at {vault_path}. Run 'agentkit vault init' to initialize.")
+        return 1
+
+    total_notes = sum(1 for p in vault_path.rglob("*.md") if ".obsidian" not in p.parts)
+    pending_dir = vault_path / "User-Input" / "pending"
+    pending_files = sorted([p.name for p in pending_dir.glob("*.md") if not p.name.startswith(".")]) if pending_dir.exists() else []
+
+    projects_dir = vault_path / "Projects"
+    project_files = sorted([p.stem for p in projects_dir.glob("*.md") if not p.name.startswith(".")]) if projects_dir.exists() else []
+
+    sessions_dir = vault_path / "Sessions"
+    recent_session: Optional[str] = None
+    if sessions_dir.exists():
+        session_files = [p for p in sessions_dir.glob("*.md") if p.name != "README.md" and not p.name.startswith(".")]
+        if session_files:
+            session_files.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+            recent_session = session_files[0].name
+
+    if is_json:
+        print(json.dumps({
+            "exists": True,
+            "path": str(vault_path),
+            "total_notes": total_notes,
+            "pending_notes": len(pending_files),
+            "pending_files": pending_files,
+            "active_projects": len(project_files),
+            "projects": project_files,
+            "recent_session": recent_session,
+        }, indent=2))
+        return 0
+
+    print_step("Obsidian Vault Status")
+    print_success(f"Vault Path: {vault_path}")
+    print_success(f"Total Notes: {total_notes}")
+    print_success(f"Active Projects: {len(project_files)} ({', '.join(project_files)})")
+    if pending_files:
+        print_warning(f"Pending User Notes: {len(pending_files)} ({', '.join(pending_files)})")
+    else:
+        print_success("Pending User Notes: 0")
+    print_info(f"Most Recent Session: {recent_session or 'None'}")
+    return 0
+
+
+def cmd_vault_ingest(args: argparse.Namespace) -> int:
+    """Ingest pending user directives from User-Input/pending/ and project notes."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists():
+        if is_json:
+            print(json.dumps({"error": f"Vault does not exist at {vault_path}", "ingested_count": 0, "items": []}, indent=2))
+        else:
+            print_failure(f"Vault does not exist at {vault_path}")
+        return 1
+
+    pending_dir = vault_path / "User-Input" / "pending"
+    processed_dir = vault_path / "User-Input" / "processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+
+    ingested_items: List[Dict[str, Any]] = []
+    iso_date = datetime.date.today().isoformat()
+    iso_ts = datetime.datetime.now().astimezone().isoformat()
+
+    # 1. Inspect User-Input/pending/
+    if pending_dir.exists():
+        for note_file in sorted(pending_dir.glob("*.md")):
+            if note_file.name.startswith("."):
+                continue
+            raw_text = note_file.read_text(encoding="utf-8")
+            meta, body = parse_frontmatter_and_body(raw_text)
+
+            # Destination filename with date prefix
+            if note_file.name.startswith(iso_date):
+                dest_name = note_file.name
+            else:
+                dest_name = f"{iso_date}-{note_file.name}"
+            dest_file = processed_dir / dest_name
+            if dest_file.exists():
+                counter = 1
+                base_stem = dest_file.stem
+                while dest_file.exists():
+                    dest_file = processed_dir / f"{base_stem}_{counter}.md"
+                    counter += 1
+
+            audit_stamp = f"\n\n> [!check] Ingested by agentkit on {iso_ts}\n"
+            processed_text = raw_text.rstrip() + audit_stamp
+            dest_file.write_text(processed_text, encoding="utf-8")
+            note_file.unlink()
+
+            ingested_items.append({
+                "source": f"User-Input/pending/{note_file.name}",
+                "processed_path": f"User-Input/processed/{dest_file.name}",
+                "title": meta.get("title", note_file.stem),
+                "project": meta.get("project", getattr(args, "project", None) or "general"),
+                "tags": meta.get("tags", []),
+                "content": raw_text.strip(),
+            })
+
+    # 2. If --project specified, check Projects/<project>.md for ## Offline User Input & Notes
+    project_arg = getattr(args, "project", None)
+    if project_arg:
+        proj_stem = project_arg[:-3] if project_arg.endswith(".md") else project_arg
+        proj_file = vault_path / "Projects" / f"{proj_stem}.md"
+        if proj_file.exists():
+            proj_text = proj_file.read_text(encoding="utf-8")
+            section_header = "## Offline User Input & Notes"
+            if section_header in proj_text:
+                parts = proj_text.split(section_header, 1)
+                before_section = parts[0]
+                section_and_after = parts[1]
+                next_h2 = section_and_after.find("\n## ")
+                if next_h2 != -1:
+                    section_content = section_and_after[:next_h2]
+                    after_section = section_and_after[next_h2:]
+                else:
+                    section_content = section_and_after
+                    after_section = ""
+
+                # Only lines before ### Processed Directives (or before audit stamps) are pending
+                pending_section = section_content
+                processed_section = ""
+                if "### Processed Directives" in section_content:
+                    parts_p = section_content.split("### Processed Directives", 1)
+                    pending_section = parts_p[0]
+                    processed_section = "### Processed Directives" + parts_p[1]
+
+                meaningful_lines = []
+                for line in pending_section.strip().splitlines():
+                    line_s = line.strip()
+                    if not line_s:
+                        continue
+                    if line_s.startswith("> [!todo]") or line_s.startswith("> Add task requests") or line_s.startswith("> [!check] Ingested"):
+                        continue
+                    meaningful_lines.append(line)
+
+                if meaningful_lines:
+                    directive_text = "\n".join(meaningful_lines).strip()
+                    ingested_items.append({
+                        "source": f"Projects/{proj_stem}.md",
+                        "section": "Offline User Input & Notes",
+                        "title": f"{proj_stem} Offline Notes",
+                        "project": proj_stem,
+                        "content": directive_text,
+                    })
+                    audit_entry = (
+                        f"\n\n### Processed Directives\n"
+                        f"{directive_text}\n\n"
+                        f"> [!check] Ingested by agentkit on {iso_ts}\n"
+                    )
+                    if processed_section:
+                        combined_processed = audit_entry + "\n" + processed_section.replace("### Processed Directives\n", "")
+                    else:
+                        combined_processed = audit_entry
+
+                    reset_pending = "\n> [!todo] Pending Notes\n> Add task requests or design considerations here for automatic ingestion.\n"
+                    new_section = reset_pending + combined_processed
+                    updated_text = before_section + section_header + new_section + after_section
+                    proj_file.write_text(updated_text, encoding="utf-8")
+
+    if is_json:
+        print(json.dumps({
+            "ingested_count": len(ingested_items),
+            "items": ingested_items,
+        }, indent=2))
+        return 0
+
+    if not ingested_items:
+        print_info("No pending user inputs found.")
+        return 0
+
+    print_step(f"Ingested {len(ingested_items)} Pending Directive(s)")
+    for item in ingested_items:
+        src = item["source"]
+        dest = item.get("processed_path", src)
+        print_success(f"{src} -> {dest}")
+        snippet = item["content"].replace("\n", " ")
+        if len(snippet) > 80:
+            snippet = snippet[:77] + "..."
+        print(f"    {BOLD}Directives:{RESET} {snippet}")
+
+    return 0
+
+
+def cmd_vault_sync(args: argparse.Namespace) -> int:
+    """Idempotently sync project state, tasks, and ADR links in Projects/<project>.md."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists():
+        if is_json:
+            print(json.dumps({"error": f"Vault does not exist at {vault_path}", "synced": []}, indent=2))
+        else:
+            print_failure(f"Vault does not exist at {vault_path}")
+        return 1
+
+    projects_dir = vault_path / "Projects"
+    projects_dir.mkdir(parents=True, exist_ok=True)
+
+    project_arg = getattr(args, "project", None)
+    if project_arg:
+        target_projects = [project_arg[:-3] if project_arg.endswith(".md") else project_arg]
+    else:
+        found_projs = [p.stem for p in projects_dir.glob("*.md") if not p.name.startswith(".")]
+        target_projects = found_projs if found_projs else [
+            "agentkit",
+            "repokit",
+            "riced-kubuntu-os",
+            "workstation-setup",
+            "augurs-bazaar",
+            "augurs-saber",
+        ]
+
+    # Collect available ADRs from Architecture/decisions
+    decisions_dir = vault_path / "Architecture" / "decisions"
+    adr_links: List[str] = []
+    if decisions_dir.exists():
+        for adr_file in sorted(decisions_dir.glob("*.md")):
+            if adr_file.name == "README.md" or adr_file.name.startswith("."):
+                continue
+            adr_links.append(f"- [[Architecture/decisions/{adr_file.stem}|{adr_file.stem}]]")
+
+    synced_projects: List[str] = []
+    for proj in target_projects:
+        proj_file = projects_dir / f"{proj}.md"
+        if proj_file.exists():
+            content = proj_file.read_text(encoding="utf-8")
+            meta, body = parse_frontmatter_and_body(content)
+            meta["last_updated"] = datetime.date.today().isoformat()
+            meta["updated_by"] = "agentkit"
+            if "status" not in meta:
+                meta["status"] = "active"
+
+            if adr_links:
+                adr_block = "\n".join(adr_links)
+                if "## Architecture Decisions (ADRs)" not in body:
+                    body = body.rstrip() + f"\n\n## Architecture Decisions (ADRs)\n{adr_block}\n"
+
+            if "## Active Tasks" not in body:
+                body = body.rstrip() + "\n\n## Active Tasks\n- [ ] Sync project state and directives\n"
+
+            tags = meta.pop("tags", ["project", proj])
+            if isinstance(tags, str):
+                tags = [tags]
+            note_type = meta.pop("type", "project")
+            updated_by = meta.pop("updated_by", "agentkit")
+            new_fm = format_frontmatter(tags, note_type, updated_by, extra=meta)
+            proj_file.write_text(new_fm + "\n\n" + body.strip() + "\n", encoding="utf-8")
+        else:
+            proj_file.write_text(get_project_template(proj), encoding="utf-8")
+
+        synced_projects.append(proj)
+        if not is_json:
+            print_success(f"Synced project note: Projects/{proj}.md")
+
+    if is_json:
+        print(json.dumps({"synced": synced_projects}, indent=2))
+
+    return 0
+
+
+def cmd_vault_note(args: argparse.Namespace) -> int:
+    """Create a structured note or append a section in the vault."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists():
+        if is_json:
+            print(json.dumps({"error": f"Vault does not exist at {vault_path}"}, indent=2))
+        else:
+            print_failure(f"Vault does not exist at {vault_path}")
+        return 1
+
+    proj_arg = args.project
+    proj_stem = proj_arg[:-3] if proj_arg.endswith(".md") else proj_arg
+    title = args.title.strip()
+    content = args.content.strip()
+
+    # Collect tags
+    tags: List[str] = ["project", proj_stem]
+    if getattr(args, "tag", None):
+        raw_tags = args.tag if isinstance(args.tag, list) else [args.tag]
+        for item in raw_tags:
+            for part in str(item).split(","):
+                cleaned = part.strip()
+                if cleaned and cleaned not in tags:
+                    tags.append(cleaned)
+
+    # Check if user specified a section to append into the project note directly
+    section_arg = getattr(args, "section", None)
+    if section_arg:
+        proj_file = vault_path / "Projects" / f"{proj_stem}.md"
+        if not proj_file.exists():
+            proj_file.parent.mkdir(parents=True, exist_ok=True)
+            proj_file.write_text(get_project_template(proj_stem), encoding="utf-8")
+
+        proj_text = proj_file.read_text(encoding="utf-8")
+        section_heading = f"## {section_arg}"
+        if section_heading in proj_text:
+            parts = proj_text.split(section_heading, 1)
+            updated = parts[0] + section_heading + "\n" + content + "\n\n" + parts[1].lstrip("\n")
+        else:
+            updated = proj_text.rstrip() + f"\n\n{section_heading}\n{content}\n"
+        proj_file.write_text(updated, encoding="utf-8")
+
+        if is_json:
+            print(json.dumps({
+                "success": True,
+                "action": "appended_section",
+                "path": str(proj_file),
+                "section": section_arg,
+                "project": proj_stem,
+            }, indent=2))
+        else:
+            print_success(f"Appended section '{section_arg}' to Projects/{proj_stem}.md")
+        return 0
+
+    # Otherwise, create or append to structured note in Projects/
+    safe_title = re.sub(r"[^\w\-\s]", "", title).strip().replace(" ", "-")
+    if not safe_title:
+        safe_title = "note"
+
+    note_file = vault_path / "Projects" / f"{safe_title}.md"
+    action = "created"
+
+    if note_file.exists():
+        existing_text = note_file.read_text(encoding="utf-8")
+        timestamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+        appended_block = f"\n\n## {timestamp} Entry\n\n{content}\n"
+        note_file.write_text(existing_text.rstrip() + appended_block, encoding="utf-8")
+        action = "appended"
+    else:
+        note_file.parent.mkdir(parents=True, exist_ok=True)
+        fm = format_frontmatter(tags=tags, note_type="note", updated_by="agentkit", extra={"project": proj_stem})
+        body = f"""# {title}
+
+> [!note] Project: [[Projects/{proj_stem}|{proj_stem}]]
+
+{content}
+"""
+        note_file.write_text(fm + "\n\n" + body, encoding="utf-8")
+
+    # Link from Projects/<project>.md if exists
+    proj_file = vault_path / "Projects" / f"{proj_stem}.md"
+    if proj_file.exists() and proj_file != note_file:
+        proj_text = proj_file.read_text(encoding="utf-8")
+        wikilink = f"- [[Projects/{safe_title}|{title}]]"
+        if wikilink not in proj_text:
+            if "## Related Notes" in proj_text:
+                parts = proj_text.split("## Related Notes", 1)
+                updated_proj = parts[0] + "## Related Notes\n" + wikilink + "\n" + parts[1].lstrip("\n")
+            else:
+                updated_proj = proj_text.rstrip() + f"\n\n## Related Notes\n{wikilink}\n"
+            proj_file.write_text(updated_proj, encoding="utf-8")
+
+    if is_json:
+        print(json.dumps({
+            "success": True,
+            "action": action,
+            "path": str(note_file),
+            "project": proj_stem,
+            "title": title,
+            "tags": tags,
+        }, indent=2))
+    else:
+        if action == "created":
+            print_success(f"Created structured note: Projects/{note_file.name}")
+        else:
+            print_success(f"Appended content to existing note: Projects/{note_file.name}")
+
+    return 0
+
+
+# ==============================================================================
 # Main Argument Parser
 # ==============================================================================
 
@@ -1791,6 +2638,73 @@ def build_parser() -> argparse.ArgumentParser:
     p_q_route.add_argument("--json", action="store_true", help="Output JSON")
     p_q_route.set_defaults(func=cmd_quota_route)
     p_quota.set_defaults(func=_print_subparser_help(p_quota))
+
+    # vault
+    p_vault = subparsers.add_parser(
+        "vault",
+        parents=[harness_parent],
+        help="Obsidian knowledge vault management and offline directives integration",
+    )
+    vault_sub = p_vault.add_subparsers(dest="vault_command", help="Vault subcommands")
+
+    vault_parent = argparse.ArgumentParser(add_help=False)
+    vault_parent.add_argument(
+        "--path",
+        help="Custom Obsidian vault root path (defaults to AGENTKIT_VAULT_PATH, OBSIDIAN_VAULT_PATH, or ~/Documents/Vault)",
+    )
+
+    # vault init
+    p_v_init = vault_sub.add_parser(
+        "init",
+        parents=[harness_parent, vault_parent],
+        help="Idempotently initialize Obsidian vault directory tree, Dashboard, and initial projects",
+    )
+    p_v_init.set_defaults(func=cmd_vault_init)
+
+    # vault status
+    p_v_status = vault_sub.add_parser(
+        "status",
+        parents=[harness_parent, vault_parent],
+        help="Report Obsidian vault health, note count, and pending user directives",
+    )
+    p_v_status.add_argument("--json", action="store_true", help="Output status in JSON format")
+    p_v_status.set_defaults(func=cmd_vault_status)
+
+    # vault ingest
+    p_v_ingest = vault_sub.add_parser(
+        "ingest",
+        parents=[harness_parent, vault_parent],
+        help="Ingest offline user directives from User-Input/pending and project notes",
+    )
+    p_v_ingest.add_argument("--project", help="Target project to ingest directives for")
+    p_v_ingest.add_argument("--json", action="store_true", help="Output ingested items in JSON format")
+    p_v_ingest.set_defaults(func=cmd_vault_ingest)
+
+    # vault sync
+    p_v_sync = vault_sub.add_parser(
+        "sync",
+        parents=[harness_parent, vault_parent],
+        help="Idempotently sync project state, tasks, and ADR links",
+    )
+    p_v_sync.add_argument("--project", help="Specific project to sync (defaults to all projects)")
+    p_v_sync.add_argument("--json", action="store_true", help="Output sync summary in JSON format")
+    p_v_sync.set_defaults(func=cmd_vault_sync)
+
+    # vault note
+    p_v_note = vault_sub.add_parser(
+        "note",
+        parents=[harness_parent, vault_parent],
+        help="Create a structured note or append a section in the vault",
+    )
+    p_v_note.add_argument("--project", required=True, help="Associated project name")
+    p_v_note.add_argument("--title", required=True, help="Note or section title")
+    p_v_note.add_argument("--content", required=True, help="Body content for the note")
+    p_v_note.add_argument("--tag", action="append", help="Tag to attach to note (can be specified multiple times)")
+    p_v_note.add_argument("--section", help="Optional section heading to append into project note directly")
+    p_v_note.add_argument("--json", action="store_true", help="Output note creation details in JSON format")
+    p_v_note.set_defaults(func=cmd_vault_note)
+
+    p_vault.set_defaults(func=_print_subparser_help(p_vault))
 
     return parser
 
