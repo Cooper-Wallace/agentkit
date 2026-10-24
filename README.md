@@ -121,6 +121,11 @@ agentkit profile set opus-flash
   - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`filter-and-wrap.py` -> `headroom-wrap.py`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
   - **Deterministic Hook Gates**: Hard blocks direct pushes and trunk merges to `main` (`guard-git-operations.sh`), gates destructive deletions, and prevents task termination on test failures or dirty trees (`verify-clean-completion.sh`).
   - Pre-approves Git worktree operations (`git worktree`, `git rev-parse`, `git ls-files`) for concurrent subagent isolation.
+- **Git Tree Management & Concurrency Isolation**:
+  - Enforces three foundational tree management invariants across all agent workflows:
+    - **One Branch Per Change**: Dedicated, short-lived feature branches (`feat/`, `fix/`, `docs/`, `refactor/`, `test/`) with zero stacked unrelated changes.
+    - **One Commit Per Subagent**: Each worker subagent produces a single atomic Conventional Commit representing its completed and tested deliverable.
+    - **Isolated Git Worktrees for Concurrent Threads**: Guarantees isolated worktrees (`Workspace: "share"` or `git worktree add`) for concurrent threads within the same repository, eliminating `.git/index.lock` collisions, dirty tree races, and write contention.
 
 ---
 
@@ -403,7 +408,8 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │       ├── 0007-agentkit-harness-agnostic-standardisation.md
 │       ├── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
 │       ├── 0009-quota-aware-model-routing.md
-│       └── 0010-obsidian-perpetual-knowledge-vault.md
+│       ├── 0010-obsidian-perpetual-knowledge-vault.md
+│       └── 0011-git-tree-management-and-worktree-isolation.md
 │
 └── tests/
     └── test_cli.py               # Automated unit tests

@@ -21,7 +21,8 @@ Welcome to the enterprise autonomous development environment. These directives g
   - **Tag Convention**: Orchestrators must place `[complexity: low|med|high]` at the start of subagent prompts.
 - **Worker Subagents (Gemini 3.8 Flash / Flash Lite)**:
   - Code implementation, localized refactoring, documentation syncing, and test runs MUST be delegated to subagents launched with `Model: "flash"` (or `flash_lite` for low-complexity tasks) and `Workspace: "share"` (or `Workspace: "inherit"` when the active workspace is `$HOME` rather than a VCS repository root).
-  - **Disjoint-File Parallel Worker Partitioning**: Multi-component tasks (e.g., backend logic, frontend UI, documentation, and unit tests) MUST be partitioned across concurrent subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
+  - **One Atomic Commit Per Subagent**: Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work. Workers must not leave uncommitted changes or produce messy WIP commits.
+  - **Disjoint-File Parallel Worker Partitioning & Isolated Worktrees**: Multi-component tasks (e.g., backend logic, frontend UI, documentation, and unit tests) MUST be partitioned across concurrent subagents operating on strictly disjoint file sets. Furthermore, when multiple threads or subagents work concurrently within the same repository, they MUST execute in isolated git worktrees (`Workspace: "share"` in Antigravity or `git worktree add`) to prevent `.git/index.lock` collisions, dirty working tree races, and write contention. Concurrent workers must never operate on the same physical working directory simultaneously.
 - **Adversarial Auditor (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7)**:
   - Before requesting task completion or submitting a Pull Request, an adversarial review must evaluate the `git diff` against the initial specification.
 - **Crash & Compaction Recovery Protocol**:
@@ -93,18 +94,24 @@ Welcome to the enterprise autonomous development environment. These directives g
 
 ## 5. Git Source Control & Trunk Hygiene
 
-- **Strict Trunk Protection**:
-  - Never run `git push origin main`, `git push origin master`, or force-pushes.
-  - Direct local merges into `main` are prohibited.
-  - Always operate on short-lived branches:
+- **Branching Strategy: One Branch Per Change**:
+  - Every discrete task, feature, bug fix, or refactor must operate on its own dedicated short-lived feature branch branched directly from `main`:
     - `feat/<feature-name>`: New functionality
     - `fix/<bug-name>`: Bug fixes
     - `docs/<doc-name>`: Documentation
     - `refactor/<target>`: Structural improvements
     - `test/<suite>`: Test additions
-- **Conventional Commits 1.0.0**:
-  - Every commit message must adhere to: `<type>(<scope>): <short summary>`
+  - Never stack unrelated features or accumulate unrelated changes on the same branch.
+- **Commit Hygiene: One Atomic Commit Per Subagent**:
+  - Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work.
+  - Workers must not leave uncommitted changes or produce messy WIP commits.
+  - Every commit message must adhere to Conventional Commits 1.0.0: `<type>(<scope>): <short summary>`
   - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+- **Multi-Agent Concurrency: Isolated Git Worktrees for Concurrent Threads**:
+  - When multiple agent threads or subagents work concurrently within the same repository, they MUST operate in isolated git worktrees (`Workspace: "share"` in Antigravity or `git worktree add`) to prevent `.git/index.lock` collisions, dirty working tree races, and write contention. Concurrent workers must never operate on the same physical working directory simultaneously.
+- **Strict Trunk Protection & Governance**:
+  - Never run `git push origin main`, `git push origin master`, or force-pushes. Direct local merges into `main` are prohibited.
+  - Repositories follow the Squash and Merge model governed by `repokit`.
 - **Test Before Completion**:
   - Never mark work complete without running automated tests. The harness `Stop` hook will reject termination if tests fail or if the working tree is dirty.
 

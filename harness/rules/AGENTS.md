@@ -77,21 +77,27 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ## 5. Git Workflow & Version Control Standards
 
-- **Branching Strategy**:
-  - Always work in short-lived feature branches branched from `main`:
+- **Branching Strategy: One Branch Per Change**:
+  - Every discrete task, feature, bug fix, refactor, or test improvement must operate on its own dedicated short-lived feature branch branched directly from `main`:
     - `feat/<feature-name>`: New functionality
     - `fix/<bug-name>`: Bug fixes
     - `docs/<doc-name>`: Documentation updates
     - `refactor/<target>`: Structural code improvements
     - `test/<suite>`: Test additions or refactoring
-- **Conventional Commits 1.0.0**:
-  - Commit messages must strictly follow the format: `<type>(<scope>): <short summary>`
-  - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`
+  - Never stack unrelated features or accumulate unrelated changes on the same branch. Keep scope narrow, focused, and atomic.
+- **Commit Hygiene: One Atomic Commit Per Subagent**:
+  - Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work.
+  - Workers must never leave uncommitted changes or produce messy WIP commits.
+  - Commit messages must strictly follow Conventional Commits 1.0.0: `<type>(<scope>): <short summary>`
+  - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
   - Use imperative, present-tense verbs ("add", "fix", "update", not "added" or "fixes").
   - Scope is optional but encouraged for modular repositories.
+- **Multi-Agent Concurrency: Isolated Git Worktrees for Concurrent Threads**:
+  - When multiple agent threads or subagents work concurrently within the same repository, they MUST operate in isolated git worktrees (`Workspace: "share"` in Antigravity or `git worktree add`) to prevent `.git/index.lock` collisions, dirty working tree races, and write contention.
+  - Concurrent workers must never operate on the same physical working directory simultaneously.
 - **Trunk Hygiene & Merge Governance**:
   - Repositories follow the **Squash and Merge** model governed by `repokit`.
-  - Squash titles default to `PR_TITLE` and bodies to `PR_BODY`.
+  - Squash titles default to `PR_TITLE` and bodies to `PR_BODY`. Direct pushes to `main` and local trunk merges are strictly prohibited.
 
 ---
 

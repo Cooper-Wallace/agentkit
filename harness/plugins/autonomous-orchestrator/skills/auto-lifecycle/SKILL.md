@@ -32,7 +32,7 @@ flowchart LR
    - Define exact files to modify.
    - Define test contracts and acceptance criteria.
    - Outline subtask DAG with explicit complexity tiers (`[complexity: low|med|high]`) for parallel worker execution.
-4. **Branch Isolation**: Ensure the active branch is a short-lived feature branch (`feat/<name>` or `fix/<name>`).
+4. **Branch Isolation (One Branch Per Change)**: Ensure the active branch is a dedicated short-lived feature branch (`feat/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`, `test/<name>`) branched directly from `main`. Never stack unrelated changes or accumulate multiple features on the same branch.
 
 ### Phase 2: Autonomous Implementation (Worker Subagents)
 1. **Strict Subagent Execution**: ALL code, test, and UI edits (including initial implementation as well as iterative tuning after user review feedback) must be executed by subagents (`Workspace: "inherit"` or `"share"`), never directly by the Root Orchestrator (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7) in the root session.
@@ -48,22 +48,23 @@ flowchart LR
 5. **Automated Tool Output Token Suppression (Headroom CCR)**:
    - Note that `PreToolUse` automatically intercepts and wraps verbose test/inspection commands via `headroom-wrap.py` (`filter-and-wrap.py` -> `headroom-wrap.py`), compressing outputs >= 1,500 chars by 60-90%.
    - Full uncompressed outputs are cached locally at `~/.cache/antigravity-headroom/<hash>.txt` for reversible CCR retrieval via `read_file` when specific stack trace slices are required.
-6. **Launch Worker Subagents**: Delegate coding and testing using `invoke_subagent`:
-   - Set `Workspace: "share"` (or `"branch"`) when inside a Git repository root, or `Workspace: "inherit"` with strict disjoint file boundaries when the active session workspace is `$HOME`.
+6. **Launch Worker Subagents in Isolated Worktrees**: Delegate coding and testing using `invoke_subagent`:
+   - **Separate Worktrees for Concurrent Threads**: Always set `Workspace: "share"` (which provisions an isolated Git worktree) when inside a Git repository root to prevent `.git/index.lock` collisions, dirty working tree races, and write contention across concurrent threads. Concurrent workers must never operate in the same physical working directory simultaneously. Use `Workspace: "inherit"` with strictly disjoint file boundaries only when the active session workspace is `$HOME` rather than a repository root.
    - Pass the exact spec contract from Phase 1.
-7. **Zero-Prompt Subagent Prompting**: Include explicit autonomy constraints in every `invoke_subagent` prompt:
+7. **Zero-Prompt Subagent Prompting & Atomic Commit Instruction**: Include explicit autonomy and commit constraints in every `invoke_subagent` prompt:
+   - **One Commit Per Subagent**: Instruct each worker subagent: *"Upon verifying all changes pass automated tests, stage your modifications and produce exactly ONE atomic Conventional Commit (`git add <files>` and `git commit -m '<type>(<scope>): <short summary>'`). Do NOT leave uncommitted modifications or produce multiple messy WIP commits."*
    - **Pure-Edit Workers**: For workers modifying code, UI, or documentation without running tests/commands: *"Use ONLY `read_file` and `edit_file`. NEVER call `run_command`."*
    - **Test/Build Workers**: For workers running tests or build commands: *"Prioritize workspace-relative generic commands (`.venv/bin/pytest tests -v`, `git status`, `git diff`) when inside the repo root. Never use `cd ... && ...`, shell chains (`&&`, `;`, `|`), or `/path/to/.venv/bin/python3 -c ...` one-liners. Reserve absolute or `-C` paths only when cross-directory invocations from `$HOME` are required."*
-   - Instruct workers: *"Return only a concise 10-line summary of files modified and verification results."*
+   - Instruct workers: *"Return only a concise 10-line summary of files modified, commit hash/message, and test verification results."*
 8. **Reactive Wakeup**: When the subagents complete, the agent harness reactively resumes the Root Orchestrator.
 
 ### Phase 3: Adversarial Critique & Self-Healing (Argon 4 / Flash High / Opus 5.5)
-1. **Inspect Git Diff**:
-   - Run `git status` and `git diff` to view the comprehensive changes.
+1. **Inspect Git Diff & Subagent Commits**:
+   - Run `git status`, `git diff`, and `git log -n 1 --stat` to inspect changes and verify that each worker subagent produced a single atomic Conventional Commit representing its completed deliverable without uncommitted working tree residue.
 2. **Audit Checkpoints**:
    - Review logic against edge cases, error handling, and potential race conditions.
    - Verify that no secrets, `.env` files, or temporary scratch statements leaked.
-   - Verify that commit messages comply with Conventional Commits 1.0.0.
+   - Verify that commit messages comply with Conventional Commits 1.0.0 and represent a coherent, single unit of work.
 3. **Self-Healing & User Review Feedback Loop**: When either the adversarial review OR the user reports a regression, tuning issue, or requested adjustment: the Root Orchestrator diagnoses the logs/diff and updates `plan.md`, but **MUST dispatch a subagent (`Model: "flash"`)** to implement the fix and update unit tests — never editing project files directly in the root session.
 
 ### Phase 4: Verification, Vault Memory Persistence & PR Promotion Gate

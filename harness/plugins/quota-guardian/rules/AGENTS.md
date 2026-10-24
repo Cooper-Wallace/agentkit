@@ -39,3 +39,11 @@ All subagent invocations MUST explicitly declare their task complexity in their 
   1. **Halt New Delegations**: Immediately cease invoking new subagents.
   2. **Do Not Retry Failed Invocations**: Do not attempt to bypass or re-invoke subagents with different model names.
   3. **Execute Quota Wrap-Up Runbook**: Follow the `quota-wrapup` skill to run automated tests, commit work-in-progress, generate the handoff note in the Obsidian AgentVault (`$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and advise the user.
+
+---
+
+## 4. Git Tree Management & Worktree Safety
+
+- **One Branch Per Change**: Quota wrap-up commits and active feature work must remain on their dedicated feature branch (`feat/`, `fix/`, etc.). Never commit wrap-up WIP directly to `main`.
+- **One Commit Per Subagent**: Worker subagents completing units of work prior to wrap-up must stage and commit a single atomic Conventional Commit. If wrap-up interrupts execution mid-task, create a single clean WIP commit (`chore(wip): ...`).
+- **Isolated Worktrees**: When running concurrent workers across threads or subagents in the same repository, always utilize isolated git worktrees (`Workspace: "share"` in Antigravity or `git worktree add`) to avoid `.git/index.lock` collisions, dirty working tree races, and state corruption during quota-triggered wrap-up.

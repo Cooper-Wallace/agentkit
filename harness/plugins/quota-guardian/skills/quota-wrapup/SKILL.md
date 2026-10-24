@@ -29,15 +29,22 @@ python3 -m unittest discover tests -v
 
 ---
 
-## Phase 3: Git Working Tree Hygiene & WIP Commit
+## Phase 3: Git Working Tree Hygiene, One-Commit Safety & Worktree State
 
-1. **Inspect Working Tree**:
+1. **One Branch Per Change**:
+   - Ensure the working tree is located on the dedicated short-lived feature branch (`feat/<name>`, `fix/<name>`, etc.).
+   - Never commit wrap-up progress directly to `main` or `master`.
+2. **Worktree Concurrency Safety**:
+   - If running within an isolated git worktree (`Workspace: "share"`), verify that active index locks (`.git/index.lock`) are clear and uncommitted edits are confined to this worktree.
+   - Do not clobber sibling worktrees used by concurrent subagent threads.
+3. **Inspect Working Tree**:
    ```bash
    git status
    git diff --stat
    ```
-2. **Commit Uncommitted Work**:
-   Stage and commit all completed and in-flight changes to the active feature branch using a Conventional Commit message:
+4. **Produce Single Atomic Commit (One Commit per Subagent / Wrap-up)**:
+   - If a subagent completed its deliverable, ensure it produced a single atomic Conventional Commit.
+   - If wrap-up interrupts execution mid-flight with uncommitted changes, stage and consolidate all remaining progress into exactly ONE atomic WIP commit on the active feature branch:
    ```bash
    git add -A
    git commit -m "chore(wip): save progress before quota wrap-up"

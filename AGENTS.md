@@ -61,7 +61,8 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 │       ├── 0007-agentkit-harness-agnostic-standardisation.md
 │       ├── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
 │       ├── 0009-quota-aware-model-routing.md
-│       └── 0010-obsidian-perpetual-knowledge-vault.md
+│       ├── 0010-obsidian-perpetual-knowledge-vault.md
+│       └── 0011-git-tree-management-and-worktree-isolation.md
 │
 └── tests/
     ├── test_cli.py           # Automated unit test suite
@@ -142,3 +143,29 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
   - **Project Living Notes**: Agents maintain project knowledge bases in `Projects/<project>.md` (e.g. `agentkit.md`, `repokit.md`), keeping active architecture, current branch/commit, and task checklists synchronized.
   - **Handoff at Session Wrap-Up (Phase 4)**: Agents author structured handoff notes to `Sessions/handoff-YYYY-MM-DD-<topic>.md`, capturing completed deliverables, test verification results, and offline tasks.
   - **Visual Architecture with JSON Canvas**: Visual architecture maps and multi-agent DAGs are maintained in `Architecture/` using the open JSON Canvas specification (`.canvas`).
+
+---
+
+## 5. Git Workflow & Version Control Standards
+
+- **Branching Strategy: One Branch Per Change**:
+  - Every discrete task, feature, bug fix, refactor, or test improvement must operate on its own dedicated short-lived feature branch branched directly from `main`:
+    - `feat/<feature-name>`: New functionality
+    - `fix/<bug-name>`: Bug fixes
+    - `docs/<doc-name>`: Documentation updates
+    - `refactor/<target>`: Structural code improvements
+    - `test/<suite>`: Test additions or refactoring
+  - Never stack unrelated features or accumulate unrelated changes on the same branch. Keep scope narrow, focused, and atomic.
+- **Commit Hygiene: One Atomic Commit Per Subagent**:
+  - Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work.
+  - Workers must never leave uncommitted changes or produce messy WIP commits.
+  - Commit messages must strictly follow Conventional Commits 1.0.0: `<type>(<scope>): <short summary>`
+  - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
+  - Use imperative, present-tense verbs ("add", "fix", "update", not "added" or "fixes").
+  - Scope is optional but encouraged for modular repositories.
+- **Multi-Agent Concurrency: Isolated Git Worktrees for Concurrent Threads**:
+  - When multiple agent threads or subagents work concurrently within the same repository, they MUST operate in isolated git worktrees (`Workspace: "share"` in Antigravity or `git worktree add`) to prevent `.git/index.lock` collisions, dirty working tree races, and write contention.
+  - Concurrent workers must never operate on the same physical working directory simultaneously.
+- **Trunk Hygiene & Merge Governance**:
+  - Repositories follow the **Squash and Merge** model governed by `repokit`.
+  - Squash titles default to `PR_TITLE` and bodies to `PR_BODY`. Direct pushes to `main` and local trunk merges are strictly prohibited.
