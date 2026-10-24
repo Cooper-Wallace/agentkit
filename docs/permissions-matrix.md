@@ -58,7 +58,7 @@ This document outlines the security classification, categories, and safety ratio
 In addition to terminal command execution permissions (`command(...)`), autonomous agents utilize Model Context Protocol (MCP) servers and harness-level meta-tools to interact with structured external services and persistent state.
 
 ### Rationale & Boundary Design
-- **Eliminating Approval Fatigue**: Standard MCP tools (`memory`, `repomix`, `github`, `fetch`, `sqlite`) and invocation tools (`call_mcp_tool`) are invoked repeatedly during multi-agent workflows. Pre-approving trusted servers and methods removes repetitive interactive prompts, allowing seamless autonomous orchestration across conversational threads and subagents.
+- **Eliminating Approval Fatigue**: Standard MCP tools (`memory`, `repomix`, `github`, `fetch`) and invocation tools (`call_mcp_tool`) are invoked repeatedly during multi-agent workflows. Pre-approving trusted servers and methods removes repetitive interactive prompts, allowing seamless autonomous orchestration across conversational threads and subagents.
 - **Safety Boundary**: Only explicitly registered, vetted MCP servers defined in `config/mcp.json` and `config/permissions.json` are pre-approved. Any unverified third-party MCP server or arbitrary external tool invocation remains subject to interactive user confirmation.
 
 ### A. Persistent Knowledge Graph (`memory`)
@@ -77,11 +77,7 @@ In addition to terminal command execution permissions (`command(...)`), autonomo
 - **Permissions**: `mcp(fetch)`, `mcp(fetch/*)`, `mcp(fetch/fetch)`
 - **Rationale**: Provides read-only retrieval and markdown conversion of online documentation, API references, and external specs.
 
-### E. Database Queries (`sqlite`)
-- **Permissions**: `mcp(sqlite)`, `mcp(sqlite/*)`, `mcp(sqlite/read_query)`, `mcp(sqlite/write_query)`, `mcp(sqlite/create_table)`, `mcp(sqlite/list_tables)`, `mcp(sqlite/describe_table)`
-- **Rationale**: Facilitates local development database schema inspection and analytical queries against developer SQLite databases configured in `config/mcp.json`.
-
-### F. Harness Invocation & Resource Access (`provisioned_tools`)
+### E. Harness Invocation & Resource Access (`provisioned_tools`)
 - **Permissions**: `call_mcp_tool`, `call_mcp_tool(*)`, `list_resources`, `read_resource`
 - **Rationale**: Pre-approves the harness meta-tools that dispatch calls to configured MCP servers and read external server resources, preventing approval prompts at the harness invocation layer.
 

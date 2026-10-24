@@ -84,7 +84,7 @@ agentkit profile set opus-flash
   - Pre-approves complete git hygiene and GitHub workflows (`git status`, `git diff`, `git log`, `git checkout`, `gh pr`, `repokit`).
   - Pre-approves multi-language test harnesses (`pytest`, `unittest`, `npm test`, `cargo test`, `go test`).
   - Pre-approves agentkit ecosystem binaries (`agentkit`, `workstation-setup`, `ws-setup`).
-  - Pre-approves provisioned MCP servers and cross-thread memory tools (`memory`, `repomix`, `github`, `fetch`, `sqlite`) and harness invocation tools (`call_mcp_tool`), removing approval fatigue across conversation threads.
+  - Pre-approves provisioned MCP servers and cross-thread memory tools (`memory`, `repomix`, `github`, `fetch`) and harness invocation tools (`call_mcp_tool`), removing approval fatigue across conversation threads.
 - **Reusable Domain Skills & Utility Tools**:
   - Distributes consolidated engineering and machine learning skills (`project/skills/`) from `AugursAptitude` (`timeseries-ml`, `feature-engineering`, `model-evaluation`, `duckdb-pipeline`, `llm-structured-output`, `prompt-engineering`).
   - Provides frictionless project integration via `agentkit skill install <name> [--copy]` and inspection via `agentkit skill info <name>`.
@@ -106,9 +106,9 @@ agentkit profile set opus-flash
 - **Universal Agent Directives**:
   - Deploys canonical developer rules (`templates/AGENTS.md` and symlinked `GEMINI.md`) emphasizing Conventional Commits, clean architecture, bash safety, and verification before completion.
 - **Declarative MCP Server Management**:
-  - Declarative catalog (`config/mcp.json`) for 5 standard Model Context Protocol servers: `github`, `fetch`, `sqlite`, `memory` (cross-repository knowledge graph), and `repomix` (AST-compressed repository code maps).
-  - All sensitive credentials decoupled via environment variable interpolations (`${GITHUB_PERSONAL_ACCESS_TOKEN}`, `${SQLITE_DEV_DB}`).
-  - Active diagnostics: `audit` and `apply` verify CLI dependencies (`npx`, `uvx`) and inspect `os.environ` and shell profiles (`~/.profile`, `~/.bashrc`), providing actionable setup advisories for missing variables.
+  - Declarative catalog (`config/mcp.json`) for 4 standard Model Context Protocol servers: `github`, `fetch`, `memory` (cross-repository knowledge graph), and `repomix` (AST-compressed repository code maps).
+  - All sensitive credentials decoupled via environment variable interpolations (`${GITHUB_PERSONAL_ACCESS_TOKEN}`).
+  - Active diagnostics: `audit` and `apply` verify CLI dependencies (`npx`, `node`) and inspect `os.environ` and shell profiles (`~/.profile`, `~/.bashrc`), providing actionable setup advisories for missing variables.
   - Clear architectural boundary: `agentkit` audits runtime and environment readiness while delegating OS/toolchain provisioning and shell environment injection to `workstation-setup`.
 - **Project Scaffolding**:
   - Scaffolds modular project-level `AGENTS.md` and `GEMINI.md` files with custom test commands and architecture maps.

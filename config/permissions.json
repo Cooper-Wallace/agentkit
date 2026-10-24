@@ -202,18 +202,6 @@
         "mcp(fetch/*)",
         "mcp(fetch/fetch)"
       ]
-    },
-    "sqlite": {
-      "description": "Local SQLite database queries and schema inspection.",
-      "permissions": [
-        "mcp(sqlite)",
-        "mcp(sqlite/*)",
-        "mcp(sqlite/read_query)",
-        "mcp(sqlite/write_query)",
-        "mcp(sqlite/create_table)",
-        "mcp(sqlite/list_tables)",
-        "mcp(sqlite/describe_table)"
-      ]
     }
   },
   "tools": {

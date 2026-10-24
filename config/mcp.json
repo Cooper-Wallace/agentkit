@@ -14,13 +14,6 @@
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-fetch"]
     },
-    "sqlite": {
-      "command": "bash",
-      "args": [
-        "-c",
-        "exec uvx mcp-server-sqlite --db-path \"${SQLITE_DEV_DB:-$HOME/dev.db}\""
-      ]
-    },
     "memory": {
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-memory"]
@@ -42,12 +35,6 @@
       "required_bins": ["npx", "node"],
       "required_env": [],
       "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."
-    },
-    "sqlite": {
-      "description": "Local SQLite database querying and inspection via MCP.",
-      "required_bins": ["uvx"],
-      "required_env": ["SQLITE_DEV_DB"],
-      "setup_hint": "Run 'workstation-setup apply' to install uv/uvx and configure SQLITE_DEV_DB in your shell profile."
     },
     "memory": {
       "description": "Persistent cross-repository knowledge graph for architectural contracts, entity relationships, and multi-session decisions.",

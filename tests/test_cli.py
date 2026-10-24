@@ -321,7 +321,7 @@ class TestPermissionMerger(unittest.TestCase):
     def test_merge_mixed_command_mcp_and_tool_permissions(self):
         existing = {
             "permissions": {
-                "allow": ["command(git status)", "mcp(sqlite/read_query)"]
+                "allow": ["command(git status)", "mcp(memory/read_graph)"]
             }
         }
         standard = [
@@ -344,7 +344,7 @@ class TestPermissionMerger(unittest.TestCase):
         self.assertEqual(added, expected_added)
         self.assertIn("command(git status)", merged["permissions"]["allow"])
         self.assertIn("command(pytest)", merged["permissions"]["allow"])
-        self.assertIn("mcp(sqlite/read_query)", merged["permissions"]["allow"])
+        self.assertIn("mcp(memory/read_graph)", merged["permissions"]["allow"])
         self.assertIn("mcp(memory)", merged["permissions"]["allow"])
         self.assertIn("mcp(memory/create_entities)", merged["permissions"]["allow"])
         self.assertIn("call_mcp_tool", merged["permissions"]["allow"])
@@ -594,13 +594,9 @@ class TestMCPManagement(unittest.TestCase):
         self.assertIn("fetch", catalog["mcpServers"])
         self.assertIn("memory", catalog["mcpServers"])
         self.assertIn("repomix", catalog["mcpServers"])
-        self.assertIn("sqlite", catalog["mcpServers"])
-        sqlite_def = catalog["mcpServers"]["sqlite"]
-        self.assertEqual(sqlite_def.get("command"), "bash")
-        sqlite_args = sqlite_def.get("args", [])
-        self.assertEqual(sqlite_args[0], "-c")
-        self.assertIn("${SQLITE_DEV_DB:-$HOME/dev.db}", sqlite_args[1])
-        self.assertTrue(sqlite_args[1].startswith("exec uvx mcp-server-sqlite --db-path"))
+        self.assertNotIn("sqlite", catalog["mcpServers"])
+        self.assertNotIn("sqlite", catalog.get("_requirements", {}))
+        self.assertEqual(len(catalog["mcpServers"]), 4)
 
     def test_mcp_merger_preserves_custom_servers(self):
         existing = {
@@ -618,109 +614,97 @@ class TestMCPManagement(unittest.TestCase):
         self.assertIn("custom-service", merged["mcpServers"])
         self.assertIn("github", merged["mcpServers"])
 
-    def test_mcp_merger_resolves_sqlite_dev_db_default(self):
-        catalog = agy_std.get_standard_mcp_catalog()
+    def test_mcp_merger_resolves_server_vars_with_default(self):
+        catalog = {
+            "mcpServers": {
+                "custom-service": {
+                    "command": "test-service",
+                    "args": ["--path", "${TEST_DATA_DIR:-$HOME/data}"]
+                }
+            }
+        }
         with unittest.mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SQLITE_DEV_DB", None)
+            os.environ.pop("TEST_DATA_DIR", None)
             merged, added = agy_std.merge_mcp_servers({}, catalog)
-            self.assertIn("sqlite", merged["mcpServers"])
-            sqlite_srv = merged["mcpServers"]["sqlite"]
-            self.assertEqual(sqlite_srv.get("command"), "bash")
-            sqlite_args = sqlite_srv.get("args", [])
-            expected_db = str(Path.home() / "dev.db")
-            self.assertTrue(any(expected_db in arg for arg in sqlite_args))
-            self.assertFalse(any("${SQLITE_DEV_DB" in arg for arg in sqlite_args))
+            self.assertIn("custom-service", merged["mcpServers"])
+            srv = merged["mcpServers"]["custom-service"]
+            expected_path = str(Path.home() / "data")
+            self.assertEqual(srv["args"], ["--path", expected_path])
 
-    def test_mcp_merger_resolves_sqlite_dev_db_env(self):
-        catalog = agy_std.get_standard_mcp_catalog()
-        custom_db = "/tmp/custom_test_dev.db"
-        with unittest.mock.patch.dict(os.environ, {"SQLITE_DEV_DB": custom_db}):
+    def test_mcp_merger_resolves_server_vars_with_env(self):
+        catalog = {
+            "mcpServers": {
+                "custom-service": {
+                    "command": "test-service",
+                    "args": ["--path", "${TEST_DATA_DIR:-$HOME/data}"]
+                }
+            }
+        }
+        custom_path = "/tmp/custom_data_dir"
+        with unittest.mock.patch.dict(os.environ, {"TEST_DATA_DIR": custom_path}):
             merged, added = agy_std.merge_mcp_servers({}, catalog)
-            self.assertIn("sqlite", merged["mcpServers"])
-            sqlite_srv = merged["mcpServers"]["sqlite"]
-            self.assertEqual(sqlite_srv.get("command"), "bash")
-            sqlite_args = sqlite_srv.get("args", [])
-            self.assertTrue(any(custom_db in arg for arg in sqlite_args))
-            self.assertFalse(any("${SQLITE_DEV_DB" in arg for arg in sqlite_args))
+            self.assertIn("custom-service", merged["mcpServers"])
+            srv = merged["mcpServers"]["custom-service"]
+            self.assertEqual(srv["args"], ["--path", custom_path])
 
-    def test_mcp_merger_heals_existing_unresolved_sqlite(self):
-        catalog = agy_std.get_standard_mcp_catalog()
+    def test_mcp_merger_heals_unresolved_placeholders(self):
+        catalog = {
+            "mcpServers": {
+                "custom-service": {
+                    "command": "custom-cmd",
+                    "args": ["--dir", "${CUSTOM_DIR:-$HOME/data}"]
+                }
+            }
+        }
         existing = {
             "mcpServers": {
-                "sqlite": {
-                    "command": "uvx",
-                    "args": ["mcp-server-sqlite", "--db-path", "${SQLITE_DEV_DB}"]
+                "custom-service": {
+                    "command": "custom-cmd",
+                    "args": ["--dir", "${CUSTOM_DIR:-$HOME/data}"]
                 }
             }
         }
         with unittest.mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SQLITE_DEV_DB", None)
+            os.environ.pop("CUSTOM_DIR", None)
             merged, added = agy_std.merge_mcp_servers(existing, catalog)
-            self.assertNotIn("sqlite", added)
-            sqlite_args = merged["mcpServers"]["sqlite"].get("args", [])
-            expected_db = str(Path.home() / "dev.db")
-            self.assertIn(expected_db, sqlite_args)
-            self.assertNotIn("${SQLITE_DEV_DB}", sqlite_args)
-
-        existing_bash = {
-            "mcpServers": {
-                "sqlite": {
-                    "command": "bash",
-                    "args": [
-                        "-c",
-                        "exec uvx mcp-server-sqlite --db-path \"${SQLITE_DEV_DB:-$HOME/dev.db}\""
-                    ]
-                }
-            }
-        }
-        with unittest.mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SQLITE_DEV_DB", None)
-            merged, added = agy_std.merge_mcp_servers(existing_bash, catalog)
-            self.assertNotIn("sqlite", added)
-            sqlite_args = merged["mcpServers"]["sqlite"].get("args", [])
-            expected_db = str(Path.home() / "dev.db")
-            self.assertTrue(any(expected_db in arg for arg in sqlite_args))
-            self.assertFalse(any("${SQLITE_DEV_DB" in arg for arg in sqlite_args))
+            self.assertNotIn("custom-service", added)
+            expected_dir = str(Path.home() / "data")
+            self.assertEqual(merged["mcpServers"]["custom-service"]["args"], ["--dir", expected_dir])
 
     def test_resolve_mcp_server_vars(self):
-        # 1. Fallback to ~/dev.db when SQLITE_DEV_DB unset
-        srv = {"command": "uvx", "args": ["mcp-server-sqlite", "--db-path", "${SQLITE_DEV_DB}"]}
-        with unittest.mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SQLITE_DEV_DB", None)
-            res = agy_std.resolve_mcp_server_vars(srv)
-            self.assertEqual(res["args"], ["mcp-server-sqlite", "--db-path", str(Path.home() / "dev.db")])
-
-        # 2. Env override for SQLITE_DEV_DB
-        with unittest.mock.patch.dict(os.environ, {"SQLITE_DEV_DB": "/custom/path.db"}):
-            res = agy_std.resolve_mcp_server_vars(srv)
-            self.assertEqual(res["args"], ["mcp-server-sqlite", "--db-path", "/custom/path.db"])
-
-        # 3. Default fallback syntax ${VAR:-default}
+        # 1. Default fallback syntax ${VAR:-default}
         srv_default = {"command": "test", "args": ["--mode", "${TEST_MODE:-production}"]}
         with unittest.mock.patch.dict(os.environ, {}, clear=False):
             os.environ.pop("TEST_MODE", None)
             res = agy_std.resolve_mcp_server_vars(srv_default)
             self.assertEqual(res["args"], ["--mode", "production"])
 
-        # 4. Env value used for ${VAR:-default} when set
+        # 2. Env value used for ${VAR:-default} when set
         with unittest.mock.patch.dict(os.environ, {"TEST_MODE": "staging"}):
             res = agy_std.resolve_mcp_server_vars(srv_default)
             self.assertEqual(res["args"], ["--mode", "staging"])
 
-        # 5. Bash wrapper with safe fallback expansion
+        # 3. Path with $HOME expansion in default
+        srv_home = {"command": "test", "args": ["--path", "${DATA_DIR:-$HOME/store}"]}
+        with unittest.mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("DATA_DIR", None)
+            res = agy_std.resolve_mcp_server_vars(srv_home)
+            self.assertEqual(res["args"], ["--path", str(Path.home() / "store")])
+
+        # 4. Bash wrapper with safe fallback expansion
         srv_bash = {
             "command": "bash",
-            "args": ["-c", 'exec uvx mcp-server-sqlite --db-path "${SQLITE_DEV_DB:-$HOME/dev.db}"']
+            "args": ["-c", 'exec my-server --path "${DATA_PATH:-$HOME/data.db}"']
         }
         with unittest.mock.patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("SQLITE_DEV_DB", None)
+            os.environ.pop("DATA_PATH", None)
             res = agy_std.resolve_mcp_server_vars(srv_bash)
-            expected_arg = f'exec uvx mcp-server-sqlite --db-path "{Path.home() / "dev.db"}"'
+            expected_arg = f'exec my-server --path "{Path.home() / "data.db"}"'
             self.assertEqual(res["args"], ["-c", expected_arg])
 
-        with unittest.mock.patch.dict(os.environ, {"SQLITE_DEV_DB": "/tmp/custom.db"}):
+        with unittest.mock.patch.dict(os.environ, {"DATA_PATH": "/tmp/custom.db"}):
             res = agy_std.resolve_mcp_server_vars(srv_bash)
-            self.assertEqual(res["args"], ["-c", 'exec uvx mcp-server-sqlite --db-path "/tmp/custom.db"'])
+            self.assertEqual(res["args"], ["-c", 'exec my-server --path "/tmp/custom.db"'])
 
         # 5. Unknown var without default is preserved
         srv_preserve = {"command": "test", "args": ["--token", "${UNKNOWN_VAR}"]}

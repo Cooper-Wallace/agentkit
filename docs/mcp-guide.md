@@ -1,6 +1,6 @@
 # AI Agent MCP Server Standardization Guide
 
-The **Model Context Protocol (MCP)** enables AI agents to connect with external tools, databases, and services (such as GitHub, SQLite, DevTools, or internal APIs). 
+The **Model Context Protocol (MCP)** enables AI agents to connect with external tools, databases, and services (such as GitHub, DevTools, or internal APIs). 
 
 This guide explains how **`agentkit`** manages MCP servers declaratively as Layer 2 of the workstation ecosystem while keeping credentials strictly decoupled and secure.
 
@@ -33,15 +33,17 @@ When the AI developer harness spawns the MCP server process, it inherits your wo
 
 ## 2. Declarative Catalog & Standard Servers
 
-`agentkit` provides a declarative catalog in `config/mcp.json` establishing **5 standard MCP servers** across all developer workstations:
+`agentkit` provides a declarative catalog in `config/mcp.json` establishing **4 standard MCP servers** across all developer workstations:
 
 | Server | Binary / Package | Role & Scope | Dependencies |
 | :--- | :--- | :--- | :--- |
 | **`github`** | `npx @modelcontextprotocol/server-github` | Repository inspection, PR reviews, issue management. | `node`, `npx`, `GITHUB_PERSONAL_ACCESS_TOKEN` |
 | **`fetch`** | `npx @modelcontextprotocol/server-fetch` | Web document fetching and markdown conversion. | `node`, `npx` |
-| **`sqlite`** | `uvx mcp-server-sqlite` | Local SQLite database querying and diagnostic state. | `uvx`, `SQLITE_DEV_DB` |
 | **`memory`** | `npx @modelcontextprotocol/server-memory` | Persistent cross-repository knowledge graph. | `node`, `npx` |
 | **`repomix`** | `npx repomix --mcp` | AST-compressed codebase packing and structural skeletons. | `node`, `npx` |
+
+> [!NOTE]
+> **Persistent State & Knowledge Storage**: Local persistent state and long-term memory across sessions are handled natively via the Obsidian Perpetual Knowledge Vault (`agentkit vault`), permanently deprecating legacy SQLite MCP database servers and eliminating the risk of double-writing or stray database files.
 
 Each server configuration in `config/mcp.json` is paired with diagnostic requirements under `_requirements`:
 
@@ -75,25 +77,22 @@ Each server configuration in `config/mcp.json` is paired with diagnostic require
 ## 3. Active Diagnostics via `agentkit` (`ak`)
 
 When you run `agentkit audit` (or `ak audit`) and `agentkit apply` (or `ak apply`), the tool:
-1. Verifies that the harness MCP configuration (e.g. `~/.gemini/config/mcp_config.json`) contains all 5 standard server definitions.
-2. Checks whether required command-line binaries (e.g. `npx`, `uvx`) are present in `$PATH` (`shutil.which`).
+1. Verifies that the harness MCP configuration (e.g. `~/.gemini/config/mcp_config.json`) contains all 4 standard server definitions.
+2. Checks whether required command-line binaries (e.g. `npx`, `node`) are present in `$PATH` (`shutil.which`).
 3. Checks whether required environment variables are set in your current shell (`os.environ`).
 4. Prints clear, actionable setup advisories for any missing variables.
 
 Example Diagnostic Output:
 ```text
 ==> MCP Server Diagnostics
-  ✔ MCP Configuration: All 5 standard servers configured
+  ✔ MCP Configuration: All 4 standard servers configured
   ⚠ MCP 'github': Missing environment variable: GITHUB_PERSONAL_ACCESS_TOKEN
   ✔ MCP 'fetch': Dependencies and environment ready
-  ⚠ MCP 'sqlite': Missing required binary in PATH: uvx
-  ⚠ MCP 'sqlite': Missing environment variable: SQLITE_DEV_DB
   ✔ MCP 'memory': Dependencies and environment ready
   ✔ MCP 'repomix': Dependencies and environment ready
 
 ==> MCP Environment Setup Advisories
   ℹ github: Create a GitHub PAT with repo scope and add 'export GITHUB_PERSONAL_ACCESS_TOKEN="..."' to ~/.bashrc
-  ℹ sqlite: Install uv (pip install uv) and add 'export SQLITE_DEV_DB="$HOME/dev.db"' to ~/.bashrc
 ```
 
 ---
@@ -139,7 +138,6 @@ To enable your pre-configured MCP servers on any machine:
    Add the requested tokens to your `~/.bashrc` or `~/.zshrc`:
    ```bash
    export GITHUB_PERSONAL_ACCESS_TOKEN="ghp_yourTokenHere"
-   export SQLITE_DEV_DB="$HOME/dev.db"
    ```
    Reload your shell:
    ```bash
