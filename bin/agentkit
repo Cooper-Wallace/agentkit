@@ -355,8 +355,36 @@ def merge_permissions(
     result["permissions"]["allow"] = merged_allow
 
     # Ensure trustedWorkspaces exists as a list if not already present
-    if "trustedWorkspaces" not in result:
+    if "trustedWorkspaces" not in result or not isinstance(result["trustedWorkspaces"], list):
         result["trustedWorkspaces"] = []
+    else:
+        result["trustedWorkspaces"] = list(result["trustedWorkspaces"])
+
+    # Add default AgentVault paths dynamically if not already present
+    agent_vault_paths: List[str] = [
+        str(Path.home() / "Documents" / "AgentVault"),
+        str(Path.home() / "AgentVault"),
+    ]
+    for env_var in ("AGENTKIT_VAULT_PATH", "AGENTKIT_AGENTVAULT_PATH"):
+        env_val = os.environ.get(env_var)
+        if env_val and env_val.strip():
+            resolved_env_path = str(Path(env_val).expanduser().resolve())
+            if resolved_env_path not in agent_vault_paths:
+                agent_vault_paths.append(resolved_env_path)
+
+    seen_workspaces: Set[str] = set()
+    deduped_workspaces: List[str] = []
+    for ws in result["trustedWorkspaces"]:
+        if ws not in seen_workspaces:
+            deduped_workspaces.append(ws)
+            seen_workspaces.add(ws)
+
+    for p in agent_vault_paths:
+        if p not in seen_workspaces:
+            deduped_workspaces.append(p)
+            seen_workspaces.add(p)
+
+    result["trustedWorkspaces"] = deduped_workspaces
 
     return result, added_permissions
 
@@ -778,7 +806,31 @@ def cmd_audit(args: argparse.Namespace) -> int:
     else:
         print_warning("Workspace Boundary: 'allowNonWorkspaceAccess' not explicitly enabled")
 
-    # 5. Color Scheme Check
+    # 5. Trusted Workspaces (AgentVault) Check
+    total_checks += 1
+    user_workspaces = settings.get("trustedWorkspaces", [])
+    if not isinstance(user_workspaces, list):
+        user_workspaces = []
+
+    expected_vault_paths = {
+        str(Path.home() / "Documents" / "AgentVault"),
+        str(Path.home() / "AgentVault"),
+    }
+    for env_var in ("AGENTKIT_VAULT_PATH", "AGENTKIT_AGENTVAULT_PATH"):
+        env_val = os.environ.get(env_var)
+        if env_val and env_val.strip():
+            expected_vault_paths.add(str(Path(env_val).expanduser().resolve()))
+
+    found_vault_paths = [w for w in user_workspaces if w in expected_vault_paths]
+    if found_vault_paths:
+        print_success(f"Trusted Workspaces: AgentVault path whitelisted ({found_vault_paths[0]})")
+        passed_checks += 1
+    else:
+        print_warning(
+            f"Trusted Workspaces: AgentVault path missing from trustedWorkspaces ({str(Path.home() / 'Documents' / 'AgentVault')})"
+        )
+
+    # 6. Color Scheme Check
     total_checks += 1
     if settings.get("colorScheme") == "dark":
         print_success("UI Theme: 'colorScheme' set to 'dark'")
@@ -787,7 +839,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
         print_info(f"UI Theme: 'colorScheme' is '{settings.get('colorScheme', 'not set')}'")
         passed_checks += 1
 
-    # 6. PATH verification for ~/.local/bin
+    # 7. PATH verification for ~/.local/bin
     total_checks += 1
     local_bin = str(Path.home() / ".local" / "bin")
     current_path = os.environ.get("PATH", "")
@@ -797,7 +849,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     else:
         print_warning(f"Environment PATH missing {local_bin}")
 
-    # 7. MCP Server Standards & Environment Diagnostics
+    # 8. MCP Server Standards & Environment Diagnostics
     if not getattr(args, "no_mcp", False):
         mcp_path = (
             Path(getattr(args, "mcp_path", None)).expanduser().resolve()
@@ -841,7 +893,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
             for s_name, hint in missing_env_advisories:
                 print(f"  {CYAN}ℹ{RESET} {BOLD}{s_name}{RESET}: {hint}")
 
-    # 8. Standard Plugins Audit
+    # 9. Standard Plugins Audit
     if not getattr(args, "no_plugins", False):
         plugins_dir = (
             Path(getattr(args, "plugins_dir", None)).expanduser().resolve()
@@ -870,7 +922,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                     else:
                         print_failure(f"Plugin '{plugin_path.name}' missing ({target_plugin})")
 
-    # 9. Multi-Model Orchestration Profile Audit
+    # 10. Multi-Model Orchestration Profile Audit
     total_checks += 1
     orch_catalog = get_orchestration_catalog()
     configured_profile: Optional[str] = None
@@ -1586,14 +1638,14 @@ def _print_subparser_help(parser_obj: argparse.ArgumentParser):
 # Obsidian Vault CLI Engine & Knowledge Graph Integration
 # ==============================================================================
 
-DEFAULT_VAULT_PATH = Path.home() / "Documents" / "Vault"
+DEFAULT_VAULT_PATH = Path.home() / "Documents" / "AgentVault"
 
 
 def resolve_vault_path(explicit_path: Optional[str] = None) -> Path:
     """Resolve Obsidian vault root path from CLI args, environment variables, or standard default."""
     if explicit_path:
         return Path(explicit_path).expanduser().resolve()
-    env = os.environ.get("AGENTKIT_VAULT_PATH") or os.environ.get("OBSIDIAN_VAULT_PATH")
+    env = os.environ.get("AGENTKIT_VAULT_PATH") or os.environ.get("AGENTKIT_AGENTVAULT_PATH") or os.environ.get("OBSIDIAN_VAULT_PATH")
     if env:
         return Path(env).expanduser().resolve()
     return DEFAULT_VAULT_PATH.resolve()
@@ -1684,7 +1736,7 @@ last_updated: {today_iso}
 updated_by: agentkit
 ---
 
-# 🌌 Workstation Knowledge Vault
+# 🌌 Workstation AgentVault
 
 > [!info] Autonomous Workstation Knowledge Graph
 > Central intelligence repository linking the 4-layer developer workstation stack, active applications, architecture contracts, and agent session history.
@@ -1982,7 +2034,7 @@ status: active
 def cmd_vault_init(args: argparse.Namespace) -> int:
     """Idempotently initialize Obsidian vault directory tree, Dashboard, and initial projects."""
     vault_path = resolve_vault_path(getattr(args, "path", None))
-    print_step(f"Initializing Obsidian Agent Knowledge Vault at {vault_path}")
+    print_step(f"Initializing Obsidian AgentVault at {vault_path}")
 
     # 1. Directories
     vault_path.mkdir(parents=True, exist_ok=True)
@@ -2025,8 +2077,8 @@ def cmd_vault_init(args: argparse.Namespace) -> int:
     for proj in initial_projects:
         write_vault_note_if_missing(vault_path / "Projects" / f"{proj}.md", get_project_template(proj))
 
-    # 5. Maintain convenient symlink: Path.home() / "Vault" -> vault_path
-    convenient_link = Path.home() / "Vault"
+    # 5. Maintain convenient symlink: Path.home() / "AgentVault" -> vault_path
+    convenient_link = Path.home() / "AgentVault"
     if convenient_link != vault_path:
         try:
             if convenient_link.is_symlink():
@@ -2038,13 +2090,55 @@ def cmd_vault_init(args: argparse.Namespace) -> int:
         except OSError:
             pass
 
-    print_success(f"Vault initialized successfully: {vault_path}")
+    print_success(f"AgentVault initialized successfully: {vault_path}")
     print_info(f"Dashboard available at: {vault_path / 'Dashboard.md'}")
+
+    # 6. Ensure vault_path and default AgentVault are in trustedWorkspaces
+    harness = get_harness_adapter(getattr(args, "harness", "antigravity"))
+    settings_path = (
+        Path(args.settings_path).expanduser().resolve()
+        if getattr(args, "settings_path", None)
+        else (
+            Path(os.environ["AGENTKIT_SETTINGS_PATH"]).expanduser().resolve()
+            if os.environ.get("AGENTKIT_SETTINGS_PATH")
+            else harness.get_default_settings_path()
+        )
+    )
+    settings, exists = load_user_settings(settings_path)
+    if "trustedWorkspaces" not in settings or not isinstance(settings["trustedWorkspaces"], list):
+        settings["trustedWorkspaces"] = []
+
+    target_workspaces = [
+        str(vault_path),
+        str(Path.home() / "AgentVault"),
+    ]
+    seen_workspaces: Set[str] = set()
+    deduped_workspaces: List[str] = []
+    for tw in settings["trustedWorkspaces"]:
+        if tw not in seen_workspaces:
+            deduped_workspaces.append(tw)
+            seen_workspaces.add(tw)
+
+    modified = False
+    for tw in target_workspaces:
+        if tw not in seen_workspaces:
+            deduped_workspaces.append(tw)
+            seen_workspaces.add(tw)
+            modified = True
+
+    if deduped_workspaces != settings["trustedWorkspaces"]:
+        settings["trustedWorkspaces"] = deduped_workspaces
+        modified = True
+
+    if modified:
+        save_json(settings_path, settings)
+        print_success(f"Registered AgentVault in trustedWorkspaces: {settings_path}")
+
     return 0
 
 
 def cmd_vault_status(args: argparse.Namespace) -> int:
-    """Report status and note inventory of Obsidian vault."""
+    """Report status and note inventory of Obsidian AgentVault."""
     vault_path = resolve_vault_path(getattr(args, "path", None))
     is_json = getattr(args, "json", False)
 
@@ -2053,10 +2147,10 @@ def cmd_vault_status(args: argparse.Namespace) -> int:
             print(json.dumps({
                 "exists": False,
                 "path": str(vault_path),
-                "error": "Obsidian vault does not exist or is not initialized."
+                "error": "Obsidian AgentVault does not exist or is not initialized."
             }, indent=2))
         else:
-            print_failure(f"Obsidian vault not found at {vault_path}. Run 'agentkit vault init' to initialize.")
+            print_failure(f"Obsidian AgentVault not found at {vault_path}. Run 'agentkit vault init' to initialize.")
         return 1
 
     total_notes = sum(1 for p in vault_path.rglob("*.md") if ".obsidian" not in p.parts)
@@ -2087,7 +2181,7 @@ def cmd_vault_status(args: argparse.Namespace) -> int:
         }, indent=2))
         return 0
 
-    print_step("Obsidian Vault Status")
+    print_step("Obsidian AgentVault Status")
     print_success(f"Vault Path: {vault_path}")
     print_success(f"Total Notes: {total_notes}")
     print_success(f"Active Projects: {len(project_files)} ({', '.join(project_files)})")
@@ -2100,15 +2194,15 @@ def cmd_vault_status(args: argparse.Namespace) -> int:
 
 
 def cmd_vault_ingest(args: argparse.Namespace) -> int:
-    """Ingest pending user directives from User-Input/pending/ and project notes."""
+    """Ingest pending user directives from User-Input/pending/ and project notes in Obsidian AgentVault."""
     vault_path = resolve_vault_path(getattr(args, "path", None))
     is_json = getattr(args, "json", False)
 
     if not vault_path.exists():
         if is_json:
-            print(json.dumps({"error": f"Vault does not exist at {vault_path}", "ingested_count": 0, "items": []}, indent=2))
+            print(json.dumps({"error": f"Obsidian AgentVault does not exist at {vault_path}", "ingested_count": 0, "items": []}, indent=2))
         else:
-            print_failure(f"Vault does not exist at {vault_path}")
+            print_failure(f"Obsidian AgentVault does not exist at {vault_path}")
         return 1
 
     pending_dir = vault_path / "User-Input" / "pending"
@@ -2240,15 +2334,15 @@ def cmd_vault_ingest(args: argparse.Namespace) -> int:
 
 
 def cmd_vault_sync(args: argparse.Namespace) -> int:
-    """Idempotently sync project state, tasks, and ADR links in Projects/<project>.md."""
+    """Idempotently sync project state, tasks, and ADR links in Obsidian AgentVault Projects/<project>.md."""
     vault_path = resolve_vault_path(getattr(args, "path", None))
     is_json = getattr(args, "json", False)
 
     if not vault_path.exists():
         if is_json:
-            print(json.dumps({"error": f"Vault does not exist at {vault_path}", "synced": []}, indent=2))
+            print(json.dumps({"error": f"Obsidian AgentVault does not exist at {vault_path}", "synced": []}, indent=2))
         else:
-            print_failure(f"Vault does not exist at {vault_path}")
+            print_failure(f"Obsidian AgentVault does not exist at {vault_path}")
         return 1
 
     projects_dir = vault_path / "Projects"
@@ -2317,15 +2411,15 @@ def cmd_vault_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_vault_note(args: argparse.Namespace) -> int:
-    """Create a structured note or append a section in the vault."""
+    """Create a structured note or append a section in Obsidian AgentVault."""
     vault_path = resolve_vault_path(getattr(args, "path", None))
     is_json = getattr(args, "json", False)
 
     if not vault_path.exists():
         if is_json:
-            print(json.dumps({"error": f"Vault does not exist at {vault_path}"}, indent=2))
+            print(json.dumps({"error": f"Obsidian AgentVault does not exist at {vault_path}"}, indent=2))
         else:
-            print_failure(f"Vault does not exist at {vault_path}")
+            print_failure(f"Obsidian AgentVault does not exist at {vault_path}")
         return 1
 
     proj_arg = args.project
@@ -2643,21 +2737,25 @@ def build_parser() -> argparse.ArgumentParser:
     p_vault = subparsers.add_parser(
         "vault",
         parents=[harness_parent],
-        help="Obsidian knowledge vault management and offline directives integration",
+        help="Obsidian AgentVault management and offline directives integration",
     )
     vault_sub = p_vault.add_subparsers(dest="vault_command", help="Vault subcommands")
 
     vault_parent = argparse.ArgumentParser(add_help=False)
     vault_parent.add_argument(
         "--path",
-        help="Custom Obsidian vault root path (defaults to AGENTKIT_VAULT_PATH, OBSIDIAN_VAULT_PATH, or ~/Documents/Vault)",
+        help="Custom Obsidian AgentVault root path (defaults to AGENTKIT_VAULT_PATH, AGENTKIT_AGENTVAULT_PATH, OBSIDIAN_VAULT_PATH, or ~/Documents/AgentVault)",
+    )
+    vault_parent.add_argument(
+        "--settings-path",
+        help="Path to settings.json (defaults to active harness settings path)",
     )
 
     # vault init
     p_v_init = vault_sub.add_parser(
         "init",
         parents=[harness_parent, vault_parent],
-        help="Idempotently initialize Obsidian vault directory tree, Dashboard, and initial projects",
+        help="Idempotently initialize Obsidian AgentVault directory tree, Dashboard, and initial projects",
     )
     p_v_init.set_defaults(func=cmd_vault_init)
 
@@ -2665,7 +2763,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_v_status = vault_sub.add_parser(
         "status",
         parents=[harness_parent, vault_parent],
-        help="Report Obsidian vault health, note count, and pending user directives",
+        help="Report Obsidian AgentVault health, note count, and pending user directives",
     )
     p_v_status.add_argument("--json", action="store_true", help="Output status in JSON format")
     p_v_status.set_defaults(func=cmd_vault_status)

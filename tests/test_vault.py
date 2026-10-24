@@ -17,6 +17,9 @@ CLI_PATH = REPO_ROOT / "bin" / "agentkit"
 def run_cli(*args: str, env: dict = None) -> subprocess.CompletedProcess:
     """Execute agentkit CLI in a subprocess with optional environment variables."""
     full_env = os.environ.copy()
+    # Default to an isolated test settings file unless specified
+    if "AGENTKIT_SETTINGS_PATH" not in full_env:
+        full_env["AGENTKIT_SETTINGS_PATH"] = str(Path(tempfile.gettempdir()) / "agentkit_test_vault_settings.json")
     if env:
         full_env.update(env)
     return subprocess.run(
@@ -41,6 +44,7 @@ class TestVaultPathResolution(unittest.TestCase):
         custom_path = Path(self.temp_dir) / "CustomVault"
         env = {
             "AGENTKIT_VAULT_PATH": str(Path(self.temp_dir) / "EnvVault"),
+            "AGENTKIT_AGENTVAULT_PATH": str(Path(self.temp_dir) / "AgentVaultEnvVault"),
             "OBSIDIAN_VAULT_PATH": str(Path(self.temp_dir) / "ObsidianEnvVault"),
         }
         res = run_cli("vault", "status", "--path", str(custom_path), "--json", env=env)
@@ -54,12 +58,34 @@ class TestVaultPathResolution(unittest.TestCase):
         data = json.loads(res.stdout)
         self.assertEqual(data["path"], str(env_path.resolve()))
 
-    def test_obsidian_vault_path_env_var_fallback(self):
-        env_path = Path(self.temp_dir) / "ObsidianEnvVault"
-        env = {"AGENTKIT_VAULT_PATH": "", "OBSIDIAN_VAULT_PATH": str(env_path)}
+    def test_agentkit_agentvault_path_env_var(self):
+        env_path = Path(self.temp_dir) / "AgentkitAgentVaultEnv"
+        env = {"AGENTKIT_VAULT_PATH": "", "AGENTKIT_AGENTVAULT_PATH": str(env_path)}
         res = run_cli("vault", "status", "--json", env=env)
         data = json.loads(res.stdout)
         self.assertEqual(data["path"], str(env_path.resolve()))
+
+    def test_obsidian_vault_path_env_var_fallback(self):
+        env_path = Path(self.temp_dir) / "ObsidianEnvVault"
+        env = {
+            "AGENTKIT_VAULT_PATH": "",
+            "AGENTKIT_AGENTVAULT_PATH": "",
+            "OBSIDIAN_VAULT_PATH": str(env_path),
+        }
+        res = run_cli("vault", "status", "--json", env=env)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["path"], str(env_path.resolve()))
+
+    def test_default_path_resolution(self):
+        env = {
+            "AGENTKIT_VAULT_PATH": "",
+            "AGENTKIT_AGENTVAULT_PATH": "",
+            "OBSIDIAN_VAULT_PATH": "",
+        }
+        res = run_cli("vault", "status", "--json", env=env)
+        data = json.loads(res.stdout)
+        expected = (Path.home() / "Documents" / "AgentVault").resolve()
+        self.assertEqual(data["path"], str(expected))
 
 
 class TestVaultInit(unittest.TestCase):
@@ -68,14 +94,15 @@ class TestVaultInit(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.vault_path = Path(self.temp_dir) / "Vault"
+        self.settings_path = Path(self.temp_dir) / "settings.json"
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_init_creates_complete_directory_tree_and_files(self):
-        res = run_cli("vault", "init", "--path", str(self.vault_path))
+        res = run_cli("vault", "init", "--path", str(self.vault_path), "--settings-path", str(self.settings_path))
         self.assertEqual(res.returncode, 0, res.stderr)
-        self.assertIn("Vault initialized successfully", res.stdout)
+        self.assertIn("AgentVault initialized successfully", res.stdout)
 
         # 1. Directories
         self.assertTrue((self.vault_path / ".obsidian").is_dir())
@@ -120,9 +147,16 @@ class TestVaultInit(unittest.TestCase):
                 self.assertRegex(content, r"> \[![a-zA-Z]+\]", f"Note {note} missing callout")
                 self.assertIn("[[", content, f"Note {note} missing wikilinks")
 
+        # 4. Verify trustedWorkspaces in settings
+        self.assertTrue(self.settings_path.exists())
+        settings_data = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        self.assertIn("trustedWorkspaces", settings_data)
+        self.assertIn(str(self.vault_path.resolve()), settings_data["trustedWorkspaces"])
+        self.assertIn(str(Path.home() / "AgentVault"), settings_data["trustedWorkspaces"])
+
     def test_init_is_idempotent_and_preserves_customizations(self):
         # First init
-        run_cli("vault", "init", "--path", str(self.vault_path))
+        run_cli("vault", "init", "--path", str(self.vault_path), "--settings-path", str(self.settings_path))
 
         # Add custom line to agentkit.md
         agentkit_md = self.vault_path / "Projects" / "agentkit.md"
@@ -130,12 +164,33 @@ class TestVaultInit(unittest.TestCase):
         agentkit_md.write_text(custom_content, encoding="utf-8")
 
         # Second init
-        res = run_cli("vault", "init", "--path", str(self.vault_path))
+        res = run_cli("vault", "init", "--path", str(self.vault_path), "--settings-path", str(self.settings_path))
         self.assertEqual(res.returncode, 0)
 
         # Custom line must be preserved
         persisted = agentkit_md.read_text(encoding="utf-8")
         self.assertIn("- [x] Custom completed task", persisted)
+
+        # Settings trustedWorkspaces must not have duplicates
+        settings_data = json.loads(self.settings_path.read_text(encoding="utf-8"))
+        workspaces = settings_data.get("trustedWorkspaces", [])
+        self.assertEqual(len(workspaces), len(set(workspaces)))
+        self.assertIn(str(self.vault_path.resolve()), workspaces)
+        self.assertIn(str(Path.home() / "AgentVault"), workspaces)
+
+    def test_init_registers_trusted_workspaces_in_settings(self):
+        custom_settings = Path(self.temp_dir) / "custom_settings.json"
+        res = run_cli(
+            "vault", "init",
+            "--path", str(self.vault_path),
+            "--settings-path", str(custom_settings),
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        self.assertTrue(custom_settings.exists())
+        data = json.loads(custom_settings.read_text(encoding="utf-8"))
+        self.assertIn("trustedWorkspaces", data)
+        self.assertIn(str(self.vault_path.resolve()), data["trustedWorkspaces"])
+        self.assertIn(str(Path.home() / "AgentVault"), data["trustedWorkspaces"])
 
 
 class TestVaultStatus(unittest.TestCase):
@@ -151,12 +206,13 @@ class TestVaultStatus(unittest.TestCase):
     def test_status_uninitialized_vault(self):
         res = run_cli("vault", "status", "--path", str(self.vault_path))
         self.assertNotEqual(res.returncode, 0)
-        self.assertIn("not found", res.stdout)
+        self.assertIn("Obsidian AgentVault not found", res.stdout)
 
         res_json = run_cli("vault", "status", "--path", str(self.vault_path), "--json")
         self.assertNotEqual(res_json.returncode, 0)
         data = json.loads(res_json.stdout)
         self.assertFalse(data["exists"])
+        self.assertEqual(data["error"], "Obsidian AgentVault does not exist or is not initialized.")
 
     def test_status_initialized_vault(self):
         run_cli("vault", "init", "--path", str(self.vault_path))
@@ -164,7 +220,7 @@ class TestVaultStatus(unittest.TestCase):
         # Human output
         res = run_cli("vault", "status", "--path", str(self.vault_path))
         self.assertEqual(res.returncode, 0)
-        self.assertIn("Obsidian Vault Status", res.stdout)
+        self.assertIn("Obsidian AgentVault Status", res.stdout)
         self.assertIn("Total Notes:", res.stdout)
         self.assertIn("Active Projects: 6", res.stdout)
 

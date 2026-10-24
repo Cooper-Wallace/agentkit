@@ -49,7 +49,7 @@ python3 -m unittest discover tests -v
 
 ## Phase 4: Generate Handoff Artifact & Vault Note
 
-Create a structured handoff note directly in the Obsidian Perpetual Knowledge Vault at `$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md` (and mirror to the conversation artifact directory as `handoff.md`) detailing:
+Create a structured handoff note directly in the Obsidian AgentVault at `$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md` (and mirror to the conversation artifact directory as `handoff.md`) detailing:
 
 1. **Frontmatter Properties**: Set `type: session-handoff`, `date: YYYY-MM-DD`, `project: <project>`, `status: pending`, `tags: [quota-wrapup, <project>]`.
 2. **Quota Telemetry**: Current remaining quota percentage per group and earliest reset timestamp (`agentkit quota status`).
@@ -62,7 +62,7 @@ Create a structured handoff note directly in the Obsidian Perpetual Knowledge Va
 
 ## Phase 5: Update Project Knowledge Base in Vault
 
-Update `$HOME/Documents/Vault/Projects/<project>.md` to maintain long-term alignment across conversations:
+Update `$HOME/Documents/AgentVault/Projects/<project>.md` to maintain long-term alignment across conversations:
 - Update the "Current State" section with the active feature branch name, WIP commit hash, and quota reset timestamp.
 - Record passing/failing test counts.
 - Add unfinished DAG items to the project checklist (`- [ ]`) for offline review in Obsidian.
@@ -75,4 +75,4 @@ Notify the user in the conversation summary:
 - The exact reset time (from `agentkit quota status`).
 - Recommended profile or model switch:
   - If Gemini/Argon is exhausted, suggest switching to Claude profile: `/model opus` or `agentkit apply --model-profile opus-flash`.
-- Path to the generated Obsidian vault handoff note (`$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`) and conversational `handoff.md`.
+- Path to the generated Obsidian AgentVault handoff note (`$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`) and conversational `handoff.md`.

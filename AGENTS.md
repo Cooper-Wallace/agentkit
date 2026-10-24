@@ -60,7 +60,8 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 │       ├── 0006-token-compression-and-cross-repo-memory.md
 │       ├── 0007-agentkit-harness-agnostic-standardisation.md
 │       ├── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
-│       └── 0009-quota-aware-model-routing.md
+│       ├── 0009-quota-aware-model-routing.md
+│       └── 0010-obsidian-perpetual-knowledge-vault.md
 │
 └── tests/
     ├── test_cli.py           # Automated unit test suite
@@ -123,7 +124,7 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
     1. Cease spawning new subagents.
     2. Run local test suites to verify system stability.
     3. Create a clean WIP commit on the active feature branch (`git commit -m "chore(wip): save state prior to quota wrap-up"`).
-    4. Generate a comprehensive handoff note in the Obsidian Perpetual Knowledge Vault (`$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and mirror `handoff.md` in conversation artifacts.
+    4. Generate a comprehensive handoff note in the Obsidian AgentVault (`$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and mirror `handoff.md` in conversation artifacts.
     5. Advise the user of the exact quota reset timestamp and recommend an advisory root model switch.
 - **Advisory Root Model Switching**:
   - The root session model cannot be switched programmatically via API during an active session.
@@ -131,10 +132,11 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 
 ---
 
-## 4. Perpetual Long-Term Memory & Offline Collaboration (Obsidian Vault)
+## 4. Perpetual Long-Term Memory & Offline Collaboration (Obsidian AgentVault)
 
-- **Local Obsidian Knowledge Vault**:
-  - The local Obsidian Vault (`$HOME/Documents/Vault` or `$HOME/Vault`, configurable via `$AGENTKIT_VAULT_PATH`) serves as the long-term, human-in-the-loop memory store across sessions, adhering to the open Obsidian Skills standard and "files over apps" philosophy.
+- **Local Obsidian AgentVault**:
+  - The local Obsidian AgentVault (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`, configurable via `$AGENTKIT_AGENTVAULT_PATH` or `$AGENTKIT_VAULT_PATH`) serves as the long-term, human-in-the-loop memory store across sessions, adhering to the open Obsidian Skills standard and "files over apps" philosophy.
+  - **Automatic Workspace Whitelisting**: The AgentVault directory (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) is automatically whitelisted in Antigravity's `trustedWorkspaces` via `agentkit apply` and `agentkit vault init` to eliminate file read/write prompts during autonomous workflows.
 - **Offline Human-Agent Collaboration Protocol**:
   - **Ingest at Session Start (Phase 1)**: Agents must check `User-Input/pending/` at the beginning of each session (or run `agentkit vault ingest`) to process offline user directives, feedback, and backlog notes written between conversations. Processed directives are archived to `User-Input/processed/`.
   - **Project Living Notes**: Agents maintain project knowledge bases in `Projects/<project>.md` (e.g. `agentkit.md`, `repokit.md`), keeping active architecture, current branch/commit, and task checklists synchronized.

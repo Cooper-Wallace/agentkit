@@ -60,7 +60,7 @@ Embeds direct Markdown text directly onto the canvas.
 ```
 
 ### 2.2 File Node (`type: "file"`)
-References and embeds a vault Markdown file or media asset.
+References and embeds an AgentVault Markdown file or media asset.
 ```json
 {
   "id": "node-project-agentkit",
@@ -74,7 +74,7 @@ References and embeds a vault Markdown file or media asset.
   "color": "4"
 }
 ```
-- `file` (string, required): Relative path inside the vault.
+- `file` (string, required): Relative path inside the AgentVault.
 - `subpath` (string, optional): Heading anchor (`#Heading`) or block reference (`#^blockid`).
 
 ### 2.3 Link Node (`type: "link"`)
@@ -139,7 +139,7 @@ Edges define directional or bidirectional links between nodes.
 
 ## 4. Standard Workstation Stack Canvas Generator
 
-When synthesizing architecture diagrams for the 4-layer workstation stack, agents should generate structured `.canvas` files into `$VAULT/Architecture/` (e.g. `Workstation-Stack.canvas`).
+When synthesizing architecture diagrams for the 4-layer workstation stack, agents should generate structured `.canvas` files into the Obsidian AgentVault at `$HOME/Documents/AgentVault/Architecture/` (or `$AGENTVAULT/Architecture/`, `$VAULT/Architecture/`, e.g. `Workstation-Stack.canvas`).
 
 ### Complete Example: `Workstation-Stack.canvas`
 
@@ -183,7 +183,7 @@ When synthesizing architecture diagrams for the 4-layer workstation stack, agent
       "y": 500,
       "width": 800,
       "height": 180,
-      "text": "## Layer 2: agentkit (CLI: `agentkit`)\n- **Scope**: AI agent harness standards, pre-approved CLI permissions, switchable model profiles, quota telemetry, Obsidian Perpetual Knowledge Vault\n- **Role**: Cognitive tiering, autonomous orchestration, long-term memory",
+      "text": "## Layer 2: agentkit (CLI: `agentkit`)\n- **Scope**: AI agent harness standards, pre-approved CLI permissions, switchable model profiles, quota telemetry, Obsidian AgentVault\n- **Role**: Cognitive tiering, autonomous orchestration, long-term memory",
       "color": "4"
     },
     {

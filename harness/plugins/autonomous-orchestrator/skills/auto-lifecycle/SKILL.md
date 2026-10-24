@@ -22,7 +22,7 @@ flowchart LR
 
 ### Phase 1: Contract Freeze, Offline Ingestion & Task DAG (Root Orchestrator)
 1. **Analyze Requirements, Offline User Directives & Cross-Repo Context**:
-   - **Offline User Input Ingestion**: Inspect the Obsidian Perpetual Knowledge Vault at `$HOME/Documents/Vault` (or `$HOME/Vault`) via `agentkit vault ingest` or by reading `User-Input/pending/` and `Projects/<project>.md`. Ingest any offline user feedback, tasks, or directives left between agent conversations, and incorporate them directly into `plan.md`. Move processed input notes to `User-Input/processed/`.
+   - **Offline User Input Ingestion**: Inspect the Obsidian AgentVault at `$HOME/Documents/AgentVault` (or `$HOME/AgentVault`) via `agentkit vault ingest` or by reading `User-Input/pending/` and `Projects/<project>.md`. Ingest any offline user feedback, tasks, or directives left between agent conversations, and incorporate them directly into `plan.md`. Move processed input notes to `User-Input/processed/`.
    - **Cross-Repo Contracts & Project Context**: Read `$VAULT/Projects/<project>.md` for living architecture constraints and active task status. Query cross-repo contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit`], `repokit`).
    - When inspecting sibling repositories, use `repomix` AST compression (`repomix` MCP or `repomix --compress`) to retrieve structural skeletons without bloating context.
    - Inspect local project files, existing tests, and architecture constraints.
@@ -68,9 +68,9 @@ flowchart LR
 
 ### Phase 4: Verification, Vault Memory Persistence & PR Promotion Gate
 1. **Deterministic Quality Gate**: Verify that the test suite passes locally. The `Stop` hook will reject session termination if tests fail or if the worktree is dirty.
-2. **Obsidian Perpetual Knowledge Vault Persistence**:
-   - Author a structured session handoff note to `$HOME/Documents/Vault/Sessions/handoff-YYYY-MM-DD-<topic>.md` (or run `agentkit vault handoff --topic <topic>`), detailing completed deliverables, active branch, test verification status, and next steps for offline review.
-   - Update the target project knowledge base in `$HOME/Documents/Vault/Projects/<project>.md`: check off completed tasks (`- [x]`), record newly discovered backlog items (`- [ ]`), and update the "Current State" summary.
+2. **Obsidian AgentVault Persistence**:
+   - Author a structured session handoff note to `$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-<topic>.md` (or run `agentkit vault handoff --topic <topic>`), detailing completed deliverables, active branch, test verification status, and next steps for offline review.
+   - Update the target project knowledge base in `$HOME/Documents/AgentVault/Projects/<project>.md`: check off completed tasks (`- [x]`), record newly discovered backlog items (`- [ ]`), and update the "Current State" summary.
    - If cross-repo contracts or architectural boundaries were modified, update `$VAULT/Architecture/` notes and visual JSON Canvas diagrams (`[[Architecture/Workstation-Stack.canvas]]`).
 3. **Subagent Pool Cleanup**: Terminate all idle worker subagents via `manage_subagents(Action="kill_all")` before finalizing the session.
 4. **Push Feature Branch**:

@@ -1,4 +1,4 @@
-# ADR 0010: Obsidian Perpetual Knowledge Vault for Long-Term Agent Memory and Offline Collaboration
+# ADR 0010: Obsidian AgentVault for Long-Term Agent Memory and Offline Collaboration
 
 ## Context
 
@@ -16,14 +16,15 @@ Prior to this decision, persistent cross-session knowledge and architectural con
    - Text-based contracts and Markdown summaries struggle to capture multi-layered architectural boundaries, runtime toolchain dependencies, and multi-model agent DAGs at a glance.
    - Developers need spatial node-and-edge diagrams that render natively alongside living documentation.
 
-To resolve these challenges, we adopt the philosophy of **"Files Over Apps"** and the **Obsidian Skills** open-source specification initiated by Steph Ango (kepano, CEO of Obsidian). By establishing a local, standard Obsidian Markdown vault as the primary agent memory layer, memory becomes completely transparent, durable, and editable by human and agent alike.
+To resolve these challenges, we adopt the philosophy of **"Files Over Apps"** and the **Obsidian Skills** open-source specification initiated by Steph Ango (kepano, CEO of Obsidian). By establishing a local, standard Obsidian Markdown vault (**Obsidian AgentVault**) as the primary agent memory layer, memory becomes completely transparent, durable, and editable by human and agent alike.
 
 ---
 
 ## Decision
 
-1. **Adopt Obsidian Perpetual Knowledge Vault as Primary Long-Term Memory**:
-   - Transition primary cross-session persistence from opaque JSON memory graphs to a local **Obsidian Perpetual Knowledge Vault** located at `$HOME/Documents/Vault` (or `$HOME/Vault`, configurable via `$AGENTKIT_VAULT_PATH`).
+1. **Adopt Obsidian AgentVault as Primary Long-Term Memory**:
+   - Transition primary cross-session persistence from opaque JSON memory graphs to a local **Obsidian AgentVault** located at `$HOME/Documents/AgentVault` (or `$HOME/AgentVault`, configurable via `$AGENTKIT_AGENTVAULT_PATH` or `$AGENTKIT_VAULT_PATH`).
+   - Automatically whitelist the AgentVault path in Antigravity's `trustedWorkspaces` via `agentkit apply` and `agentkit vault init` to eliminate read/write confirmation prompts during autonomous execution.
    - Adhere to the Obsidian Skills open standard: plaintext Markdown files, YAML frontmatter properties, bidirectional wikilinks (`[[Note Name]]`), callouts (`> [!note]`), and task checklists (`- [ ]`, `- [x]`).
 
 2. **Standardized Vault Directory Architecture**:
@@ -63,5 +64,5 @@ To resolve these challenges, we adopt the philosophy of **"Files Over Apps"** an
 - **Visual Spatial Reasoning**: Infinite JSON Canvas maps allow instant visual inspection of the 4-layer workstation hierarchy and multi-agent DAGs.
 
 ### Neutral / Negative
-- **Path Configuration**: Workstations must specify or adhere to standard vault paths (`$HOME/Documents/Vault` or `$HOME/Vault`).
+- **Path Configuration**: Workstations must specify or adhere to standard AgentVault paths (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`, configurable via `$AGENTKIT_AGENTVAULT_PATH` or `$AGENTKIT_VAULT_PATH`).
 - **File Discipline**: Agents and developers must follow frontmatter and wikilink conventions to maintain graph integrity.

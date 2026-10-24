@@ -38,4 +38,4 @@ All subagent invocations MUST explicitly declare their task complexity in their 
 - When `guard-quota.py` denies `invoke_subagent` with `QUOTA WRAP-UP: All model quotas are critically low`:
   1. **Halt New Delegations**: Immediately cease invoking new subagents.
   2. **Do Not Retry Failed Invocations**: Do not attempt to bypass or re-invoke subagents with different model names.
-  3. **Execute Quota Wrap-Up Runbook**: Follow the `quota-wrapup` skill to run automated tests, commit work-in-progress, generate the handoff note in the Obsidian Perpetual Knowledge Vault (`Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and advise the user.
+  3. **Execute Quota Wrap-Up Runbook**: Follow the `quota-wrapup` skill to run automated tests, commit work-in-progress, generate the handoff note in the Obsidian AgentVault (`$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and advise the user.

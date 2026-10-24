@@ -1,11 +1,11 @@
 ---
 name: obsidian-vault
-description: "Navigate, read, update, and manage the Obsidian Perpetual Knowledge Vault for long-term agent memory, offline human-agent collaboration, project knowledge bases, and session handoffs."
+description: "Navigate, read, update, and manage the Obsidian AgentVault for long-term agent memory, offline human-agent collaboration, project knowledge bases, and session handoffs."
 ---
 
-# Obsidian Perpetual Knowledge Vault Skill
+# Obsidian AgentVault Skill
 
-This skill teaches AI agents how to navigate, read, update, and maintain the developer's local **Obsidian Perpetual Knowledge Vault** (`~/Documents/Vault` or `~/Vault`). Based on the open-source **Obsidian Skills** specification initiated by Steph Ango (kepano, CEO of Obsidian) and the "files over apps" philosophy, this vault serves as the persistent, human-readable long-term memory layer across agent conversations.
+This skill teaches AI agents how to navigate, read, update, and maintain the developer's local **Obsidian AgentVault** (`~/Documents/AgentVault` or `~/AgentVault`). Based on the open-source **Obsidian Skills** specification initiated by Steph Ango (kepano, CEO of Obsidian) and the "files over apps" philosophy, this vault serves as the persistent, human-readable long-term memory layer across agent conversations.
 
 ---
 
@@ -13,7 +13,7 @@ This skill teaches AI agents how to navigate, read, update, and maintain the dev
 
 Traditional agent memory often relies on opaque, ephemeral vector stores or JSON graph blobs (`@modelcontextprotocol/server-memory`) that developers cannot easily inspect, curate, or manipulate outside of active agent sessions. 
 
-The **Obsidian Perpetual Knowledge Vault** replaces opaque memory mechanisms with standard, durable Markdown files and visual JSON Canvas diagrams:
+The **Obsidian AgentVault** replaces opaque memory mechanisms with standard, durable Markdown files and visual JSON Canvas diagrams:
 - **Files Over Apps**: Plaintext Markdown files in a local directory remain readable, version-controllable, and portable for decades without vendor lock-in.
 - **Asynchronous Offline Collaboration**: During breaks between conversations or overnight, the developer opens Obsidian on their desktop or mobile device, inspects previous session handoffs, updates project tasks, adjusts architectural guidelines, and drops offline directives into `User-Input/pending/`.
 - **Bidirectional Ingestion & Synthesis**: When a new conversation session starts, the agent immediately inspects `User-Input/pending/` and active project notes in `Projects/`, inlining offline directives directly into Phase 1 planning artifacts (`plan.md`). At session completion, the agent writes a structured handoff note to `Sessions/handoff-YYYY-MM-DD-<topic>.md` and updates `Projects/<project>.md`.
@@ -22,20 +22,25 @@ The **Obsidian Perpetual Knowledge Vault** replaces opaque memory mechanisms wit
 
 ## 2. Vault Location & Environment Resolution
 
-Agents must locate the Obsidian Vault dynamically in order of precedence:
-1. `$AGENTKIT_VAULT_PATH` environment variable (if set).
-2. `$HOME/Documents/Vault` (standard desktop default).
-3. `$HOME/Vault` (alternate standard path).
+Agents must locate the Obsidian AgentVault dynamically in order of precedence:
+1. `$AGENTKIT_AGENTVAULT_PATH` environment variable (if set).
+2. `$AGENTKIT_VAULT_PATH` environment variable (legacy compatibility).
+3. `$HOME/Documents/AgentVault` (standard desktop default).
+4. `$HOME/AgentVault` (alternate standard path).
 
 > [!IMPORTANT]
-> Never hardcode `/home/cooper/Documents/Vault`. Always resolve dynamically using `$HOME` in bash, `Path.home() / "Documents" / "Vault"` in Python, or relative paths.
+> Never hardcode `/home/cooper/Documents/AgentVault`. Always resolve dynamically using `$HOME` in bash, `Path.home() / "Documents" / "AgentVault"` in Python, or relative paths.
+
+> [!TIP]
+> **Automatic Workspace Whitelisting (`trustedWorkspaces`)**:
+> To eliminate repetitive interactive read/write confirmation prompts during autonomous agent execution, the AgentVault path (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) is automatically whitelisted in Antigravity's `trustedWorkspaces` settings array via `agentkit apply` and `agentkit vault init`.
 
 ---
 
 ## 3. Vault Standard Directory Structure
 
 ```text
-~/Documents/Vault/
+~/Documents/AgentVault/
 ├── User-Input/
 │   ├── pending/                  # Unread user directives, offline prompts, and feedback
 │   └── processed/                # Ingested directives archived with processing timestamps
@@ -158,10 +163,10 @@ tags:
   - obsidian
 ---
 
-# Session Handoff: Obsidian Perpetual Knowledge Vault Integration
+# Session Handoff: Obsidian AgentVault Integration
 
 ## 1. Executive Summary
-Integrated the Obsidian Perpetual Knowledge Vault specification into `agentkit`, establishing a durable, human-readable offline collaboration memory layer replacing opaque memory servers.
+Integrated the Obsidian AgentVault specification into `agentkit`, establishing a durable, human-readable offline collaboration memory layer replacing opaque memory servers.
 
 ## 2. Completed Deliverables
 - [x] Created `project/skills/obsidian-vault/SKILL.md` and symlinked into harness.

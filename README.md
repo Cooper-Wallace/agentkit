@@ -89,8 +89,9 @@ agentkit profile set opus-flash
   - Distributes consolidated engineering and machine learning skills (`project/skills/`) from `AugursAptitude` (`timeseries-ml`, `feature-engineering`, `model-evaluation`, `duckdb-pipeline`, `llm-structured-output`, `prompt-engineering`).
   - Provides frictionless project integration via `agentkit skill install <name> [--copy]` and inspection via `agentkit skill info <name>`.
   - Discovers reusable project scripts and analytical utilities via `agentkit tool list`.
-- **Obsidian Perpetual Knowledge Vault & Offline Collaboration**:
-  - Replaces opaque MCP memory stores with a durable, human-readable local Obsidian Markdown vault (`~/Documents/Vault` or `~/Vault`) adhering to the open **Obsidian Skills** specification by Steph Ango (kepano).
+- **Obsidian AgentVault & Offline Collaboration**:
+  - Replaces opaque MCP memory stores with a durable, human-readable local Obsidian Markdown vault (`~/Documents/AgentVault` or `~/AgentVault`) adhering to the open **Obsidian Skills** specification by Steph Ango (kepano).
+  - Automatically whitelisted in Antigravity's `trustedWorkspaces` via `agentkit apply` and `agentkit vault init` to eliminate read/write confirmation prompts during autonomous workflows.
   - Enables asynchronous offline collaboration: developers review session handoffs, refine project living notes, and drop offline directives into `User-Input/pending/` during conversation breaks.
   - Generates visual architecture maps and multi-agent workflows using the open **JSON Canvas** (`.canvas`) specification (`jsoncanvas.org`).
   - Integrated CLI commands (`agentkit vault init`, `agentkit vault ingest`, `agentkit vault handoff`, `agentkit vault status`).
@@ -300,8 +301,8 @@ agentkit tool list
 
 ---
 
-### 11. Obsidian Perpetual Knowledge Vault Management
-Initialize, audit, and orchestrate long-term agent memory and offline human-agent collaboration via the local Obsidian Perpetual Knowledge Vault (`~/Documents/Vault` or `~/Vault`, configurable via `$AGENTKIT_VAULT_PATH`):
+### 11. Obsidian AgentVault Management
+Initialize, audit, and orchestrate long-term agent memory and offline human-agent collaboration via the local Obsidian AgentVault (`~/Documents/AgentVault` or `~/AgentVault`, configurable via `$AGENTKIT_AGENTVAULT_PATH` or `$AGENTKIT_VAULT_PATH`):
 
 ```bash
 # Initialize standard vault directory layout and baseline project notes:

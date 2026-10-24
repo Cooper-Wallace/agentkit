@@ -43,7 +43,7 @@ When the AI developer harness spawns the MCP server process, it inherits your wo
 | **`repomix`** | `npx repomix --mcp` | AST-compressed codebase packing and structural skeletons. | `node`, `npx` |
 
 > [!NOTE]
-> **Persistent State & Knowledge Storage**: Local persistent state and long-term memory across sessions are handled natively via the Obsidian Perpetual Knowledge Vault (`agentkit vault`), permanently deprecating legacy SQLite MCP database servers and eliminating the risk of double-writing or stray database files.
+> **Persistent State & Knowledge Storage**: Local persistent state and long-term memory across sessions are handled natively via the Obsidian AgentVault (`~/Documents/AgentVault` or `~/AgentVault` via `agentkit vault`), permanently deprecating legacy SQLite MCP database servers and eliminating the risk of double-writing or stray database files.
 
 Each server configuration in `config/mcp.json` is paired with diagnostic requirements under `_requirements`:
 
