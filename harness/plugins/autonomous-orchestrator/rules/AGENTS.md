@@ -1,6 +1,6 @@
 # Autonomous Multi-Model Orchestration Standards
 
-Welcome to the enterprise autonomous development environment. These directives govern multi-agent task distribution, context preservation, and source control hygiene.
+Welcome to the enterprise autonomous development environment. These directives govern multi-agent task distribution, context preservation, quota safety, and source control hygiene.
 
 ---
 
@@ -8,23 +8,53 @@ Welcome to the enterprise autonomous development environment. These directives g
 
 - **Root Orchestrator (Switchable High-Tier Profiles)**:
   - The root session operates under a high-capability reasoning model with switchable profiles:
-    - **Default**: Gemini 4 Argon (`Model: "pro"` / `"inherit"`)
-    - **Quota / Token Limit Fallback**: Claude Opus 5.5 (`Model: "opus"` / `"claude-opus-5.5"` / `"inherit"`)
-    - **High-Throughput Profile**: Claude Sonnet 3.7
-    - **Standard Profile**: Gemini 3.0 Pro
-  - The Root Orchestrator (Argon 4 / Opus 5.5 / Sonnet 3.7 / Pro) is responsible for high-level requirement analysis, architectural contracts, task DAG generation (Phase 1 planning), and adversarial reviews (Phase 4 review).
+    - **Primary Tier (`argon-flash`)**: Gemini 4 Argon (`Model: "pro"` / `"inherit"`) when Argon quota is available AND the task involves complex architecture, multi-repo planning, or adversarial diff auditing.
+    - **Standard Tier (`flash-high`)**: Gemini 3.8 Flash with High reasoning (`Model: "flash"` / `"inherit"`) for standard feature and lifecycle workflows (replaces retired Gemini 3.0/3.1 Pro).
+    - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: Claude Opus 5.5 / Claude Sonnet 3.7 (`Model: "opus"` / `"claude-opus-5.5"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
+  - The Root Orchestrator (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7) is responsible for high-level requirement analysis, architectural contracts, task DAG generation (Phase 1 planning), and adversarial reviews (Phase 3 review).
   - The Root Orchestrator MUST NEVER directly edit project source code, tests, or UI files (via `edit_file` or `write_file`) — only artifact files in the session brain directory (e.g., `plan.md`) may be written directly by the root orchestrator. All code implementation, post-review bugfixes, threshold tuning, and test updates — even single-file follow-up adjustments after user feedback — MUST be delegated to Flash worker subagents.
-- **Worker Subagents (Gemini 3.8 Flash)**:
-  - Code implementation, localized refactoring, documentation syncing, and test runs MUST be delegated to subagents launched with `Model: "flash"` and `Workspace: "share"` (or `Workspace: "inherit"` when the active workspace is `$HOME` rather than a VCS repository root).
-  - **Disjoint-File Parallel Worker Partitioning**: Multi-component tasks (e.g., backend logic, frontend UI, documentation, and unit tests) MUST be partitioned across concurrent Flash subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
-- **Adversarial Auditor (Argon 4 / Opus 5.5 / Sonnet 3.7 / Pro)**:
+- **Subagent Complexity Tiers**:
+  - Subagents are partitioned into discrete complexity tiers based on task scope and routed accordingly:
+    - **`low`**: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
+    - **`med`**: `flash` (feature code, tests, localized refactors).
+    - **`high`**: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy.
+  - **Tag Convention**: Orchestrators must place `[complexity: low|med|high]` at the start of subagent prompts.
+- **Worker Subagents (Gemini 3.8 Flash / Flash Lite)**:
+  - Code implementation, localized refactoring, documentation syncing, and test runs MUST be delegated to subagents launched with `Model: "flash"` (or `flash_lite` for low-complexity tasks) and `Workspace: "share"` (or `Workspace: "inherit"` when the active workspace is `$HOME` rather than a VCS repository root).
+  - **Disjoint-File Parallel Worker Partitioning**: Multi-component tasks (e.g., backend logic, frontend UI, documentation, and unit tests) MUST be partitioned across concurrent subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
+- **Adversarial Auditor (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7)**:
   - Before requesting task completion or submitting a Pull Request, an adversarial review must evaluate the `git diff` against the initial specification.
 - **Crash & Compaction Recovery Protocol**:
   - Whenever resuming after a crash, context compaction, or interrupted turn, the Root Orchestrator MUST check subagent completeness via `manage_subagents(Action="list")`, `transcript.jsonl`, and `git status` before dispatching new work.
 
 ---
 
-## 2. Context Window Preservation, Token Suppression & Cross-Repo Memory
+## 2. Quota Awareness & Graceful Wrap-Up
+
+- **Pre-Flight Quota Inspection**:
+  - Run `agentkit quota status` before dispatching large subagent fan-outs to verify quota headroom across provider groups.
+- **The 3 Quota Groups**:
+  - **Gemini Group**: Gemini 3.8 Flash, Gemini 3.8 Flash Lite (standard and high-throughput subagent execution).
+  - **Claude + GPT Group**: Claude Opus 5.5, Claude Sonnet 3.7 (fallback root orchestrator and cross-family execution).
+  - **Gemini 4 Argon Group**: Dedicated deep reasoning quota (architectural planning, complex system design, adversarial critique).
+- **Automated Fallback Routing**:
+  - The `quota-guardian` plugin automatically intercepts `invoke_subagent` calls via `PreToolUse`.
+  - When the target model's quota group drops below **15% remaining capacity**, `quota-guardian` dynamically reroutes the subagent to a healthy fallback group without interrupting execution.
+- **Graceful Wrap-Up Circuit Breaker**:
+  - When all eligible quota groups drop below **5% remaining capacity**, `quota-guardian` denies further subagent delegation with `QUOTA WRAP-UP:`.
+  - Agents MUST immediately follow the `quota-wrapup` protocol:
+    1. Cease spawning new subagents.
+    2. Run local test suites to verify system stability.
+    3. Create a clean WIP commit on the active feature branch (`git commit -m "chore(wip): save state prior to quota wrap-up"`).
+    4. Generate a comprehensive `handoff.md` detailing finished deliverables, pending DAG items, and resumption commands.
+    5. Advise the user of the exact quota reset timestamp and recommend an advisory root model switch.
+- **Advisory Root Model Switching**:
+  - The root session model cannot be switched programmatically via API during an active session.
+  - When root quota is depleted, the agent must provide clear advisory guidance instructing the user to switch models via the chat UI picker or the `/model` slash command.
+
+---
+
+## 3. Context Window Preservation, Token Suppression & Cross-Repo Memory
 
 - **Zero-Pollution Delegation**:
   - Ephemeral worker subagents discard voluminous build logs, 500-line test outputs, and scratch explorations upon termination.
@@ -37,14 +67,14 @@ Welcome to the enterprise autonomous development environment. These directives g
   - Verbose test, log, and diff commands executed via `run_command` are automatically intercepted by `PreToolUse` (`filter-and-wrap.py` -> `headroom-wrap.py`), compressing outputs >= 1,500 chars by 60-90%.
   - **Reversible CCR Retrieval**: Full uncompressed outputs are cached locally at `~/.cache/antigravity-headroom/<hash>.txt`. If an agent needs raw stack trace lines omitted by compression, it MUST read the cached file slice via `read_file` rather than re-running the test suite.
 - **Perpetual Cross-Repository Memory (`memory` MCP)**:
-  - Maintain cross-repo architectural contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit` / `ak`], `repokit`) in the persistent `memory` knowledge graph.
+  - Maintain cross-repo architectural contracts, shared schemas, and system boundaries across the 4-layer workstation stack (`riced-kubuntu-os`, `workstation-setup`, `agentkit` [CLI `agentkit`], `repokit`) in the persistent `memory` knowledge graph.
   - The Root Orchestrator queries the knowledge graph during Phase 1 planning and injects relevant cross-repo constraints into Flash worker prompts, avoiding redundant multi-repo file exploration.
 - **Cross-Repo Structural AST Compression (`repomix` MCP)**:
   - When inspecting sibling repositories, prefer AST-compressed structural skeletons (`repomix` MCP or `repomix --compress`) over raw multi-file reads to reduce cross-repo token ingestion by ~70%.
 
 ---
 
-## 3. Subagent Autonomy & Zero-Prompt Command Discipline
+## 4. Subagent Autonomy & Zero-Prompt Command Discipline
 
 - **Pure-Edit Worker Isolation**:
   - Subagents assigned exclusively to file edits (frontend UI, configuration, or documentation) MUST be instructed to use ONLY native `read_file` and `edit_file` tools (`NEVER call run_command`), guaranteeing zero terminal approval prompts.
@@ -60,7 +90,7 @@ Welcome to the enterprise autonomous development environment. These directives g
 
 ---
 
-## 4. Git Source Control & Trunk Hygiene
+## 5. Git Source Control & Trunk Hygiene
 
 - **Strict Trunk Protection**:
   - Never run `git push origin main`, `git push origin master`, or force-pushes.
@@ -79,9 +109,9 @@ Welcome to the enterprise autonomous development environment. These directives g
 
 ---
 
-## 5. Tooling & Ecosystem Awareness
+## 6. Tooling & Ecosystem Awareness
 
 - **Layer 0**: `riced-kubuntu-os` (RKO) - Kubuntu OS packages, KDE Plasma 6 configurations, and system-level dotfiles.
 - **Layer 1**: `workstation-setup` - Developer toolchains (Node.js, Python, uv), shell profiles (`~/.profile`, `~/.bashrc`), keyrings, and environment bridging.
-- **Layer 2**: `agentkit` (CLI `agentkit` / `ak`) - Audits and synchronizes agent harness settings, command permissions, global agent directives (`AGENTS.md`), MCP server catalogs, and plugin lifecycle hooks.
+- **Layer 2**: `agentkit` (CLI `agentkit`) - Audits and synchronizes agent harness settings, command permissions, global agent directives (`AGENTS.md`), MCP server catalogs, and plugin lifecycle hooks.
 - **Layer 3**: `repokit` - Automates GitHub repository governance, branch protection rulesets, squash merge enforcement, and semantic PR checks.

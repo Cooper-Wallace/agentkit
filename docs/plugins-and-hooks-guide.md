@@ -21,23 +21,28 @@ The following lifecycle hooks represent core automation and safety components im
 ### A. PreToolUse Subagent Delegation Guard
 - **Lifecycle Event**: `PreToolUse` matching `edit_file|write_file`
 - **Script**: `scripts/guard-subagent-delegation.sh`
-- **Purpose**: Enforces cognitive tiering by blocking the Root Orchestrator (Gemini 4 Argon / Claude Opus 5.5) from directly editing project code, tests, or UI files, ensuring implementation work is delegated to Gemini 3.8 Flash subagents.
+- **Purpose**: Enforces cognitive tiering by blocking the Root Orchestrator (Gemini 4 Argon, Claude Opus 5.5, Claude Sonnet 3.7, or Gemini 3.8 Flash High) from directly editing project code, tests, or UI files, ensuring implementation work is delegated to Flash worker subagents.
 
 ### B. PreToolUse Git & Filesystem Safety Gate
 - **Lifecycle Event**: `PreToolUse` matching `run_command`
 - **Script**: `scripts/guard-git-operations.sh`
 - **Purpose**: A deterministic programmatic circuit-breaker blocking direct pushes, force-pushes, or merges to `main`/`master`, while prompting for human confirmation on destructive commands (`rm -rf`, `mkfs`, `dd`).
 
-### C. Stop Quality & Completion Gate
+### C. PreToolUse Quota Guardian & Fallback Router
+- **Lifecycle Event**: `PreToolUse` matching `invoke_subagent`
+- **Script**: `scripts/guard-quota.py`
+- **Purpose**: Intercepts subagent delegation calls, checks remaining token quotas via `RetrieveUserQuotaSummary`, dynamically reroutes subagents to fallback model families when quotas fall below 15%, and enforces graceful wrap-up when quotas fall below 5%.
+
+### D. Stop Quality & Completion Gate
 - **Lifecycle Event**: `Stop`
 - **Script**: `scripts/verify-clean-completion.sh`
 - **Purpose**: Intercepts agent loop termination. Rejects completion if automated test suites fail or if uncommitted changes linger in the git working tree.
 
-### D. PostToolUse Auto-Formatter & Linter
+### E. PostToolUse Auto-Formatter & Linter
 - **Lifecycle Event**: `PostToolUse` matching `write_to_file|edit_file`
 - **Purpose**: Automatically runs fast language formatters (e.g., `ruff format` on `.py`, `prettier` on `.ts/.json`, `gofmt` on `.go`) immediately after the agent writes or modifies a file.
 
-### E. PreInvocation Git Hygiene Watcher
+### F. PreInvocation Git Hygiene Watcher
 - **Lifecycle Event**: `PreInvocation`
 - **Purpose**: Runs `git status --porcelain` at the start of an agent turn. If unstaged scratch files or a detached `HEAD` state are detected, it surfaces a concise alert in the agent's context.
 
@@ -102,7 +107,55 @@ When a candidate command is intercepted, `filter-and-wrap.py` returns an `overwr
 
 ---
 
-## 4. Workstation Stack Plugins (Architecture)
+## 4. Standard Harness Plugins (Layer 2 Governance)
+
+The following production plugins are bundled with `agentkit` to govern autonomous multi-model orchestration, token economy, and quota safety:
+
+### 1. `autonomous-orchestrator` (Cognitive Tiering & Headroom CCR)
+- **Purpose**: Enforces cognitive tiering, context window preservation, Headroom CCR token compression, and git safety gates across Gemini 4 Argon, Claude Opus 5.5, Claude Sonnet 3.7, and Gemini 3.8 Flash.
+- **Components & Architecture**:
+  - **Hooks**:
+    - `PreToolUse` matching `edit_file|write_file` -> `scripts/guard-subagent-delegation.sh`: Blocks the Root Orchestrator from directly modifying project source code, tests, or UI files, mandating delegation to Flash subagents.
+    - `PreToolUse` matching `run_command` -> `scripts/guard-git-operations.sh`: Hard-blocks direct pushes or merges to `main`/`master`, and gates destructive operations (`rm -rf`, `mkfs`, `dd`).
+    - `PreToolUse` matching `run_command` -> `scripts/filter-and-wrap.py`: Intercepts verbose test, inspection, and diff commands, rewriting them to execute under `scripts/headroom-wrap.py` for 60%–90% token compression with Reversible CCR caching in `~/.cache/antigravity-headroom/<hash>.txt`.
+    - `Stop` -> `scripts/verify-clean-completion.sh`: Rejects agent completion if automated tests fail or if uncommitted changes linger in the git working tree.
+  - **Rules**: `rules/AGENTS.md` (Cognitive tiering hierarchy, pure-edit subagent isolation, prefix-matchable command shapes, conventional commits).
+  - **Skills**: `skills/auto-lifecycle/SKILL.md` (4-phase autonomous feature lifecycle: Contract Freeze, Worker Implementation, Adversarial Review, Promotion & Cleanup).
+
+### 2. `quota-guardian` (Quota-Aware Routing, Complexity Mapping & Wrap-Up Gate)
+- **Purpose**: Autonomous quota-aware model routing, subagent task complexity mapping, and graceful wrap-up circuit-breaker to eliminate hung subagents and data loss during token quota exhaustion.
+- **Components & Architecture**:
+  - **Hooks**:
+    - `PreToolUse` matching `invoke_subagent` -> executes `scripts/guard-quota.py` (timeout: 10s).
+  - **Scripts**:
+    - `scripts/quota_status.py`: Interrogates the Antigravity Language Server RPC or local cache, categorizes usage into quota groups, and formats tabular/JSON output for CLI and hooks.
+    - `scripts/guard-quota.py`: Intercepts `invoke_subagent` calls. Evaluates task complexity tag (`[complexity: low|med|high]`), checks remaining quota in the target model family, and automatically rewrites the subagent `Model` argument to a healthy fallback family when quota drops below 15%. If all groups drop below 5%, denies execution with `QUOTA WRAP-UP:`.
+  - **Configuration (`config/quota.json`)**:
+    - `thresholds`: `{"switch_threshold": 0.15, "wrapup_threshold": 0.05, "cache_ttl_seconds": 60}`
+    - `groups`: Maps model identifiers to 3 quota groups:
+      - `gemini`: Gemini 3.8 Flash, Flash Lite
+      - `claude`: Claude Opus 5.5, Claude Sonnet 3.7
+      - `argon`: Gemini 4 Argon
+    - `complexity_to_model`:
+      - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
+      - `med`: `flash` (feature code, tests, localized refactors).
+      - `high`: `flash` (with escalation to `pro` for architecture, multi-repo design, or adversarial review when Argon quota is healthy).
+    - `fallbacks`: Declarative fallback routing sequences (`flash_lite` -> `inherit`, `flash` -> `inherit`, `pro` -> `flash` -> `inherit`).
+  - **Language Server RPC Endpoint**:
+    - Interrogates `RetrieveUserQuotaSummary` over HTTP/JSON:
+      `POST http://$ANTIGRAVITY_LS_ADDRESS/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary`
+      Headers: `Content-Type: application/json`, `x-codeium-csrf-token: $ANTIGRAVITY_CSRF_TOKEN`
+  - **Environment Variables**:
+    - `AGENTKIT_QUOTA_GUARD`: Set to `0` or `false` to disable the pre-tool subagent guard (useful during offline runs or emergency bypass).
+    - `AGENTKIT_QUOTA_FIXTURE`: Absolute path to a mock JSON quota response for unit tests and deterministic simulation.
+    - `AGENTKIT_QUOTA_CACHE`: Custom file path for caching the language server quota response (defaults to `~/.cache/antigravity-quota/summary.json`).
+  - **Graceful Wrap-Up Protocol**:
+    - When all quota families drop below 5%, `guard-quota.py` denies delegation with `QUOTA WRAP-UP:`.
+    - Enforces the `quota-wrapup` protocol: Cease spawning subagents, run local test suite, commit WIP changes on the feature branch, generate a structured `handoff.md`, and advise the user of the exact quota reset time and recommended `/model` switch.
+
+---
+
+## 5. Workstation Stack Integration Plugins (Architecture)
 
 The following modular plugins coordinate across the 4-layer workstation stack:
 
@@ -129,7 +182,7 @@ The following modular plugins coordinate across the 4-layer workstation stack:
 
 ---
 
-## 5. Templates Available in this Repository
+## 6. Templates Available in this Repository
 
 This repository includes ready-to-use templates for future implementation:
 
@@ -144,7 +197,7 @@ This repository includes ready-to-use templates for future implementation:
 
 ---
 
-## 6. Activating a Plugin or Hook
+## 7. Activating a Plugin or Hook
 
 When you are ready to implement a specific plugin or hook:
 

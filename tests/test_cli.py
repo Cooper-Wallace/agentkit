@@ -162,7 +162,7 @@ class TestOrchestrationProfiles(unittest.TestCase):
         self.assertEqual(data["default_profile"], "argon-flash")
         self.assertIn("profiles", data)
 
-        required_profiles = ["argon-flash", "opus-flash", "sonnet-flash", "pro-flash"]
+        required_profiles = ["argon-flash", "opus-flash", "sonnet-flash", "flash-high"]
         for prof in required_profiles:
             self.assertIn(prof, data["profiles"], f"Missing profile {prof}")
             prof_data = data["profiles"][prof]
@@ -848,6 +848,7 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         res_cancel = subprocess.run(
             [str(self.verify_script)],
             input=json.dumps({"terminationReason": "USER_CANCELED"}),
+            env=dict(os.environ, AGY_VERIFY_RUNNING="0"),
             cwd=tempfile.gettempdir(),
             capture_output=True,
             text=True,
@@ -858,7 +859,9 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         # 2. Dry run check
         res_dry = subprocess.run(
             [str(self.verify_script), "--dry-run"],
+            env=dict(os.environ, AGY_VERIFY_RUNNING="0"),
             cwd=tempfile.gettempdir(),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
         )
@@ -874,6 +877,7 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
             [str(self.verify_script)],
             env=env_recursion,
             cwd=tempfile.gettempdir(),
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
         )

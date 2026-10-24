@@ -9,7 +9,7 @@ Features:
 - Snapshot / export locally approved commands and MCP servers back to repository manifests.
 - Diff local machine state against standardized declarative catalog.
 - Scaffold project-level AGENTS.md / GEMINI.md rulesets into repositories.
-- Configure multi-model orchestration tiers (Argon-Flash, Opus-Flash, Sonnet-Flash, Pro-Flash).
+- Configure multi-model orchestration tiers (Argon-Flash, Opus-Flash, Sonnet-Flash, Flash-High).
 - Modular Harness abstraction supporting Google Antigravity, Claude Code, Cursor, and OpenCode.
 - Install local Conventional Commits git hooks.
 - Manage reusable project skills (list, inspect info, and install via symlink or copy).
@@ -518,6 +518,22 @@ def audit_mcp_requirements(
 # ==============================================================================
 
 
+DEPRECATED_PROFILE_ALIASES = {"pro-flash": "flash-high"}
+DEFAULT_COMPLEXITY_TIERS = {
+    "low": {
+        "model": "flash_lite",
+        "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize",
+    },
+    "med": {"model": "flash", "use": "feature code, tests, localized refactors"},
+    "high": {
+        "model": "flash",
+        "escalate_to": "pro",
+        "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy",
+    },
+}
+QUOTA_SCRIPT = HARNESS_DIR / "plugins" / "quota-guardian" / "scripts" / "quota_status.py"
+
+
 def get_orchestration_catalog() -> Dict[str, Any]:
     """Load declarative multi-model orchestration catalog."""
     if ORCHESTRATION_FILE.exists():
@@ -525,32 +541,42 @@ def get_orchestration_catalog() -> Dict[str, Any]:
             return load_json(ORCHESTRATION_FILE)
         except Exception:
             pass
+    tl = json.loads(json.dumps(DEFAULT_COMPLEXITY_TIERS))
     return {
         "default_profile": "argon-flash",
+        "deprecated_aliases": dict(DEPRECATED_PROFILE_ALIASES),
         "profiles": {
             "argon-flash": {
-                "description": "Gemini 4 Argon Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Default high-reasoning tier)",
+                "description": "Gemini 4 Argon Root Orchestrator (complex tasks) -> Gemini 3.8 Flash Worker Subagents (Default tier)",
                 "root_model": "Gemini 4 Argon",
                 "worker_model": "flash",
                 "root_slug": "argon",
+                "complexity_tiers": tl,
+                "quota_fallback": ["flash-high", "opus-flash", "sonnet-flash"],
+            },
+            "flash-high": {
+                "description": "Gemini 3.8 Flash (HIGH reasoning) Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Standard tier)",
+                "root_model": "Gemini 3.8 Flash (high reasoning)",
+                "worker_model": "flash",
+                "root_slug": "flash-high",
+                "complexity_tiers": tl,
+                "quota_fallback": ["opus-flash", "sonnet-flash"],
             },
             "opus-flash": {
                 "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
                 "root_model": "Claude Opus 5.5",
                 "worker_model": "flash",
                 "root_slug": "opus",
+                "complexity_tiers": tl,
+                "quota_fallback": ["sonnet-flash"],
             },
             "sonnet-flash": {
                 "description": "Claude Sonnet 3.7 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (High-throughput engineering tier)",
                 "root_model": "Claude Sonnet 3.7",
                 "worker_model": "flash",
                 "root_slug": "sonnet",
-            },
-            "pro-flash": {
-                "description": "Gemini 3.0 Pro Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Standard polyglot tier)",
-                "root_model": "Gemini 3.0 Pro",
-                "worker_model": "flash",
-                "root_slug": "pro",
+                "complexity_tiers": tl,
+                "quota_fallback": ["opus-flash"],
             },
         },
     }
@@ -560,7 +586,74 @@ def list_model_profiles() -> List[str]:
     """Return available orchestration model profile slugs."""
     cat = get_orchestration_catalog()
     profiles = list(cat.get("profiles", {}).keys())
-    return profiles or ["argon-flash", "opus-flash", "sonnet-flash", "pro-flash"]
+    return profiles or ["argon-flash", "flash-high", "opus-flash", "sonnet-flash"]
+
+
+def profile_arg(value: str) -> str:
+    """argparse type: map deprecated profile aliases (e.g. pro-flash) to their replacement with a warning."""
+    aliases = get_orchestration_catalog().get("deprecated_aliases", DEPRECATED_PROFILE_ALIASES)
+    if value in aliases:
+        print(
+            f"WARNING: model profile '{value}' is deprecated (base model retired); using '{aliases[value]}'.",
+            file=sys.stderr,
+        )
+        return aliases[value]
+    return value
+
+
+def _profile_lines(name: str, info: Dict[str, Any], default: str) -> List[str]:
+    mark = " (default)" if name == default else ""
+    lines = [
+        f"{BOLD}{name}{RESET}{mark}: {info.get('description', '')}",
+        f"    root: {info.get('root_model', 'N/A')} | worker: {info.get('worker_model', 'N/A')}",
+        "    complexity_tiers:",
+    ]
+    tiers = info.get("complexity_tiers") or info.get("thinking_levels", {})  # old key kept for compat
+    for lvl, t in tiers.items():
+        if isinstance(t, str):
+            t = {"use": t}
+        esc = f" (escalate to {t['escalate_to']})" if t.get("escalate_to") else ""
+        lines.append(f"      {lvl}: {t.get('model', info.get('worker_model', 'N/A'))}{esc} - {t.get('use', '')}")
+    lines.append(f"    fallback: {' -> '.join(info.get('quota_fallback', [])) or 'none'}")
+    return lines
+
+
+def cmd_profile_list(args: argparse.Namespace) -> int:
+    cat = get_orchestration_catalog()
+    default = cat.get("default_profile", "argon-flash")
+    for name, info in cat.get("profiles", {}).items():
+        print("\n".join(_profile_lines(name, info, default)))
+    return 0
+
+
+def cmd_profile_show(args: argparse.Namespace) -> int:
+    cat = get_orchestration_catalog()
+    name = args.profile_name
+    info = cat.get("profiles", {}).get(name)
+    if info is None:
+        print_failure(f"Unknown profile: {name}")
+        return 1
+    print("\n".join(_profile_lines(name, info, cat.get("default_profile", "argon-flash"))))
+    return 0
+
+
+def _run_quota_script(script_args: List[str]) -> int:
+    """Delegate to the quota-guardian plugin script via subprocess (never imported)."""
+    if not QUOTA_SCRIPT.exists():
+        print(f"quota-guardian plugin script not found: {QUOTA_SCRIPT}", file=sys.stderr)
+        print("Install or restore harness/plugins/quota-guardian to use quota commands.", file=sys.stderr)
+        return 1
+    import subprocess
+
+    return subprocess.run([sys.executable, str(QUOTA_SCRIPT)] + script_args).returncode
+
+
+def cmd_quota_status(args: argparse.Namespace) -> int:
+    return _run_quota_script(["status"] + (["--json"] if args.json else []))
+
+
+def cmd_quota_route(args: argparse.Namespace) -> int:
+    return _run_quota_script(["route", "--complexity", args.complexity] + (["--json"] if args.json else []))
 
 
 def resolve_orchestration_config_path(
@@ -1523,6 +1616,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_audit.add_argument("--orchestration-path", help="Path to orchestration.json config")
     p_audit.add_argument(
         "--model-profile",
+        type=profile_arg,
         choices=list_model_profiles(),
         default="argon-flash",
         help="Expected orchestration model profile to verify against (default: argon-flash)",
@@ -1546,6 +1640,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_apply.add_argument("--orchestration-path", help="Path to orchestration.json config")
     p_apply.add_argument(
         "--model-profile",
+        type=profile_arg,
         choices=list_model_profiles(),
         default="argon-flash",
         help="Active multi-model orchestration profile (default: argon-flash)",
@@ -1666,6 +1761,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_tool_list.set_defaults(func=cmd_tool_list)
     p_tool.set_defaults(func=_print_subparser_help(p_tool))
+
+    # profile
+    p_prof = subparsers.add_parser(
+        "profile",
+        parents=[harness_parent],
+        help="Orchestration model profile inspection",
+    )
+    prof_sub = p_prof.add_subparsers(dest="profile_command", help="Profile subcommands")
+    p_prof_list = prof_sub.add_parser("list", parents=[harness_parent], help="List profiles with thinking levels and fallback")
+    p_prof_list.set_defaults(func=cmd_profile_list)
+    p_prof_show = prof_sub.add_parser("show", parents=[harness_parent], help="Show one profile")
+    p_prof_show.add_argument("profile_name", type=profile_arg, help="Profile name")
+    p_prof_show.set_defaults(func=cmd_profile_show)
+    p_prof.set_defaults(func=_print_subparser_help(p_prof))
+
+    # quota
+    p_quota = subparsers.add_parser(
+        "quota",
+        parents=[harness_parent],
+        help="Quota-aware model routing (delegates to quota-guardian plugin)",
+    )
+    quota_sub = p_quota.add_subparsers(dest="quota_command", help="Quota subcommands")
+    p_q_status = quota_sub.add_parser("status", parents=[harness_parent], help="Show model-group quota status")
+    p_q_status.add_argument("--json", action="store_true", help="Output JSON")
+    p_q_status.set_defaults(func=cmd_quota_status)
+    p_q_route = quota_sub.add_parser("route", parents=[harness_parent], help="Recommend root/worker model for a task complexity")
+    p_q_route.add_argument("--complexity", required=True, choices=["low", "med", "high"], help="Task complexity")
+    p_q_route.add_argument("--json", action="store_true", help="Output JSON")
+    p_q_route.set_defaults(func=cmd_quota_route)
+    p_quota.set_defaults(func=_print_subparser_help(p_quota))
 
     return parser
 

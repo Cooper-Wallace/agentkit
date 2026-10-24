@@ -2,6 +2,12 @@
 # verify-clean-completion.sh: Stop hook to prevent autonomous agent termination on dirty git status or failing tests.
 set -euo pipefail
 
+# Support CLI test / dry-run mode
+if [[ "${1:-}" == "--dry-run" ]]; then
+  echo '{"status": "dry-run", "decision": "stop", "message": "verify-clean-completion.sh is operational"}'
+  exit 0
+fi
+
 # Recursion circuit breaker: prevent infinite test invocation loops
 if [[ "${AGY_VERIFY_RUNNING:-0}" == "1" ]]; then
   echo '{"decision": "stop", "reason": "Recursion circuit breaker: verification already running"}'
@@ -9,11 +15,7 @@ if [[ "${AGY_VERIFY_RUNNING:-0}" == "1" ]]; then
 fi
 export AGY_VERIFY_RUNNING=1
 
-# Support CLI test / dry-run mode
-if [[ "${1:-}" == "--dry-run" ]]; then
-  echo '{"status": "dry-run", "decision": "stop", "message": "verify-clean-completion.sh is operational"}'
-  exit 0
-elif [[ "${1:-}" == "--test" && -n "${2:-}" ]]; then
+if [[ "${1:-}" == "--test" && -n "${2:-}" ]]; then
   INPUT_JSON="$2"
 else
   INPUT_JSON="$(cat)"
@@ -56,9 +58,9 @@ FAILED_SUITE=""
 # Python verification
 if [[ -f "pytest.ini" || -f "pyproject.toml" || -d "tests" ]]; then
   if command -v pytest >/dev/null 2>&1; then
-    pytest -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="pytest"; }
+    AGY_VERIFY_RUNNING=0 pytest -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="pytest"; }
   elif command -v python3 >/dev/null 2>&1; then
-    python3 -m unittest discover tests -v >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="python unittest"; }
+    AGY_VERIFY_RUNNING=0 python3 -m unittest discover tests -v >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="python unittest"; }
   fi
 fi
 

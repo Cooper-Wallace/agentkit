@@ -52,14 +52,22 @@ By separating Layer 2 from Layer 1, `agentkit` maintains strict focus on AI agen
 
 | Profile | Root Orchestrator | Worker Subagents | Primary Use Case |
 |---|---|---|---|
-| **`argon-flash`** | Gemini 4 Argon | Gemini 3.8 Flash | **Default**: Maximum reasoning depth and architectural precision with fast, cost-effective subagent execution. |
-| **`opus-flash`** | Claude Opus 5.5 | Gemini 3.8 Flash | **Token Limit Fallback**: Seamless fallback root planner when Argon hits daily rate limits or token quotas. |
-| **`sonnet-flash`** | Claude Sonnet 3.7 | Gemini 3.8 Flash | Balanced high-speed reasoning and code synthesis with Flash execution. |
-| **`pro-flash`** | Gemini 3.0 Pro | Gemini 3.8 Flash | Balanced Google Gemini multi-model tiering. |
+| **`argon-flash`** | Gemini 4 Argon | Gemini 3.8 Flash | **Primary / Default**: Deepest reasoning and architectural precision (when Argon quota is available) with fast Flash subagents. |
+| **`flash-high`** | Gemini 3.8 Flash (High reasoning) | Gemini 3.8 Flash | **Standard**: Fast lifecycle and feature development with high reasoning depth (replaces retired Pro). |
+| **`opus-flash`** | Claude Opus 5.5 | Gemini 3.8 Flash | **Quota / Token Limit Fallback**: High-capability root planner when Gemini quota groups are exhausted or rate-limited. |
+| **`sonnet-flash`** | Claude Sonnet 3.7 | Gemini 3.8 Flash | **High-Throughput**: High-speed reasoning, refactoring, and code synthesis with Flash execution. |
+
+### Subagent Complexity Tiers
+
+Subagents are routed to optimal models based on task complexity tags placed at the start of prompts (`[complexity: low|med|high]`):
+- **`low`**: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
+- **`med`**: `flash` (feature code, tests, localized refactors).
+- **`high`**: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy.
 
 Switch active profiles seamlessly:
 ```bash
 agentkit profile list
+agentkit profile set flash-high
 agentkit profile set opus-flash
 ```
 
@@ -68,7 +76,8 @@ agentkit profile set opus-flash
 ## Features
 
 - **Harness-Agnostic Governance**: Support for Google Antigravity CLI and extensible harness targets via `--harness`.
-- **Switchable Cognitive Profiles**: Switch between `argon-flash`, `opus-flash`, `sonnet-flash`, and `pro-flash` profiles to navigate token quotas and workload complexity.
+- **Switchable Cognitive Profiles**: Switch between `argon-flash`, `flash-high`, `opus-flash`, and `sonnet-flash` profiles to navigate token quotas and workload complexity.
+- **Quota Telemetry & Fallback Routing**: Query real-time token quotas with `agentkit quota status` and calculate optimal model assignments with `agentkit quota route`.
 - **Tiered Command Permissions**:
   - Pre-approves safe core inspection tools (`cat`, `grep`, `which`, `ls`, `find`, `file`, `diff`, `fastfetch`).
   - Pre-approves non-destructive file operations (`mkdir`, `touch`, `cp`, `mv`, `chmod`, `ln`) while gating unreviewed deletions.
@@ -99,9 +108,10 @@ agentkit profile set opus-flash
 - **Project Scaffolding**:
   - Scaffolds modular project-level `AGENTS.md` and `GEMINI.md` files with custom test commands and architecture maps.
 - **Autonomous Orchestrator & Plugin Governance**:
-  - Bundles the standard `autonomous-orchestrator` plugin for state-of-the-art multi-model workflows with Gemini 4 Argon and Gemini 3.8 Flash.
+  - Bundles standard plugins (`autonomous-orchestrator`, `quota-guardian`) for multi-model workflows, quota management, and token optimization.
   - Automatically deploys and audits standard plugins in `~/.gemini/config/plugins/` with executable lifecycle hook scripts.
   - **Cognitive Tiering & Subagent Guard**: Enforces root planning via Argon/Opus and code execution via Flash subagents with `PreToolUse` delegation enforcement (`scripts/guard-subagent-delegation.sh`).
+  - **Quota Guardian & Fallback Routing**: Intercepts subagent delegation (`PreToolUse` on `invoke_subagent`), queries language server quota telemetry (`RetrieveUserQuotaSummary`), dynamically reroutes subagents when quotas drop below 15%, and gates execution with a graceful wrap-up protocol at 5% remaining capacity.
   - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`filter-and-wrap.py` -> `headroom-wrap.py`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
   - **Deterministic Hook Gates**: Hard blocks direct pushes and trunk merges to `main` (`guard-git-operations.sh`), gates destructive deletions, and prevents task termination on test failures or dirty trees (`verify-clean-completion.sh`).
   - Pre-approves Git worktree operations (`git worktree`, `git rev-parse`, `git ls-files`) for concurrent subagent isolation.
@@ -186,6 +196,9 @@ Inspect and switch cognitive tiering profiles:
 # List available model profiles:
 agentkit profile list
 
+# Switch to standard Flash High profile:
+agentkit profile set flash-high
+
 # Switch to Claude Opus 5.5 fallback profile:
 agentkit profile set opus-flash
 
@@ -195,7 +208,24 @@ agentkit profile set argon-flash
 
 ---
 
-### 4. Diff Local Configuration against Standard Baseline
+### 4. Quota Telemetry & Subagent Route Optimization
+Query real-time token quotas and calculate optimal subagent routing:
+```bash
+# Check quota status across Gemini, Claude, and Argon groups:
+agentkit quota status
+
+# Check quota status in JSON format:
+agentkit quota status --json
+
+# Determine optimal model recommendation for a task complexity:
+agentkit quota route --complexity low
+agentkit quota route --complexity med
+agentkit quota route --complexity high
+```
+
+---
+
+### 5. Diff Local Configuration against Standard Baseline
 Review which standard permissions are missing or which custom permissions exist locally:
 ```bash
 agentkit diff
@@ -203,7 +233,7 @@ agentkit diff
 
 ---
 
-### 5. Snapshot Local Commands to Sync Back to Git
+### 6. Snapshot Local Commands to Sync Back to Git
 When you click **"Always allow"** during ad-hoc sessions, inspect those newly added commands:
 ```bash
 agentkit snapshot
@@ -218,7 +248,7 @@ Add any commands you wish to standardize to `config/permissions.json` and push t
 
 ---
 
-### 6. Scaffold Project-Level Directives
+### 7. Scaffold Project-Level Directives
 Scaffold project-specific agent directives (`AGENTS.md` and `GEMINI.md` symlink) into any repository:
 ```bash
 cd ~/Projects/my-new-project
@@ -227,7 +257,7 @@ agentkit template --name "auth-service" --lang "Python / FastAPI" --test "pytest
 
 ---
 
-### 7. Install Conventional Commits Git Hook
+### 8. Install Conventional Commits Git Hook
 Install a local `commit-msg` hook to enforce Conventional Commits:
 ```bash
 agentkit hook install
@@ -235,7 +265,7 @@ agentkit hook install
 
 ---
 
-### 8. Manage Reusable Project Skills
+### 9. Manage Reusable Project Skills
 Discover, inspect, and install domain engineering and machine learning skills into repositories:
 ```bash
 # List available skills:
@@ -256,7 +286,7 @@ agentkit skill install feature-engineering --target ~/Projects/AugursSaber/skill
 
 ---
 
-### 9. Discover Reusable Project Tools
+### 10. Discover Reusable Project Tools
 Discover and inspect verified utility scripts and helper tools:
 ```bash
 # List all available project utility scripts:
@@ -316,12 +346,9 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │   └── settings.default.json     # Standard baseline preferences
 │
 ├── harness/                      # Harness-level governance, lifecycle hooks, and plugins
-│   ├── plugins/                  # Multi-model orchestration plugin (autonomous-orchestrator)
-│   │   └── autonomous-orchestrator/
-│   │       ├── hooks.json        # Subagent delegation, Headroom CCR, git safety gates
-│   │       ├── rules/AGENTS.md   # Cognitive tiering & zero-prompt discipline rules
-│   │       ├── skills/           # 4-phase autonomous feature lifecycle runbook (auto-lifecycle)
-│   │       └── scripts/          # Lifecycle hook scripts (headroom-wrap, guard-*)
+│   ├── plugins/                  # Standard harness plugins
+│   │   ├── autonomous-orchestrator/ # Multi-model orchestration (Argon/Flash) & Headroom CCR
+│   │   └── quota-guardian/       # Quota telemetry, fallback routing, and wrap-up gate
 │   ├── hooks/                    # Standard lifecycle hooks configuration
 │   ├── rules/                    # Universal agent directives (AGENTS.md)
 │   └── skills/                   # Harness operational skills
@@ -346,7 +373,8 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │       ├── 0005-declarative-mcp-management-and-env-advisories.md
 │       ├── 0006-token-compression-and-cross-repo-memory.md
 │       ├── 0007-agentkit-harness-agnostic-standardisation.md
-│       └── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
+│       ├── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
+│       └── 0009-quota-aware-model-routing.md
 │
 └── tests/
     └── test_cli.py               # Automated unit tests

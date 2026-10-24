@@ -1,6 +1,6 @@
 # Agent Developer Directives & Cross-Machine Standards
 
-Welcome to Cooper Wallace's development workspace. This document establishes universal behavioral guidelines, git hygiene rules, safety protocols, and verification standards for AI pair programming sessions across all workstations (managed via `agentkit` and `repokit`).
+Welcome to Cooper Wallace's development workspace. This document establishes universal behavioral guidelines, git hygiene rules, cognitive model tiering, quota management, safety protocols, and verification standards for AI pair programming sessions across all workstations (managed via `agentkit` and `repokit`).
 
 ---
 
@@ -17,7 +17,52 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 2. Git Workflow & Version Control Standards
+## 2. Cognitive Architecture & Model Tiering
+
+- **Root Orchestrator (Switchable High-Tier Profiles)**:
+  - The root session operates under a high-capability reasoning model with switchable profiles:
+    - **Primary Tier (`argon-flash`)**: Gemini 4 Argon (`Model: "pro"` / `"inherit"`) when Argon quota is available AND the task involves complex architecture, multi-repo planning, or adversarial diff auditing.
+    - **Standard Tier (`flash-high`)**: Gemini 3.8 Flash with High reasoning (`Model: "flash"` / `"inherit"`) for standard feature and lifecycle workflows (replaces retired Gemini 3.0/3.1 Pro).
+    - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: Claude Opus 5.5 / Claude Sonnet 3.7 (`Model: "opus"` / `"claude-opus-5.5"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
+  - The Root Orchestrator (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7) is responsible for high-level requirement analysis, architectural contracts, task DAG generation, and adversarial reviews.
+  - The Root Orchestrator MUST NEVER directly edit project source code, tests, or UI files (via `edit_file` or `write_file`) — only artifact files in the session brain directory (e.g., `plan.md`) may be written directly by the root orchestrator. All code implementation, post-review bugfixes, threshold tuning, and test updates MUST be delegated to worker subagents.
+- **Subagent Complexity Tiers**:
+  - Subagents are partitioned into discrete complexity tiers based on task scope and routed accordingly:
+    - **`low`**: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
+    - **`med`**: `flash` (feature code, tests, localized refactors).
+    - **`high`**: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy.
+  - **Tag Convention**: Orchestrators must place `[complexity: low|med|high]` at the start of subagent prompts.
+- **Disjoint-File Parallel Worker Partitioning**:
+  - Multi-component tasks (e.g., backend logic, frontend UI, documentation, and unit tests) MUST be partitioned across concurrent subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
+
+---
+
+## 3. Quota Awareness & Graceful Wrap-Up
+
+- **Pre-Flight Quota Inspection**:
+  - Check remaining quota with `agentkit quota status` before launching large subagent fan-outs.
+- **The 3 Quota Groups**:
+  - **Gemini Group**: Gemini 3.8 Flash, Gemini 3.8 Flash Lite (standard and high-throughput subagent execution).
+  - **Claude + GPT Group**: Claude Opus 5.5, Claude Sonnet 3.7 (fallback root orchestrator and cross-family execution).
+  - **Gemini 4 Argon Group**: Dedicated deep reasoning quota (architectural planning, complex system design, adversarial critique).
+- **Automated Routing**:
+  - The `quota-guardian` plugin automatically intercepts subagent delegation via `PreToolUse`.
+  - When the target model's quota group drops below **15% remaining capacity**, `quota-guardian` automatically reroutes subagents to a healthy fallback group without interrupting execution.
+- **Graceful Wrap-Up Circuit Breaker**:
+  - When all eligible quota groups drop below **5% remaining capacity**, `quota-guardian` denies further delegation with `QUOTA WRAP-UP:`.
+  - Agents MUST immediately follow the `quota-wrapup` protocol:
+    1. Cease spawning new subagents.
+    2. Run local test suites to verify system stability.
+    3. Create a clean WIP commit on the active feature branch (`git commit -m "chore(wip): save state prior to quota wrap-up"`).
+    4. Generate a comprehensive `handoff.md` detailing finished deliverables, pending DAG items, and resumption commands.
+    5. Advise the user of the exact quota reset timestamp and recommend an advisory root model switch.
+- **Advisory Root Model Switching**:
+  - The root session model cannot be switched programmatically via API during an active session.
+  - When root quota is depleted, the agent must provide clear advisory guidance instructing the user to switch models via the chat UI picker or the `/model` slash command.
+
+---
+
+## 4. Git Workflow & Version Control Standards
 
 - **Branching Strategy**:
   - Always work in short-lived feature branches branched from `main`:
@@ -37,7 +82,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 3. Safety Protocols & System Boundaries
+## 5. Safety Protocols & System Boundaries
 
 - **Dynamic Path Resolution**:
   - Never hardcode the absolute home directory (`/home/cooper`).
@@ -51,7 +96,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 4. Verification & Testing Standards
+## 6. Verification & Testing Standards
 
 - **Test Before Completion**:
   - Never mark a feature, fix, or refactor complete without verifying functionality through automated tests or deterministic manual validation steps.
@@ -66,7 +111,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 
 ---
 
-## 5. Tooling & Ecosystem Awareness
+## 7. Tooling & Ecosystem Awareness
 
 - **`repokit`**: Automates GitHub repository governance, branch protection rulesets, squash merge enforcement, and semantic PR checks.
 - **`riced-kubuntu-os` (RKO)**: Manages Kubuntu OS packages, KDE Plasma 6 configurations, and system-level dotfiles.

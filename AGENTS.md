@@ -1,6 +1,6 @@
 # agentkit - Agent Directives & Architecture
 
-Welcome to the **agentkit** repository. This repository defines, audits, and enforces harness-agnostic AI agent standards, command permissions, cognitive model profiles, and developer guidelines across Cooper Wallace's workstations.
+Welcome to the **agentkit** repository. This repository defines, audits, and enforces harness-agnostic AI agent standards, command permissions, cognitive model profiles, quota governance, and developer guidelines across Cooper Wallace's workstations.
 
 ---
 
@@ -15,21 +15,26 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 ├── install.sh                # Symlinks agentkit to ~/.local/bin
 │
 ├── bin/
-│   └── agentkit              # Primary Python 3 CLI tool (audit, apply, diff, snapshot, template, profile, skill, tool)
+│   └── agentkit              # Primary Python 3 CLI tool (audit, apply, diff, snapshot, template, profile, quota, skill, tool)
 │
 ├── config/
 │   ├── permissions.json      # Declarative catalog of pre-approved commands by category
 │   ├── mcp.json              # Standard MCP server configurations and environment requirements
-│   ├── profiles.json         # Cognitive model tiering profiles (argon-flash, opus-flash, etc.)
+│   ├── profiles.json         # Cognitive model tiering profiles (argon-flash, flash-high, opus-flash, sonnet-flash)
+│   ├── quota.json            # Quota thresholds, provider groups, complexity mappings, and fallback chains
 │   └── settings.default.json # Baseline configuration defaults (theme, non-workspace access)
 │
 ├── harness/                  # Harness-level governance, lifecycle hooks, and plugins
-│   ├── plugins/              # Multi-model orchestration plugin (autonomous-orchestrator)
-│   │   └── autonomous-orchestrator/
-│   │       ├── hooks.json    # Subagent delegation, Headroom CCR, git safety gates
-│   │       ├── rules/        # Cognitive tiering & zero-prompt discipline rules
-│   │       ├── skills/       # 4-phase autonomous feature lifecycle runbook (auto-lifecycle)
-│   │       └── scripts/      # Lifecycle hook scripts (headroom-wrap, guard-*)
+│   ├── plugins/              # Standard harness plugins
+│   │   ├── autonomous-orchestrator/ # Multi-model cognitive tiering (Argon/Flash) & Headroom CCR
+│   │   │   ├── hooks.json    # Subagent delegation, Headroom CCR, git safety gates
+│   │   │   ├── rules/        # Cognitive tiering & zero-prompt discipline rules
+│   │   │   ├── skills/       # 4-phase autonomous feature lifecycle runbook (auto-lifecycle)
+│   │   │   └── scripts/      # Lifecycle hook scripts (headroom-wrap, guard-*)
+│   │   └── quota-guardian/   # Quota monitoring, fallback routing, and graceful wrap-up gate
+│   │       ├── hooks.json    # PreToolUse invoke_subagent interception
+│   │       ├── plugin.json   # Plugin metadata manifest
+│   │       └── scripts/      # Quota status query and guard scripts
 │   ├── hooks/                # Lifecycle hooks configuration
 │   ├── rules/                # Universal agent directives (AGENTS.md)
 │   └── skills/               # Harness operational skills
@@ -47,9 +52,19 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 │   ├── replication-guide.md  # Multi-machine setup checklist
 │   ├── settings-reference.md # Complete anatomy of CLI settings
 │   └── decisions/            # Architecture Decision Records (ADRs)
+│       ├── 0001-permission-merging-strategy.md
+│       ├── 0002-dual-naming-convention.md
+│       ├── 0003-global-vs-workspace-rules.md
+│       ├── 0004-plugin-and-hook-templating.md
+│       ├── 0005-declarative-mcp-management-and-env-advisories.md
+│       ├── 0006-token-compression-and-cross-repo-memory.md
+│       ├── 0007-agentkit-harness-agnostic-standardisation.md
+│       ├── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
+│       └── 0009-quota-aware-model-routing.md
 │
 └── tests/
-    └── test_cli.py           # Automated unit test suite
+    ├── test_cli.py           # Automated unit test suite
+    └── test_quota_cli.py     # Quota profiles, CLI commands, and routing tests
 ```
 
 ---
@@ -65,12 +80,22 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
    - Operations support `--harness` (default `antigravity`), abstracting settings schemas and permission formats across developer harnesses.
    - Directives canonicalize on `AGENTS.md` with harness-specific symlinks (`GEMINI.md`).
 
-3. **Cognitive Model Profiles**:
-   - Manage tiering via switchable profiles (`argon-flash`, `opus-flash`, `sonnet-flash`, `pro-flash`).
-   - Support seamless fallback to `opus-flash` when token quotas or daily limits are encountered.
+3. **Cognitive Architecture & Model Tiering**:
+   - **Root Orchestrator**:
+     - **Primary Tier (`argon-flash`)**: Gemini 4 Argon (`Model: "pro"` / `"inherit"`) when Argon quota is available AND task involves complex architecture, multi-repo planning, or adversarial diff review.
+     - **Standard Tier (`flash-high`)**: Gemini 3.8 Flash with High reasoning (`Model: "flash"` / `"inherit"`) for standard feature and lifecycle workflows (replaces retired Gemini 3.0/3.1 Pro).
+     - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: Claude Opus 5.5 / Claude Sonnet 3.7 (`Model: "opus"` / `"claude-opus-5.5"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
+     - Root Orchestrator MUST NEVER directly edit project source code, tests, or UI files (via `edit_file` or `write_file`) — only artifact files in the session brain directory (`plan.md`). All code implementation and test updates MUST be delegated to worker subagents.
+   - **Subagent Complexity Tiers**:
+     - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
+     - `med`: `flash` (feature code, tests, localized refactors).
+     - `high`: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy.
+     - Tag convention: place `[complexity: low|med|high]` at the start of subagent prompts.
+   - **Disjoint-File Parallel Worker Partitioning**:
+     - Partition tasks across concurrent subagents operating on strictly disjoint file sets for race-free parallel execution.
 
 4. **Strict Test Coverage**:
-   - Any modifications to the permission catalog, parser, merger, profiles, or audit engine must be accompanied by updated unit tests in `tests/test_cli.py`.
+   - Any modifications to the permission catalog, parser, merger, profiles, quota logic, or audit engine must be accompanied by updated unit tests in `tests/`.
    - Run tests with `python3 -m unittest discover tests -v`.
 
 5. **Conventional Commits**:
@@ -78,3 +103,28 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 
 6. **Dynamic Paths**:
    - Never hardcode `/home/cooper`. Use `$HOME` in bash and `Path.home()` in Python.
+
+---
+
+## 3. Quota Awareness & Graceful Wrap-Up
+
+- **Pre-Flight Quota Inspection**:
+  - Check remaining quota with `agentkit quota status` before launching large subagent fan-outs.
+- **The 3 Quota Groups**:
+  - **Gemini Group**: Gemini 3.8 Flash, Gemini 3.8 Flash Lite (standard and high-throughput subagent execution).
+  - **Claude + GPT Group**: Claude Opus 5.5, Claude Sonnet 3.7 (fallback root orchestrator and cross-family execution).
+  - **Gemini 4 Argon Group**: Dedicated deep reasoning quota (architectural planning, complex system design, adversarial critique).
+- **Automated Fallback Routing**:
+  - The `quota-guardian` plugin automatically intercepts subagent delegation via `PreToolUse`.
+  - When the target model's quota group drops below **15% remaining capacity**, `quota-guardian` dynamically reroutes subagents to a healthy fallback group without interrupting execution.
+- **Graceful Wrap-Up Circuit Breaker**:
+  - When all eligible quota groups drop below **5% remaining capacity**, `quota-guardian` denies further delegation with `QUOTA WRAP-UP:`.
+  - Agents MUST immediately follow the `quota-wrapup` protocol:
+    1. Cease spawning new subagents.
+    2. Run local test suites to verify system stability.
+    3. Create a clean WIP commit on the active feature branch (`git commit -m "chore(wip): save state prior to quota wrap-up"`).
+    4. Generate a comprehensive `handoff.md` detailing finished deliverables, pending DAG items, and resumption commands.
+    5. Advise the user of the exact quota reset timestamp and recommend an advisory root model switch.
+- **Advisory Root Model Switching**:
+  - The root session model cannot be switched programmatically via API during an active session.
+  - When root quota is depleted, the agent must provide clear advisory guidance instructing the user to switch models via the chat UI picker or the `/model` slash command.
