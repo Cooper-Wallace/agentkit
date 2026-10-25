@@ -287,11 +287,13 @@ class TestPermissionMerger(unittest.TestCase):
         self.assertEqual(merged["colorScheme"], "dark")
         self.assertEqual(added, ["command(ls)", "command(cat)"])
         self.assertEqual(merged["permissions"]["allow"], ["command(ls)", "command(cat)"])
-        expected_vault_paths = [
+        expected_workspaces = [
             str(Path.home() / "Documents" / "AgentVault"),
             str(Path.home() / "AgentVault"),
+            str(Path.home() / "Projects" / "agentkit"),
+            str(Path.home() / "Projects" / "repokit"),
         ]
-        self.assertEqual(merged["trustedWorkspaces"], expected_vault_paths)
+        self.assertEqual(merged["trustedWorkspaces"], expected_workspaces)
 
     def test_merge_preserves_custom_permissions(self):
         existing = {
@@ -312,6 +314,8 @@ class TestPermissionMerger(unittest.TestCase):
         self.assertIn("/custom/path", merged["trustedWorkspaces"])
         self.assertIn(str(Path.home() / "Documents" / "AgentVault"), merged["trustedWorkspaces"])
         self.assertIn(str(Path.home() / "AgentVault"), merged["trustedWorkspaces"])
+        self.assertIn(str(Path.home() / "Projects" / "agentkit"), merged["trustedWorkspaces"])
+        self.assertIn(str(Path.home() / "Projects" / "repokit"), merged["trustedWorkspaces"])
         self.assertEqual(merged["model"], "Custom Model")
 
     def test_merge_includes_agentkit_vault_path_env(self):
@@ -322,6 +326,8 @@ class TestPermissionMerger(unittest.TestCase):
             self.assertIn(str(Path(custom_vault).expanduser().resolve()), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "Documents" / "AgentVault"), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "AgentVault"), merged["trustedWorkspaces"])
+            self.assertIn(str(Path.home() / "Projects" / "agentkit"), merged["trustedWorkspaces"])
+            self.assertIn(str(Path.home() / "Projects" / "repokit"), merged["trustedWorkspaces"])
 
     def test_merge_includes_agentvault_path_env(self):
         standard = ["command(ls)"]
@@ -331,19 +337,33 @@ class TestPermissionMerger(unittest.TestCase):
             self.assertIn(str(Path(custom_vault).expanduser().resolve()), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "Documents" / "AgentVault"), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "AgentVault"), merged["trustedWorkspaces"])
+            self.assertIn(str(Path.home() / "Projects" / "agentkit"), merged["trustedWorkspaces"])
+            self.assertIn(str(Path.home() / "Projects" / "repokit"), merged["trustedWorkspaces"])
 
     def test_merge_trusted_workspaces_no_duplicates(self):
         existing = {
             "trustedWorkspaces": [
                 str(Path.home() / "Documents" / "AgentVault"),
                 str(Path.home() / "AgentVault"),
+                str(Path.home() / "Projects" / "agentkit"),
+                str(Path.home() / "Projects" / "repokit"),
             ]
         }
         merged, _ = agy_std.merge_permissions(existing, [])
         self.assertEqual(
             merged["trustedWorkspaces"],
-            [str(Path.home() / "Documents" / "AgentVault"), str(Path.home() / "AgentVault")]
+            [
+                str(Path.home() / "Documents" / "AgentVault"),
+                str(Path.home() / "AgentVault"),
+                str(Path.home() / "Projects" / "agentkit"),
+                str(Path.home() / "Projects" / "repokit"),
+            ]
         )
+
+    def test_merge_includes_agentkit_and_repokit_workspaces(self):
+        merged, _ = agy_std.merge_permissions({}, [])
+        self.assertIn(str(Path.home() / "Projects" / "agentkit"), merged["trustedWorkspaces"])
+        self.assertIn(str(Path.home() / "Projects" / "repokit"), merged["trustedWorkspaces"])
 
     def test_merge_idempotence(self):
         existing = {
@@ -419,7 +439,10 @@ class TestCLIOperations(unittest.TestCase):
         )
         self.assertNotEqual(res.returncode, 0)
         self.assertIn("[NON-COMPLIANT]", res.stdout)
-        self.assertIn("Trusted Workspaces: AgentVault path missing from trustedWorkspaces", res.stdout)
+        self.assertIn("Trusted Workspaces: Required workspace path(s) missing from trustedWorkspaces", res.stdout)
+        self.assertIn("AgentVault", res.stdout)
+        self.assertIn("agentkit", res.stdout)
+        self.assertIn("repokit", res.stdout)
 
     def test_apply_and_audit_flow(self):
         # Initial empty settings
@@ -451,6 +474,8 @@ class TestCLIOperations(unittest.TestCase):
         self.assertIn("trustedWorkspaces", saved)
         self.assertIn(str(Path.home() / "Documents" / "AgentVault"), saved["trustedWorkspaces"])
         self.assertIn(str(Path.home() / "AgentVault"), saved["trustedWorkspaces"])
+        self.assertIn(str(Path.home() / "Projects" / "agentkit"), saved["trustedWorkspaces"])
+        self.assertIn(str(Path.home() / "Projects" / "repokit"), saved["trustedWorkspaces"])
 
         # Verify plugin deployment
         deployed_plugin = self.plugins_dir / "autonomous-orchestrator"
@@ -476,7 +501,7 @@ class TestCLIOperations(unittest.TestCase):
             text=True,
         )
         self.assertEqual(res_audit.returncode, 0, f"Audit failed: {res_audit.stderr}")
-        self.assertIn("Trusted Workspaces: AgentVault path whitelisted", res_audit.stdout)
+        self.assertIn("Trusted Workspaces: AgentVault, agentkit, and repokit whitelisted", res_audit.stdout)
 
     def test_apply_dry_run_does_not_modify_file(self):
         initial_data = {"permissions": {"allow": ["command(ls)"]}}

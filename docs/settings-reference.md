@@ -24,7 +24,9 @@ A complete, standard `settings.json` has the following structure:
   "trustedWorkspaces": [
     "/home/cooper",
     "/home/cooper/Projects",
-    "/home/cooper/Documents/AgentVault"
+    "/home/cooper/Documents/AgentVault",
+    "/home/cooper/Projects/agentkit",
+    "/home/cooper/Projects/repokit"
   ]
 }
 ```
@@ -38,11 +40,11 @@ A complete, standard `settings.json` has the following structure:
 | `model` | string | Preferred default AI model (e.g., `"Gemini 3.8 Flash (High)"`). | `"Gemini 3.8 Flash (High)"` |
 | `permissions` | object | Contains security rule overrides for tool actions. | `{}` |
 | `permissions.allow` | list[string] | List of pre-approved commands in `command(...)` format. | `[]` |
-| `trustedWorkspaces` | list[string] | Absolute filesystem paths trusted for workspace operations, unprompted file access, and local hook discovery. Includes Obsidian AgentVault (`~/Documents/AgentVault` or `~/AgentVault`) automatically via `agentkit apply` and `agentkit vault init`. | `[]` |
+| `trustedWorkspaces` | list[string] | Absolute filesystem paths trusted for workspace operations, unprompted file access, and local hook discovery. Includes Obsidian AgentVault (`~/Documents/AgentVault` or `~/AgentVault`) and core projects (`~/Projects/agentkit`, `~/Projects/repokit`) automatically via `agentkit apply` and `agentkit vault init`. | `[]` |
 
 > [!TIP]
-> **Automatic Whitelisting of Obsidian AgentVault (`trustedWorkspaces`)**:
-> During autonomous multi-agent workflows, agents regularly inspect `$HOME/Documents/AgentVault/User-Input/pending/` for offline user directives, persist session handoffs to `Sessions/`, and maintain living project documentation in `Projects/`. To prevent interactive confirmation prompts from interrupting autonomous workers, `agentkit apply` and `agentkit vault init` automatically ensure the active AgentVault path (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) is present in `trustedWorkspaces`.
+> **Automatic Whitelisting of Obsidian AgentVault and Core Projects (`trustedWorkspaces`)**:
+> During autonomous multi-agent workflows, agents regularly inspect `$HOME/Documents/AgentVault/User-Input/pending/` for offline user directives, persist session handoffs to `Sessions/`, maintain living project documentation in `Projects/`, and inspect sibling codebases (`~/Projects/agentkit`, `~/Projects/repokit`). To prevent interactive confirmation prompts from interrupting autonomous workers, `agentkit apply` and `agentkit vault init` automatically ensure the active AgentVault path (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) and core project repositories (`$HOME/Projects/agentkit`, `$HOME/Projects/repokit`) are present in `trustedWorkspaces`.
 
 ---
 
