@@ -1,0 +1,47 @@
+{
+  "subagent-delegation-guard": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "edit_file|write_file",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/guard-subagent-delegation.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  },
+  "git-safety-guard": {
+    "enabled": true,
+    "PreToolUse": [
+      {
+        "matcher": "run_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/guard-git-operations.sh",
+            "timeout": 15
+          },
+          {
+            "type": "command",
+            "command": "./scripts/filter-and-wrap.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "quality-completion-gate": {
+    "enabled": true,
+    "Stop": [
+      {
+        "type": "command",
+        "command": "./scripts/verify-clean-completion.sh",
+        "timeout": 60
+      }
+    ]
+  }
+}

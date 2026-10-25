@@ -1,0 +1,44 @@
+{
+  "thresholds": {
+    "switch_threshold": 0.15,
+    "wrapup_threshold": 0.05,
+    "cache_ttl_seconds": 60
+  },
+  "groups": {
+    "gemini": "gemini",
+    "claude": "claude",
+    "argon": "argon"
+  },
+  "complexity_to_model": {
+    "low": {
+      "model": "flash_lite",
+      "group": "gemini",
+      "use": "file moves, renames, mechanical find-replace, formatting, doc typos, simple one-command inspection"
+    },
+    "med": {
+      "model": "flash",
+      "group": "gemini",
+      "use": "feature code, tests, localized refactors"
+    },
+    "high": {
+      "model": "flash",
+      "escalate_to": "pro",
+      "group": "gemini",
+      "escalate_group": "argon",
+      "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+    }
+  },
+  "fallbacks": {
+    "flash_lite": [
+      "inherit"
+    ],
+    "flash": [
+      "inherit"
+    ],
+    "pro": [
+      "flash",
+      "inherit"
+    ],
+    "inherit": []
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "quota-guardian",
+  "displayName": "Quota Guardian",
+  "version": "1.0.0",
+  "description": "Automated quota-aware model routing, thinking level complexity mapping, and graceful wrap-up gate for AI agent workflows.",
+  "suggestedPrompts": [
+    "Check current model quota status",
+    "Route task complexity to optimal model",
+    "Perform graceful quota wrap-up"
+  ]
+}

@@ -1,8 +1,8 @@
 # Permissions Security Matrix & Rationale
 
-Google Antigravity CLI enforces a permission boundary on tool executions. When the agent attempts to run terminal commands, it prompts the user unless the exact command or binary is explicitly listed in `~/.gemini/antigravity-cli/settings.json` under `permissions.allow`.
+AI developer harnesses enforce a permission boundary on tool executions. When the agent attempts to run terminal commands, it prompts the user unless the exact command or binary is explicitly listed in configuration settings under `permissions.allow` (e.g., `~/.gemini/antigravity-cli/settings.json` for Antigravity).
 
-This document outlines the security classification, categories, and safety rationale for commands pre-approved by `antigravity-standardise`.
+This document outlines the security classification, categories, and safety rationale for commands pre-approved by **`agentkit`**.
 
 ---
 
@@ -10,8 +10,8 @@ This document outlines the security classification, categories, and safety ratio
 
 | Tier | Classification | Risk Level | Policy | Examples |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tier 1** | Read-Only Inspection | Negligible | Pre-Approved | `ls`, `cat`, `grep`, `pwd`, `diff`, `find`, `which` |
-| **Tier 2** | Non-Destructive Workspace Ops | Low | Pre-Approved | `mkdir`, `touch`, `cp`, `mv`, `chmod`, `ln` |
+| **Tier 1** | Read-Only Inspection | Negligible | Pre-Approved | `ls`, `cat`, `grep`, `pwd`, `diff`, `find`, `which`, `read_file` |
+| **Tier 2** | Non-Destructive Workspace Ops | Low | Pre-Approved | `mkdir`, `touch`, `cp`, `mv`, `chmod`, `ln`, `write_file` |
 | **Tier 3** | Version Control Hygiene | Low | Pre-Approved | `git status`, `git diff`, `git log`, `git add`, `git commit` |
 | **Tier 4** | Build & Test Harnesses | Low–Medium | Pre-Approved | `pytest`, `python3 -m unittest`, `npm test`, `cargo test` |
 | **Tier 5** | Workstation Introspection | Negligible | Pre-Approved | `fastfetch`, `uname`, `hostname`, `whoami`, `date` |
@@ -31,30 +31,94 @@ This document outlines the security classification, categories, and safety ratio
 - **Safety Gate**: Recursive deletion (`rm -rf`) is **deliberately excluded**. Any attempt to delete files or directories must be explicitly confirmed by the user.
 
 ### C. Git Hygiene (`git_hygiene`)
-- **Commands**: `git status`, `git diff`, `git log`, `git show`, `git branch`, `git checkout`, `git switch`, `git fetch`, `git pull`, `git add`, `git commit`, `git remote`, `git config`, `git init`, `git stash`, `git rebase`
-- **Rationale**: Enables frictionless git hygiene, branch creation, atomic commits, and repository checks.
+- **Commands**: `git status`, `git diff`, `git log`, `git show`, `git branch`, `git checkout`, `git switch`, `git fetch`, `git pull`, `git add`, `git commit`, `git remote`, `git config`, `git init`, `git stash`, `git rebase`, `git worktree`, `git rev-parse`, `git ls-files`
+- **Rationale**: Enables frictionless git hygiene, branch creation, atomic commits, repository checks, and subagent worktree isolation.
 - **Safety Gate**: Destructive git commands such as `git push --force` and `git reset --hard` are omitted from pre-approval.
 
 ### D. GitHub Governance (`github_governance`)
-- **Commands**: `gh`, `gh pr`, `gh issue`, `gh repo`, `gh auth`, `gh-standardise`, `gh-standardize`
-- **Rationale**: Allows seamless coordination with GitHub PR workflows, checking PR status (`gh pr checks`), and automating merge governance.
+- **Commands**: `gh`, `gh pr`, `gh issue`, `gh repo`, `gh auth`, `repokit`, `gh-standardise`, `gh-standardize`
+- **Rationale**: Allows seamless coordination with Layer 3 repository governance (`repokit`), GitHub PR workflows, checking PR status (`gh pr checks`), and automating merge governance.
 
 ### E. Developer Test Runners & Runtimes (`test_runners_and_runtimes`)
 - **Commands**: `python3 -m unittest discover tests`, `python3 -m unittest discover`, `pytest`, `python3`, `python`, `node`, `npm test`, `npm run`, `pnpm`, `yarn`, `mvn test`, `cargo test`, `go test`
-- **Rationale**: The agent must rigorously test code before claiming completion. Pre-approving standard test runners ensures that verification steps execute smoothly.
+- **Rationale**: The agent must rigorously test code before claiming completion. Pre-approving standard test runners ensures that verification steps execute smoothly without interactive stalls.
 
-### F. Workstation Provisioning & Scripts (`local_workflows`)
-- **Commands**: `./bootstrap.sh`, `./install.sh`, `./plasma/restore-kde.sh`, `konsole`, `agy`, `agy-standardise`, `antigravity-standardise`
-- **Rationale**: Enables orchestrating system setup, dotfile restoration, and Antigravity compliance tooling across machines.
+### F. Workstation Provisioning & Agent Tooling (`local_workflows`)
+- **Commands**: `./bootstrap.sh`, `./install.sh`, `./plasma/restore-kde.sh`, `konsole`, `agy`, `agentkit`, `workstation-setup`, `ws-setup`
+- **Rationale**: Enables orchestrating system setup, dotfile restoration, Layer 1 workstation tooling (`workstation-setup`), and Layer 2 agent standardisation tooling (`agentkit`) across machines.
+
+### G. Context & Memory Optimization (`context_and_memory_optimization`)
+- **Commands**: `headroom`, `repomix`
+- **Rationale**: Enables automatic token suppression, output wrapping, and AST-compressed codebase indexing without approval friction.
 
 ---
 
-## 3. Auditing & Syncing New Commands
+## 3. Provisioned MCP & Tool Permissions (`mcp_tools`, `tools`)
 
-If an interactive session prompts you to allow a safe command, selecting **"Always allow"** appends it to `settings.json`.
+In addition to terminal command execution permissions (`command(...)`), autonomous agents utilize Model Context Protocol (MCP) servers and harness-level meta-tools to interact with structured external services and persistent state.
+
+### Rationale & Boundary Design
+- **Eliminating Approval Fatigue**: Standard MCP tools (`memory`, `repomix`, `github`, `fetch`) and invocation tools (`call_mcp_tool`) are invoked repeatedly during multi-agent workflows. Pre-approving trusted servers and methods removes repetitive interactive prompts, allowing seamless autonomous orchestration across conversational threads and subagents.
+- **Safety Boundary**: Only explicitly registered, vetted MCP servers defined in `config/mcp.json` and `config/permissions.json` are pre-approved. Any unverified third-party MCP server or arbitrary external tool invocation remains subject to interactive user confirmation.
+
+### A. Persistent Knowledge Graph (`memory`)
+- **Permissions**: `mcp(memory)`, `mcp(memory/*)`, `mcp(memory/create_entities)`, `mcp(memory/create_relations)`, `mcp(memory/add_observations)`, `mcp(memory/delete_entities)`, `mcp(memory/delete_observations)`, `mcp(memory/delete_relations)`, `mcp(memory/read_graph)`, `mcp(memory/search_nodes)`, `mcp(memory/open_nodes)`
+- **Rationale**: Enables agents to store and retrieve cross-session architecture decisions, cross-repo invariants, and developer preferences in the perpetual knowledge graph without stalling on approval prompts.
+
+### B. AST Repository Packing (`repomix`)
+- **Permissions**: `mcp(repomix)`, `mcp(repomix/*)`, `mcp(repomix/pack_codebase)`, `mcp(repomix/read_repomix_output)`, `mcp(repomix/grep_repomix_output)`, `mcp(repomix/pack_remote_repository)`, `mcp(repomix/generate_skill)`, `mcp(repomix/attach_packed_output)`
+- **Rationale**: Enables subagents to compress entire codebases into structured AST-annotated context, reducing cross-repository token ingestion by ~70% without interactive prompts.
+
+### C. GitHub Repository Governance (`github`)
+- **Permissions**: `mcp(github)`, `mcp(github/*)`, `mcp(github/create_or_update_file)`, `mcp(github/list_commits)`, `mcp(github/search_code)`, `mcp(github/get_pull_request)`, `mcp(github/list_pull_requests)`, `mcp(github/create_issue)`, `mcp(github/update_issue)`, `mcp(github/list_issues)`, `mcp(github/push_files)`, `mcp(github/merge_pull_request)`, `mcp(github/get_file_contents)`, `mcp(github/create_pull_request)`, `mcp(github/create_branch)`, `mcp(github/fork_repository)`, `mcp(github/search_issues)`, `mcp(github/get_issue)`, `mcp(github/search_repositories)`, `mcp(github/create_repository)`, `mcp(github/search_users)`, `mcp(github/add_issue_comment)`, `mcp(github/create_pull_request_review)`, `mcp(github/get_pull_request_files)`, `mcp(github/get_pull_request_status)`, `mcp(github/update_pull_request_branch)`, `mcp(github/get_pull_request_comments)`, `mcp(github/get_pull_request_reviews)`
+- **Rationale**: Allows agents to inspect issues, review pull request diffs, query GitHub APIs, and participate in Layer 3 governance natively via MCP.
+
+### D. Web Fetching (`fetch`)
+- **Permissions**: `mcp(fetch)`, `mcp(fetch/*)`, `mcp(fetch/fetch)`
+- **Rationale**: Provides read-only retrieval and markdown conversion of online documentation, API references, and external specs.
+
+### E. Harness Invocation & Resource Access (`provisioned_tools`)
+- **Permissions**: `call_mcp_tool`, `call_mcp_tool(*)`, `list_resources`, `read_resource`
+- **Rationale**: Pre-approves the harness meta-tools that dispatch calls to configured MCP servers and read external server resources, preventing approval prompts at the harness invocation layer.
+
+---
+
+## 4. Native File Access Permissions (`file_access`)
+
+In the Google Antigravity CLI and modern agent harnesses, file inspection and mutation tools (`read_file`, `write_file`) enforce authorization boundaries. While `trustedWorkspaces` whitelists directory trees for workspace context, AGY's authorization engine evaluates `permissions.allow` for explicit native grants:
+- `read_file(<absolute_path>)`
+- `write_file(<absolute_path>)`
+
+According to the Antigravity specification, `read_file` and `write_file` apply to both individual files and directory paths, providing recursive access to directory contents.
+
+### Rationale & Boundary Design
+- **Eliminating File Access Prompts**: Without explicit `read_file(...)` grants in `permissions.allow`, accessing durable documentation, living architecture notes, and cross-repo contracts triggers interactive approval prompts (e.g., `"Read: /home/cooper/Documents/AgentVault/Projects/agentkit.md. Allow access to this file?"`).
+- **Scoped Least Privilege**: Only the local Obsidian AgentVault knowledge base and core governance repositories (`agentkit`, `repokit`) are granted pre-approved file read/write permissions. System root, user configuration folders (`~/.ssh`, `~/.gnupg`), and unmanaged personal directories remain strictly protected and require manual interactive approval.
+
+### A. Obsidian AgentVault (`agentvault`)
+- **Permissions**:
+  - `read_file(${HOME}/Documents/AgentVault)`
+  - `write_file(${HOME}/Documents/AgentVault)`
+  - `read_file(${HOME}/AgentVault)`
+  - `write_file(${HOME}/AgentVault)`
+- **Rationale**: Enables autonomous agents to read human-in-the-loop directives (`User-Input/pending/`), update living project notes (`Projects/<project>.md`), and record session handoff artifacts (`Sessions/handoff-*.md`) without prompt interruptions.
+
+### B. Core Governance Repositories (`governance_repos`)
+- **Permissions**:
+  - `read_file(${HOME}/Projects/agentkit)`
+  - `write_file(${HOME}/Projects/agentkit)`
+  - `read_file(${HOME}/Projects/repokit)`
+  - `write_file(${HOME}/Projects/repokit)`
+- **Rationale**: Allows cross-repository introspection between Layer 2 agent standardisation (`agentkit`) and Layer 3 GitHub governance (`repokit`), enabling agents to read contracts and update configuration files seamlessly.
+
+---
+
+## 5. Auditing & Syncing New Commands
+
+If an interactive session prompts you to allow a safe command, selecting **"Always allow"** appends it to your settings file.
 
 To capture newly approved commands into this repository:
 ```bash
-agy-standardise snapshot
+agentkit snapshot
 ```
 Review the detected commands and add them to [config/permissions.json](../config/permissions.json) to distribute them across all your workstations.

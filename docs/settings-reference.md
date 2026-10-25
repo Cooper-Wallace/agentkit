@@ -23,7 +23,10 @@ A complete, standard `settings.json` has the following structure:
   },
   "trustedWorkspaces": [
     "/home/cooper",
-    "/home/cooper/Projects"
+    "/home/cooper/Projects",
+    "/home/cooper/Documents/AgentVault",
+    "/home/cooper/Projects/agentkit",
+    "/home/cooper/Projects/repokit"
   ]
 }
 ```
@@ -37,7 +40,11 @@ A complete, standard `settings.json` has the following structure:
 | `model` | string | Preferred default AI model (e.g., `"Gemini 3.8 Flash (High)"`). | `"Gemini 3.8 Flash (High)"` |
 | `permissions` | object | Contains security rule overrides for tool actions. | `{}` |
 | `permissions.allow` | list[string] | List of pre-approved commands in `command(...)` format. | `[]` |
-| `trustedWorkspaces` | list[string] | Absolute filesystem paths trusted for workspace operations and local hook discovery. | `[]` |
+| `trustedWorkspaces` | list[string] | Absolute filesystem paths trusted for workspace operations, unprompted file access, and local hook discovery. Includes Obsidian AgentVault (`~/Documents/AgentVault` or `~/AgentVault`) and core projects (`~/Projects/agentkit`, `~/Projects/repokit`) automatically via `agentkit apply` and `agentkit vault init`. | `[]` |
+
+> [!TIP]
+> **Automatic Whitelisting of Obsidian AgentVault and Core Projects (`trustedWorkspaces`)**:
+> During autonomous multi-agent workflows, agents regularly inspect `$HOME/Documents/AgentVault/User-Input/pending/` for offline user directives, persist session handoffs to `Sessions/`, maintain living project documentation in `Projects/`, and inspect sibling codebases (`~/Projects/agentkit`, `~/Projects/repokit`). To prevent interactive confirmation prompts from interrupting autonomous workers, `agentkit apply` and `agentkit vault init` automatically ensure the active AgentVault path (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) and core project repositories (`$HOME/Projects/agentkit`, `$HOME/Projects/repokit`) are present in `trustedWorkspaces`.
 
 ---
 
@@ -60,8 +67,8 @@ Inside the Antigravity TUI:
 - `/permissions`: Interactive editor to view, add, or revoke command permissions.
 - `/settings`: Interactive viewer and toggle for user preferences (such as theme and copyOnSelect).
 
-Using `agy-standardise`:
-- `agy-standardise audit`: Validates current `settings.json` against the standard baseline.
-- `agy-standardise apply`: Merges missing baseline permissions while preserving custom workspaces.
-- `agy-standardise diff`: Compares active permissions with the baseline.
-- `agy-standardise snapshot`: Lists permissions approved on the machine that are not yet tracked in git.
+Using `agentkit` (or `ak`):
+- `agentkit audit`: Validates current `settings.json` against the standard baseline.
+- `agentkit apply`: Merges missing baseline permissions while preserving custom workspaces.
+- `agentkit diff`: Compares active permissions with the baseline.
+- `agentkit snapshot`: Lists permissions approved on the machine that are not yet tracked in git.

@@ -1,0 +1,18 @@
+{
+  "quota-guardian": {
+    "enabled": true,
+    "description": "PreToolUse hook on invoke_subagent for quota monitoring and model routing.",
+    "PreToolUse": [
+      {
+        "matcher": "invoke_subagent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/guard-quota.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

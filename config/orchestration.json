@@ -1,0 +1,108 @@
+{
+  "default_profile": "argon-flash",
+  "deprecated_aliases": {
+    "pro-flash": "flash-high"
+  },
+  "profiles": {
+    "argon-flash": {
+      "description": "Gemini 4 Argon Root Orchestrator (when Argon quota available and task is complex) -> Gemini 3.8 Flash Worker Subagents (Default tier)",
+      "root_model": "Gemini 4 Argon",
+      "worker_model": "flash",
+      "root_slug": "argon",
+      "quota_fallback": [
+        "flash-high",
+        "opus-flash",
+        "sonnet-flash"
+      ],
+      "complexity_tiers": {
+        "low": {
+          "model": "flash_lite",
+          "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize"
+        },
+        "med": {
+          "model": "flash",
+          "use": "feature code, tests, localized refactors"
+        },
+        "high": {
+          "model": "flash",
+          "escalate_to": "pro",
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+        }
+      }
+    },
+    "flash-high": {
+      "description": "Gemini 3.8 Flash (HIGH reasoning) Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Standard tier; replaces retired Pro)",
+      "root_model": "Gemini 3.8 Flash (high reasoning)",
+      "worker_model": "flash",
+      "root_slug": "flash-high",
+      "quota_fallback": [
+        "opus-flash",
+        "sonnet-flash"
+      ],
+      "root_reasoning": "high",
+      "complexity_tiers": {
+        "low": {
+          "model": "flash_lite",
+          "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize"
+        },
+        "med": {
+          "model": "flash",
+          "use": "feature code, tests, localized refactors"
+        },
+        "high": {
+          "model": "flash",
+          "escalate_to": "pro",
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+        }
+      }
+    },
+    "opus-flash": {
+      "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
+      "root_model": "Claude Opus 5.5",
+      "worker_model": "flash",
+      "root_slug": "opus",
+      "quota_fallback": [
+        "sonnet-flash"
+      ],
+      "complexity_tiers": {
+        "low": {
+          "model": "flash_lite",
+          "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize"
+        },
+        "med": {
+          "model": "flash",
+          "use": "feature code, tests, localized refactors"
+        },
+        "high": {
+          "model": "flash",
+          "escalate_to": "pro",
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+        }
+      }
+    },
+    "sonnet-flash": {
+      "description": "Claude Sonnet 3.7 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (High-throughput engineering tier)",
+      "root_model": "Claude Sonnet 3.7",
+      "worker_model": "flash",
+      "root_slug": "sonnet",
+      "quota_fallback": [
+        "opus-flash"
+      ],
+      "complexity_tiers": {
+        "low": {
+          "model": "flash_lite",
+          "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize"
+        },
+        "med": {
+          "model": "flash",
+          "use": "feature code, tests, localized refactors"
+        },
+        "high": {
+          "model": "flash",
+          "escalate_to": "pro",
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+        }
+      }
+    }
+  }
+}

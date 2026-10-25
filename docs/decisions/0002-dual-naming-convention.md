@@ -1,5 +1,7 @@
 # ADR 0002: Dual Naming Convention (`antigravity-standardise` and `agy-standardise`)
 
+**Status**: Superseded by ADR 0007 (`agentkit`)
+
 ## Context
 The Google Antigravity ecosystem features two common naming paradigms:
 - The full product name: **Google Antigravity** (matching sibling projects like `gh-standardise`).

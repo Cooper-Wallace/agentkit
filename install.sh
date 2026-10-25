@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
-# install.sh: Symlink agy-standardise into ~/.local/bin
+# install.sh: Symlink agentkit into ~/.local/bin
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BIN_SRC="${SCRIPT_DIR}/bin/agy-standardise"
+BIN_SRC="${SCRIPT_DIR}/bin/agentkit"
 TARGET_DIR="${HOME}/.local/bin"
-TARGET_BIN="${TARGET_DIR}/agy-standardise"
-TARGET_ALIAS="${TARGET_DIR}/antigravity-standardise"
 
 if [[ ! -f "$BIN_SRC" ]]; then
     echo -e "\033[1;31m[ERROR]\033[0m Could not find binary source at: $BIN_SRC"
@@ -16,13 +14,18 @@ fi
 mkdir -p "$TARGET_DIR"
 chmod +x "$BIN_SRC"
 
-# Create symlinks for both primary command and alias
-ln -sf "$BIN_SRC" "$TARGET_BIN"
-ln -sf "$BIN_SRC" "$TARGET_ALIAS"
+# Primary executable
+ALIASES=("agentkit")
 
-echo -e "\033[1;32m[SUCCESS]\033[0m Symlinked:"
-echo "  • $TARGET_BIN -> $BIN_SRC"
-echo "  • $TARGET_ALIAS -> $BIN_SRC"
+# Clean up legacy symlinks
+rm -f "${TARGET_DIR}/ak" "${TARGET_DIR}/agy-standardise" "${TARGET_DIR}/antigravity-standardise"
+
+echo -e "\033[1;32m[SUCCESS]\033[0m Installing agentkit..."
+for alias_name in "${ALIASES[@]}"; do
+    target_path="${TARGET_DIR}/${alias_name}"
+    ln -sf "$BIN_SRC" "$target_path"
+    echo "  • ${target_path} -> $BIN_SRC"
+done
 
 # Check if ~/.local/bin is in PATH
 if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
@@ -30,5 +33,5 @@ if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
     echo "Add the following line to your ~/.bashrc or ~/.zshrc:"
     echo '  export PATH="$HOME/.local/bin:$PATH"'
 else
-    echo "agy-standardise is ready to use! Try running: agy-standardise --help"
+    echo "agentkit is ready to use! Try running: agentkit --help"
 fi

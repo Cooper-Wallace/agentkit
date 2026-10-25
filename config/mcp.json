@@ -14,9 +14,13 @@
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-fetch"]
     },
-    "sqlite": {
-      "command": "uvx",
-      "args": ["mcp-server-sqlite", "--db-path", "${SQLITE_DEV_DB}"]
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"]
+    },
+    "repomix": {
+      "command": "npx",
+      "args": ["-y", "repomix", "--mcp"]
     }
   },
   "_requirements": {
@@ -24,19 +28,25 @@
       "description": "GitHub integration for repository, PR, and issue management via MCP.",
       "required_bins": ["npx", "node"],
       "required_env": ["GITHUB_PERSONAL_ACCESS_TOKEN"],
-      "setup_hint": "Create a GitHub PAT with repo scope and add 'export GITHUB_PERSONAL_ACCESS_TOKEN=\"...\"' to ~/.bashrc"
+      "setup_hint": "Run 'workstation-setup env' to bridge GITHUB_PERSONAL_ACCESS_TOKEN from gh keyring, or export it in your shell profile."
     },
     "fetch": {
       "description": "Web fetch and content conversion tool for retrieving web pages via MCP.",
       "required_bins": ["npx", "node"],
       "required_env": [],
-      "setup_hint": "Ensure Node.js and npm/npx are installed (e.g., via nvm or package manager)."
+      "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."
     },
-    "sqlite": {
-      "description": "Local SQLite database querying and inspection via MCP.",
-      "required_bins": ["uvx"],
-      "required_env": ["SQLITE_DEV_DB"],
-      "setup_hint": "Install uv (pip install uv) and add 'export SQLITE_DEV_DB=\"$HOME/dev.db\"' to ~/.bashrc"
+    "memory": {
+      "description": "Persistent cross-repository knowledge graph for architectural contracts, entity relationships, and multi-session decisions.",
+      "required_bins": ["npx", "node"],
+      "required_env": [],
+      "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."
+    },
+    "repomix": {
+      "description": "AST-compressed repository packing for low-token modular cross-repository code inspection.",
+      "required_bins": ["npx", "node"],
+      "required_env": [],
+      "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."
     }
   }
 }

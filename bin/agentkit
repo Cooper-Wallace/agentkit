@@ -1,0 +1,2898 @@
+#!/usr/bin/env python3
+"""
+agentkit: Harness-agnostic AI agent configuration, permissions, directives, and orchestration toolkit.
+
+Features:
+- Audit AI harness settings, command permissions, global agent directives, and multi-model orchestration profiles.
+- Safely merge standard pre-approved commands into settings without overwriting custom rules or workspaces.
+- Automated backup creation (settings.json.bak.<timestamp>) and full --dry-run support.
+- Snapshot / export locally approved commands and MCP servers back to repository manifests.
+- Diff local machine state against standardized declarative catalog.
+- Scaffold project-level AGENTS.md / GEMINI.md rulesets into repositories.
+- Configure multi-model orchestration tiers (Argon-Flash, Opus-Flash, Sonnet-Flash, Flash-High).
+- Modular Harness abstraction supporting Google Antigravity, Claude Code, Cursor, and OpenCode.
+- Install local Conventional Commits git hooks.
+- Manage reusable project skills (list, inspect info, and install via symlink or copy).
+- Discover and list reusable project utility tools and scripts.
+- Manage Obsidian knowledge vault, offline directives ingestion, and knowledge graph sync.
+"""
+
+import argparse
+import datetime
+import difflib
+import json
+import os
+import re
+import shutil
+import sys
+from abc import ABC, abstractmethod
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Set, Tuple, Type
+
+# Terminal colors and formatting
+GREEN = "\033[1;32m"
+RED = "\033[1;31m"
+YELLOW = "\033[1;33m"
+BLUE = "\033[1;34m"
+CYAN = "\033[1;36m"
+BOLD = "\033[1m"
+RESET = "\033[0m"
+
+# Project root and directory resolution
+SCRIPT_DIR = Path(__file__).resolve().parent
+REPO_ROOT = SCRIPT_DIR.parent
+CONFIG_DIR = REPO_ROOT / "config"
+HARNESS_DIR = REPO_ROOT / "harness"
+PROJECT_DIR = REPO_ROOT / "project"
+PLUGINS_SRC_DIR = HARNESS_DIR / "plugins"
+TEMPLATES_DIR = PROJECT_DIR / "templates"
+GLOBAL_DIRECTIVES_SRC = HARNESS_DIR / "rules" / "AGENTS.md"
+PROJECT_SKILLS_DIR = PROJECT_DIR / "skills"
+PROJECT_TOOLS_DIR = PROJECT_DIR / "tools"
+PERMISSIONS_FILE = CONFIG_DIR / "permissions.json"
+SETTINGS_DEFAULT_FILE = CONFIG_DIR / "settings.default.json"
+ORCHESTRATION_FILE = CONFIG_DIR / "orchestration.json"
+MCP_CATALOG_FILE = CONFIG_DIR / "mcp.json"
+
+DEFAULT_SETTINGS_PATH = Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
+DEFAULT_GLOBAL_GEMINI_DIR = Path.home() / ".gemini"
+DEFAULT_MCP_CONFIG_PATH = Path.home() / ".gemini" / "config" / "mcp_config.json"
+DEFAULT_GLOBAL_PLUGINS_DIR = Path.home() / ".gemini" / "config" / "plugins"
+
+# Conventional commit regex pattern (aligning with repokit)
+COMMIT_PATTERN = (
+    r"^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
+    r"(\([a-zA-Z0-9_\-\.]+\))?!?: .+$"
+)
+
+
+# ==============================================================================
+# Modular Harness Abstraction
+# ==============================================================================
+
+
+class HarnessAdapter(ABC):
+    """Abstract base adapter for AI development harnesses."""
+
+    name: str = "base"
+    display_name: str = "Base Harness"
+
+    @abstractmethod
+    def get_default_settings_path(self) -> Path:
+        """Return the default path to settings/config file."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_default_mcp_path(self) -> Path:
+        """Return the default path to MCP servers configuration."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_default_plugins_dir(self) -> Path:
+        """Return the default plugins directory."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_default_directives_dir(self) -> Path:
+        """Return the default global directives directory."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_default_orchestration_path(self) -> Path:
+        """Return the default orchestration configuration file path."""
+        raise NotImplementedError
+
+    def get_directive_filenames(self) -> List[str]:
+        """Return ordered list of directive filenames (primary first)."""
+        return ["AGENTS.md", "GEMINI.md"]
+
+
+class AntigravityHarnessAdapter(HarnessAdapter):
+    """Google Antigravity CLI harness adapter."""
+
+    name: str = "antigravity"
+    display_name: str = "Google Antigravity"
+
+    def get_default_settings_path(self) -> Path:
+        return Path.home() / ".gemini" / "antigravity-cli" / "settings.json"
+
+    def get_default_mcp_path(self) -> Path:
+        return Path.home() / ".gemini" / "config" / "mcp_config.json"
+
+    def get_default_plugins_dir(self) -> Path:
+        return Path.home() / ".gemini" / "config" / "plugins"
+
+    def get_default_directives_dir(self) -> Path:
+        return Path.home() / ".gemini"
+
+    def get_default_orchestration_path(self) -> Path:
+        return Path.home() / ".gemini" / "config" / "orchestration.json"
+
+    def get_directive_filenames(self) -> List[str]:
+        return ["AGENTS.md", "GEMINI.md"]
+
+
+class ClaudeCodeHarnessAdapter(HarnessAdapter):
+    """Claude Code harness adapter (extensible structure for future support)."""
+
+    name: str = "claude-code"
+    display_name: str = "Claude Code"
+
+    def get_default_settings_path(self) -> Path:
+        return Path.home() / ".claude" / "config.json"
+
+    def get_default_mcp_path(self) -> Path:
+        return Path.home() / ".claude" / "mcp.json"
+
+    def get_default_plugins_dir(self) -> Path:
+        return Path.home() / ".claude" / "plugins"
+
+    def get_default_directives_dir(self) -> Path:
+        return Path.home() / ".claude"
+
+    def get_default_orchestration_path(self) -> Path:
+        return Path.home() / ".claude" / "orchestration.json"
+
+    def get_directive_filenames(self) -> List[str]:
+        return ["CLAUDE.md", "AGENTS.md"]
+
+
+class CursorHarnessAdapter(HarnessAdapter):
+    """Cursor harness adapter (extensible structure for future support)."""
+
+    name: str = "cursor"
+    display_name: str = "Cursor"
+
+    def get_default_settings_path(self) -> Path:
+        return Path.home() / ".cursor" / "settings.json"
+
+    def get_default_mcp_path(self) -> Path:
+        return Path.home() / ".cursor" / "mcp.json"
+
+    def get_default_plugins_dir(self) -> Path:
+        return Path.home() / ".cursor" / "plugins"
+
+    def get_default_directives_dir(self) -> Path:
+        return Path.home() / ".cursor"
+
+    def get_default_orchestration_path(self) -> Path:
+        return Path.home() / ".cursor" / "orchestration.json"
+
+    def get_directive_filenames(self) -> List[str]:
+        return ["AGENTS.md", ".cursorrules"]
+
+
+class OpenCodeHarnessAdapter(HarnessAdapter):
+    """OpenCode harness adapter (extensible structure for future support)."""
+
+    name: str = "opencode"
+    display_name: str = "OpenCode"
+
+    def get_default_settings_path(self) -> Path:
+        return Path.home() / ".config" / "opencode" / "settings.json"
+
+    def get_default_mcp_path(self) -> Path:
+        return Path.home() / ".config" / "opencode" / "mcp.json"
+
+    def get_default_plugins_dir(self) -> Path:
+        return Path.home() / ".config" / "opencode" / "plugins"
+
+    def get_default_directives_dir(self) -> Path:
+        return Path.home() / ".config" / "opencode"
+
+    def get_default_orchestration_path(self) -> Path:
+        return Path.home() / ".config" / "opencode" / "orchestration.json"
+
+    def get_directive_filenames(self) -> List[str]:
+        return ["AGENTS.md"]
+
+
+SUPPORTED_HARNESSES: Dict[str, Type[HarnessAdapter]] = {
+    "antigravity": AntigravityHarnessAdapter,
+    "claude-code": ClaudeCodeHarnessAdapter,
+    "cursor": CursorHarnessAdapter,
+    "opencode": OpenCodeHarnessAdapter,
+}
+
+
+def get_harness_adapter(name: str = "antigravity") -> HarnessAdapter:
+    """Instantiate and return adapter for requested harness name."""
+    adapter_cls = SUPPORTED_HARNESSES.get(name)
+    if not adapter_cls:
+        raise ValueError(
+            f"Unsupported harness: '{name}'. Supported: {', '.join(SUPPORTED_HARNESSES.keys())}"
+        )
+    return adapter_cls()
+
+
+# ==============================================================================
+# UI Formatting & Logging
+# ==============================================================================
+
+
+def print_step(title: str) -> None:
+    print(f"\n{BOLD}{BLUE}==>{RESET} {BOLD}{title}{RESET}")
+
+
+def print_success(msg: str) -> None:
+    print(f"  {GREEN}✔{RESET} {msg}")
+
+
+def print_failure(msg: str) -> None:
+    print(f"  {RED}✖{RESET} {msg}")
+
+
+def print_warning(msg: str) -> None:
+    print(f"  {YELLOW}⚠{RESET} {msg}")
+
+
+def print_info(msg: str) -> None:
+    print(f"  {CYAN}ℹ{RESET} {msg}")
+
+
+# ==============================================================================
+# JSON File Helpers & Catalogs
+# ==============================================================================
+
+
+def load_json(path: Path) -> Dict[str, Any]:
+    """Load and parse a JSON file."""
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_json(path: Path, data: Dict[str, Any]) -> None:
+    """Save dictionary to a formatted JSON file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+
+def get_standard_permissions_catalog() -> Dict[str, Any]:
+    """Load standard permissions catalog from repository config."""
+    if not PERMISSIONS_FILE.exists():
+        raise FileNotFoundError(f"Missing permissions catalog at: {PERMISSIONS_FILE}")
+    return load_json(PERMISSIONS_FILE)
+
+
+def get_flat_standard_permissions(catalog: Optional[Dict[str, Any]] = None) -> List[str]:
+    """Extract flat list of standardized permission strings from catalog."""
+    if catalog is None:
+        catalog = get_standard_permissions_catalog()
+
+    permissions: List[str] = []
+
+    # Command categories -> command(<cmd>)
+    for cat_data in catalog.get("categories", {}).values():
+        for cmd in cat_data.get("commands", []):
+            perm_str = f"command({cmd})"
+            if perm_str not in permissions:
+                permissions.append(perm_str)
+
+    # MCP tools -> strings in permissions list
+    for mcp_data in catalog.get("mcp_tools", {}).values():
+        perm_list = mcp_data.get("permissions", []) if isinstance(mcp_data, dict) else mcp_data
+        for perm in perm_list:
+            if perm not in permissions:
+                permissions.append(perm)
+
+    # Core/provisioned harness tools -> strings in permissions list
+    for tool_data in catalog.get("tools", {}).values():
+        perm_list = tool_data.get("permissions", []) if isinstance(tool_data, dict) else tool_data
+        for perm in perm_list:
+            if perm not in permissions:
+                permissions.append(perm)
+
+    # Native file access -> strings in permissions list with ${HOME} / $HOME replaced
+    home_dir = str(Path.home())
+    for fa_data in catalog.get("file_access", {}).values():
+        perm_list = fa_data.get("permissions", []) if isinstance(fa_data, dict) else fa_data
+        for perm in perm_list:
+            resolved_perm = perm.replace("${HOME}", home_dir).replace("$HOME", home_dir)
+            if resolved_perm not in permissions:
+                permissions.append(resolved_perm)
+
+    return permissions
+
+
+def load_user_settings(settings_path: Path) -> Tuple[Dict[str, Any], bool]:
+    """Load user settings.json. Returns (dict, file_exists)."""
+    if not settings_path.exists():
+        return {}, False
+    try:
+        return load_json(settings_path), True
+    except json.JSONDecodeError as err:
+        raise ValueError(f"Corrupted JSON in {settings_path}: {err}")
+
+
+def merge_permissions(
+    existing_settings: Dict[str, Any],
+    standard_permissions: List[str],
+    default_settings: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    Idempotently merge standard permissions into existing settings.
+    Preserves custom permissions, trusted workspaces, and user preferences.
+    Returns (merged_settings_dict, list_of_newly_added_permissions).
+    """
+    result = dict(existing_settings)
+
+    # Apply default baseline settings if missing
+    if default_settings:
+        for key, value in default_settings.items():
+            if key not in result:
+                result[key] = value
+
+    if "permissions" not in result or not isinstance(result["permissions"], dict):
+        result["permissions"] = {}
+
+    current_allow: List[str] = result["permissions"].get("allow", [])
+    if not isinstance(current_allow, list):
+        current_allow = []
+
+    current_set: Set[str] = set(current_allow)
+    added_permissions: List[str] = []
+
+    merged_allow = list(current_allow)
+    for perm in standard_permissions:
+        if perm not in current_set:
+            merged_allow.append(perm)
+            added_permissions.append(perm)
+            current_set.add(perm)
+
+    # Ensure trustedWorkspaces exists as a list if not already present
+    if "trustedWorkspaces" not in result or not isinstance(result["trustedWorkspaces"], list):
+        result["trustedWorkspaces"] = []
+    else:
+        result["trustedWorkspaces"] = list(result["trustedWorkspaces"])
+
+    # Add default AgentVault and standard project paths dynamically if not already present
+    standard_trusted_workspaces: List[str] = [
+        str(Path.home() / "Documents" / "AgentVault"),
+        str(Path.home() / "AgentVault"),
+        str(Path.home() / "Projects" / "agentkit"),
+        str(Path.home() / "Projects" / "repokit"),
+    ]
+    for env_var in ("AGENTKIT_VAULT_PATH", "AGENTKIT_AGENTVAULT_PATH"):
+        env_val = os.environ.get(env_var)
+        if env_val and env_val.strip():
+            resolved_env_path = str(Path(env_val).expanduser().resolve())
+            if resolved_env_path not in standard_trusted_workspaces:
+                standard_trusted_workspaces.append(resolved_env_path)
+
+    seen_workspaces: Set[str] = set()
+    deduped_workspaces: List[str] = []
+    for ws in result["trustedWorkspaces"]:
+        if ws not in seen_workspaces:
+            deduped_workspaces.append(ws)
+            seen_workspaces.add(ws)
+
+    for p in standard_trusted_workspaces:
+        if p not in seen_workspaces:
+            deduped_workspaces.append(p)
+            seen_workspaces.add(p)
+
+    result["trustedWorkspaces"] = deduped_workspaces
+
+    # Dynamically ensure native read_file and write_file permissions are present for standard workspaces
+    for p in standard_trusted_workspaces:
+        for op in ("read_file", "write_file"):
+            file_perm = f"{op}({p})"
+            if file_perm not in current_set:
+                merged_allow.append(file_perm)
+                added_permissions.append(file_perm)
+                current_set.add(file_perm)
+
+    result["permissions"]["allow"] = merged_allow
+
+    return result, added_permissions
+
+
+def get_standard_mcp_catalog() -> Dict[str, Any]:
+    """Load standard MCP catalog from repository config."""
+    if not MCP_CATALOG_FILE.exists():
+        return {"mcpServers": {}, "_requirements": {}}
+    return load_json(MCP_CATALOG_FILE)
+
+
+def load_user_mcp_config(mcp_path: Path) -> Tuple[Dict[str, Any], bool]:
+    """Load user mcp_config.json. Returns (dict, file_exists)."""
+    if not mcp_path.exists():
+        return {"mcpServers": {}}, False
+    try:
+        data = load_json(mcp_path)
+        if "mcpServers" not in data or not isinstance(data["mcpServers"], dict):
+            data["mcpServers"] = {}
+        return data, True
+    except json.JSONDecodeError as err:
+        raise ValueError(f"Corrupted JSON in {mcp_path}: {err}")
+
+
+def resolve_mcp_server_vars(
+    srv_def: Dict[str, Any],
+    resolve_env: bool = False,
+) -> Dict[str, Any]:
+    """
+    Resolve environment variable placeholders in MCP server definitions.
+    Interpolates ${VAR} or ${VAR:-default} in args (and optionally env).
+    - If os.environ.get(var_name) is present and non-empty, uses its value.
+    - Else if a default is provided (${VAR:-default}), expands $HOME/~ if present and uses the default.
+    - Else if var_name == "SQLITE_DEV_DB", defaults to str(Path.home() / "dev.db").
+    - Otherwise, preserves the placeholder.
+    """
+    if not srv_def or not isinstance(srv_def, dict):
+        return {}
+    var_pattern = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+
+    def _replace_match(match: re.Match) -> str:
+        var_name = match.group(1)
+        default_val = match.group(2)
+        env_val = os.environ.get(var_name)
+        if env_val:
+            return env_val
+        if default_val is not None:
+            if "$HOME" in default_val:
+                default_val = default_val.replace("$HOME", str(Path.home()))
+            elif "${HOME}" in default_val:
+                default_val = default_val.replace("${HOME}", str(Path.home()))
+            elif default_val.startswith("~"):
+                default_val = str(Path.home()) + default_val[1:]
+            return default_val
+        if var_name == "SQLITE_DEV_DB":
+            return str(Path.home() / "dev.db")
+        return match.group(0)
+
+    def _interpolate(val: Any) -> Any:
+        if isinstance(val, str):
+            return var_pattern.sub(_replace_match, val)
+        return val
+
+    resolved = dict(srv_def)
+    if "command" in resolved and isinstance(resolved["command"], str):
+        resolved["command"] = _interpolate(resolved["command"])
+    if "args" in resolved and isinstance(resolved["args"], list):
+        resolved["args"] = [_interpolate(arg) for arg in resolved["args"]]
+    if resolve_env and "env" in resolved and isinstance(resolved["env"], dict):
+        resolved["env"] = {k: _interpolate(v) for k, v in resolved["env"].items()}
+    return resolved
+
+
+def merge_mcp_servers(
+    existing_mcp: Dict[str, Any],
+    standard_catalog: Dict[str, Any],
+) -> Tuple[Dict[str, Any], List[str]]:
+    """
+    Idempotently merge standard MCP servers into existing mcp_config.json.
+    Preserves custom/local MCP servers.
+    Resolves environment variable placeholders (e.g. ${SQLITE_DEV_DB}) in args.
+    Returns (merged_dict, list_of_newly_added_server_keys).
+    """
+    result = dict(existing_mcp)
+    if "mcpServers" not in result or not isinstance(result["mcpServers"], dict):
+        result["mcpServers"] = {}
+
+    current_servers = dict(result["mcpServers"])
+    standard_servers = standard_catalog.get("mcpServers", {})
+    added_servers: List[str] = []
+
+    for name, srv_def in standard_servers.items():
+        if name not in current_servers:
+            current_servers[name] = resolve_mcp_server_vars(srv_def)
+            added_servers.append(name)
+        else:
+            # If standard server already exists, heal any unexpanded placeholders
+            # (e.g. literal '${SQLITE_DEV_DB}' created prior to interpolation support)
+            resolved = resolve_mcp_server_vars(current_servers[name])
+            if resolved != current_servers[name]:
+                current_servers[name] = resolved
+
+    result["mcpServers"] = current_servers
+    return result, added_servers
+
+
+def is_env_var_configured(var_name: str) -> bool:
+    """Return True if var_name is in os.environ or exported in ~/.profile or ~/.bashrc."""
+    if bool(os.environ.get(var_name)):
+        return True
+
+    pattern = f"export {var_name}="
+    for path in (Path.home() / ".profile", Path.home() / ".bashrc"):
+        if path.exists():
+            try:
+                if pattern in path.read_text(encoding="utf-8"):
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+def audit_mcp_requirements(
+    mcp_catalog: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    """
+    Inspect the host environment against MCP requirements.
+    Checks required binaries (via shutil.which) and required environment variables (via is_env_var_configured).
+    Returns list of requirement status dicts.
+    """
+    diagnostics = []
+    requirements = mcp_catalog.get("_requirements", {})
+    standard_servers = mcp_catalog.get("mcpServers", {})
+
+    for server_name in standard_servers.keys():
+        req = requirements.get(server_name, {})
+        desc = req.get("description", "")
+        required_bins = req.get("required_bins", [])
+        required_env = req.get("required_env", [])
+        setup_hint = req.get("setup_hint", "")
+
+        missing_bins = [b for b in required_bins if shutil.which(b) is None]
+        missing_env = [v for v in required_env if not is_env_var_configured(v)]
+
+        diagnostics.append({
+            "server": server_name,
+            "description": desc,
+            "required_bins": required_bins,
+            "missing_bins": missing_bins,
+            "required_env": required_env,
+            "missing_env": missing_env,
+            "setup_hint": setup_hint,
+            "ready": len(missing_bins) == 0 and len(missing_env) == 0,
+        })
+    return diagnostics
+
+
+# ==============================================================================
+# Multi-Model Orchestration Catalog Helpers
+# ==============================================================================
+
+
+DEPRECATED_PROFILE_ALIASES = {"pro-flash": "flash-high"}
+DEFAULT_COMPLEXITY_TIERS = {
+    "low": {
+        "model": "flash_lite",
+        "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize",
+    },
+    "med": {"model": "flash", "use": "feature code, tests, localized refactors"},
+    "high": {
+        "model": "flash",
+        "escalate_to": "pro",
+        "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy",
+    },
+}
+QUOTA_SCRIPT = HARNESS_DIR / "plugins" / "quota-guardian" / "scripts" / "quota_status.py"
+
+
+def get_orchestration_catalog() -> Dict[str, Any]:
+    """Load declarative multi-model orchestration catalog."""
+    if ORCHESTRATION_FILE.exists():
+        try:
+            return load_json(ORCHESTRATION_FILE)
+        except Exception:
+            pass
+    tl = json.loads(json.dumps(DEFAULT_COMPLEXITY_TIERS))
+    return {
+        "default_profile": "argon-flash",
+        "deprecated_aliases": dict(DEPRECATED_PROFILE_ALIASES),
+        "profiles": {
+            "argon-flash": {
+                "description": "Gemini 4 Argon Root Orchestrator (complex tasks) -> Gemini 3.8 Flash Worker Subagents (Default tier)",
+                "root_model": "Gemini 4 Argon",
+                "worker_model": "flash",
+                "root_slug": "argon",
+                "complexity_tiers": tl,
+                "quota_fallback": ["flash-high", "opus-flash", "sonnet-flash"],
+            },
+            "flash-high": {
+                "description": "Gemini 3.8 Flash (HIGH reasoning) Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Standard tier)",
+                "root_model": "Gemini 3.8 Flash (high reasoning)",
+                "worker_model": "flash",
+                "root_slug": "flash-high",
+                "complexity_tiers": tl,
+                "quota_fallback": ["opus-flash", "sonnet-flash"],
+            },
+            "opus-flash": {
+                "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
+                "root_model": "Claude Opus 5.5",
+                "worker_model": "flash",
+                "root_slug": "opus",
+                "complexity_tiers": tl,
+                "quota_fallback": ["sonnet-flash"],
+            },
+            "sonnet-flash": {
+                "description": "Claude Sonnet 3.7 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (High-throughput engineering tier)",
+                "root_model": "Claude Sonnet 3.7",
+                "worker_model": "flash",
+                "root_slug": "sonnet",
+                "complexity_tiers": tl,
+                "quota_fallback": ["opus-flash"],
+            },
+        },
+    }
+
+
+def list_model_profiles() -> List[str]:
+    """Return available orchestration model profile slugs."""
+    cat = get_orchestration_catalog()
+    profiles = list(cat.get("profiles", {}).keys())
+    return profiles or ["argon-flash", "flash-high", "opus-flash", "sonnet-flash"]
+
+
+def profile_arg(value: str) -> str:
+    """argparse type: map deprecated profile aliases (e.g. pro-flash) to their replacement with a warning."""
+    aliases = get_orchestration_catalog().get("deprecated_aliases", DEPRECATED_PROFILE_ALIASES)
+    if value in aliases:
+        print(
+            f"WARNING: model profile '{value}' is deprecated (base model retired); using '{aliases[value]}'.",
+            file=sys.stderr,
+        )
+        return aliases[value]
+    return value
+
+
+def _profile_lines(name: str, info: Dict[str, Any], default: str) -> List[str]:
+    mark = " (default)" if name == default else ""
+    lines = [
+        f"{BOLD}{name}{RESET}{mark}: {info.get('description', '')}",
+        f"    root: {info.get('root_model', 'N/A')} | worker: {info.get('worker_model', 'N/A')}",
+        "    complexity_tiers:",
+    ]
+    tiers = info.get("complexity_tiers") or info.get("thinking_levels", {})  # old key kept for compat
+    for lvl, t in tiers.items():
+        if isinstance(t, str):
+            t = {"use": t}
+        esc = f" (escalate to {t['escalate_to']})" if t.get("escalate_to") else ""
+        lines.append(f"      {lvl}: {t.get('model', info.get('worker_model', 'N/A'))}{esc} - {t.get('use', '')}")
+    lines.append(f"    fallback: {' -> '.join(info.get('quota_fallback', [])) or 'none'}")
+    return lines
+
+
+def cmd_profile_list(args: argparse.Namespace) -> int:
+    cat = get_orchestration_catalog()
+    default = cat.get("default_profile", "argon-flash")
+    for name, info in cat.get("profiles", {}).items():
+        print("\n".join(_profile_lines(name, info, default)))
+    return 0
+
+
+def cmd_profile_show(args: argparse.Namespace) -> int:
+    cat = get_orchestration_catalog()
+    name = args.profile_name
+    info = cat.get("profiles", {}).get(name)
+    if info is None:
+        print_failure(f"Unknown profile: {name}")
+        return 1
+    print("\n".join(_profile_lines(name, info, cat.get("default_profile", "argon-flash"))))
+    return 0
+
+
+def _run_quota_script(script_args: List[str]) -> int:
+    """Delegate to the quota-guardian plugin script via subprocess (never imported)."""
+    if not QUOTA_SCRIPT.exists():
+        print(f"quota-guardian plugin script not found: {QUOTA_SCRIPT}", file=sys.stderr)
+        print("Install or restore harness/plugins/quota-guardian to use quota commands.", file=sys.stderr)
+        return 1
+    import subprocess
+
+    return subprocess.run([sys.executable, str(QUOTA_SCRIPT)] + script_args).returncode
+
+
+def cmd_quota_status(args: argparse.Namespace) -> int:
+    return _run_quota_script(["status"] + (["--json"] if args.json else []))
+
+
+def cmd_quota_route(args: argparse.Namespace) -> int:
+    return _run_quota_script(["route", "--complexity", args.complexity] + (["--json"] if args.json else []))
+
+
+def resolve_orchestration_config_path(
+    args: argparse.Namespace, harness: HarnessAdapter
+) -> Path:
+    """Resolve target path for orchestration.json."""
+    if getattr(args, "orchestration_path", None):
+        return Path(args.orchestration_path).expanduser().resolve()
+    if getattr(args, "gemini_dir", None):
+        return Path(args.gemini_dir).expanduser().resolve() / "config" / "orchestration.json"
+    return harness.get_default_orchestration_path()
+
+
+# ==============================================================================
+# Commands
+# ==============================================================================
+
+
+def cmd_audit(args: argparse.Namespace) -> int:
+    """Audit the current machine's AI harness configuration against standards."""
+    harness = get_harness_adapter(getattr(args, "harness", "antigravity"))
+    settings_path = (
+        Path(args.settings_path).expanduser().resolve()
+        if getattr(args, "settings_path", None)
+        else harness.get_default_settings_path()
+    )
+
+    print(f"\n{BOLD}Auditing {harness.display_name} Standards via agentkit{RESET}")
+    print(f"Harness: {CYAN}{harness.name}{RESET}")
+    print(f"Target Settings: {CYAN}{settings_path}{RESET}")
+
+    total_checks = 0
+    passed_checks = 0
+
+    catalog = get_standard_permissions_catalog()
+    standard_permissions = get_flat_standard_permissions(catalog)
+
+    # 1. Settings File Existence Check
+    total_checks += 1
+    settings, exists = load_user_settings(settings_path)
+    if exists:
+        print_success(f"Settings file exists ({settings_path})")
+        passed_checks += 1
+    else:
+        print_failure(f"Settings file missing ({settings_path})")
+
+    # 2. Permissions Allow List
+    user_allow = []
+    if exists and "permissions" in settings and isinstance(settings["permissions"], dict):
+        user_allow = settings["permissions"].get("allow", [])
+        if not isinstance(user_allow, list):
+            user_allow = []
+
+    user_allow_set = set(user_allow)
+    missing_permissions = [p for p in standard_permissions if p not in user_allow_set]
+    active_permissions = [p for p in standard_permissions if p in user_allow_set]
+
+    total_checks += 1
+    if not missing_permissions:
+        print_success(
+            f"Standard Permissions: All {len(standard_permissions)} pre-approved permissions active "
+            f"({len(active_permissions)}/{len(standard_permissions)} active)"
+        )
+        passed_checks += 1
+    else:
+        print_failure(
+            f"Standard Permissions: {len(missing_permissions)} of {len(standard_permissions)} permissions missing "
+            f"({len(active_permissions)}/{len(standard_permissions)} active)"
+        )
+        if args.verbose:
+            print(f"    {YELLOW}Missing permissions:{RESET}")
+            for p in missing_permissions:
+                print(f"      - {p}")
+
+    # Category and Tool Breakdown (when verbose)
+    if args.verbose:
+        print_step("Command Categories")
+        for cat_name, cat_data in catalog.get("categories", {}).items():
+            cat_cmds = [f"command({c})" for c in cat_data.get("commands", [])]
+            cat_present = [p for p in cat_cmds if p in user_allow_set]
+            status_color = GREEN if len(cat_present) == len(cat_cmds) else YELLOW
+            print(f"  {status_color}•{RESET} {BOLD}{cat_name}{RESET} ({len(cat_present)}/{len(cat_cmds)} active)")
+
+        print_step("MCP & Provisioned Tool Permissions")
+        for mcp_name, mcp_data in catalog.get("mcp_tools", {}).items():
+            mcp_perms = mcp_data.get("permissions", []) if isinstance(mcp_data, dict) else mcp_data
+            mcp_present = [p for p in mcp_perms if p in user_allow_set]
+            status_color = GREEN if len(mcp_present) == len(mcp_perms) else YELLOW
+            print(f"  {status_color}•{RESET} {BOLD}{mcp_name}{RESET} ({len(mcp_present)}/{len(mcp_perms)} active)")
+
+        for tool_name, tool_data in catalog.get("tools", {}).items():
+            tool_perms = tool_data.get("permissions", []) if isinstance(tool_data, dict) else tool_data
+            tool_present = [p for p in tool_perms if p in user_allow_set]
+            status_color = GREEN if len(tool_present) == len(tool_perms) else YELLOW
+            print(f"  {status_color}•{RESET} {BOLD}{tool_name}{RESET} ({len(tool_present)}/{len(tool_perms)} active)")
+
+        print_step("Native File Access Permissions")
+        for fa_name, fa_data in catalog.get("file_access", {}).items():
+            fa_perms = [
+                p.replace("${HOME}", str(Path.home())).replace("$HOME", str(Path.home()))
+                for p in (fa_data.get("permissions", []) if isinstance(fa_data, dict) else fa_data)
+            ]
+            fa_present = [p for p in fa_perms if p in user_allow_set]
+            status_color = GREEN if len(fa_present) == len(fa_perms) else YELLOW
+            print(f"  {status_color}•{RESET} {BOLD}{fa_name}{RESET} ({len(fa_present)}/{len(fa_perms)} active)")
+
+        print(f"\n  {BOLD}Total Active Permissions:{RESET} {len(active_permissions)}/{len(standard_permissions)} active")
+
+    # 3. Global Agent Directives Check (AGENTS.md and GEMINI.md)
+    total_checks += 1
+    target_gemini_dir = (
+        Path(getattr(args, "gemini_dir", None)).expanduser().resolve()
+        if getattr(args, "gemini_dir", None)
+        else harness.get_default_directives_dir()
+    )
+    global_agents = target_gemini_dir / "AGENTS.md"
+    global_gemini = target_gemini_dir / "GEMINI.md"
+
+    if global_agents.exists() or global_gemini.exists():
+        target_found = global_agents if global_agents.exists() else global_gemini
+        print_success(f"Global Agent Directives installed ({target_found})")
+        passed_checks += 1
+    else:
+        print_failure(f"Global Agent Directives missing ({global_agents})")
+
+    # 4. Non-workspace access setting
+    total_checks += 1
+    if settings.get("allowNonWorkspaceAccess") is True:
+        print_success("Workspace Boundary: 'allowNonWorkspaceAccess' enabled")
+        passed_checks += 1
+    else:
+        print_warning("Workspace Boundary: 'allowNonWorkspaceAccess' not explicitly enabled")
+
+    # 5. Trusted Workspaces (AgentVault, agentkit, repokit) Check
+    total_checks += 1
+    user_workspaces = settings.get("trustedWorkspaces", [])
+    if not isinstance(user_workspaces, list):
+        user_workspaces = []
+
+    expected_vault_paths = {
+        str(Path.home() / "Documents" / "AgentVault"),
+        str(Path.home() / "AgentVault"),
+    }
+    for env_var in ("AGENTKIT_VAULT_PATH", "AGENTKIT_AGENTVAULT_PATH"):
+        env_val = os.environ.get(env_var)
+        if env_val and env_val.strip():
+            expected_vault_paths.add(str(Path(env_val).expanduser().resolve()))
+
+    agentkit_path = str(Path.home() / "Projects" / "agentkit")
+    repokit_path = str(Path.home() / "Projects" / "repokit")
+
+    found_vault_paths = [w for w in user_workspaces if w in expected_vault_paths]
+    has_vault = bool(found_vault_paths)
+    has_agentkit = agentkit_path in user_workspaces
+    has_repokit = repokit_path in user_workspaces
+
+    if has_vault and has_agentkit and has_repokit:
+        print_success("Trusted Workspaces: AgentVault, agentkit, and repokit whitelisted")
+        passed_checks += 1
+    else:
+        missing_workspaces = []
+        if not has_vault:
+            missing_workspaces.append(f"AgentVault ({str(Path.home() / 'Documents' / 'AgentVault')})")
+        if not has_agentkit:
+            missing_workspaces.append(f"agentkit ({agentkit_path})")
+        if not has_repokit:
+            missing_workspaces.append(f"repokit ({repokit_path})")
+        print_warning(
+            f"Trusted Workspaces: Required workspace path(s) missing from trustedWorkspaces ({', '.join(missing_workspaces)})"
+        )
+
+    # 6. Native File Access Permissions (AgentVault, agentkit, repokit) Check
+    total_checks += 1
+    expected_read_vault = {
+        f"read_file({str(Path.home() / 'Documents' / 'AgentVault')})",
+        f"read_file({str(Path.home() / 'AgentVault')})",
+    }
+    for env_var in ("AGENTKIT_VAULT_PATH", "AGENTKIT_AGENTVAULT_PATH"):
+        env_val = os.environ.get(env_var)
+        if env_val and env_val.strip():
+            expected_read_vault.add(f"read_file({str(Path(env_val).expanduser().resolve())})")
+
+    agentkit_read = f"read_file({str(Path.home() / 'Projects' / 'agentkit')})"
+    repokit_read = f"read_file({str(Path.home() / 'Projects' / 'repokit')})"
+
+    has_read_vault = bool([p for p in expected_read_vault if p in user_allow_set])
+    has_read_agentkit = agentkit_read in user_allow_set
+    has_read_repokit = repokit_read in user_allow_set
+
+    if has_read_vault and has_read_agentkit and has_read_repokit:
+        print_success("Native File Access: AgentVault, agentkit, and repokit read permissions active")
+        passed_checks += 1
+    else:
+        missing_file_perms = []
+        if not has_read_vault:
+            missing_file_perms.append(f"AgentVault (read_file({str(Path.home() / 'Documents' / 'AgentVault')}))")
+        if not has_read_agentkit:
+            missing_file_perms.append(f"agentkit ({agentkit_read})")
+        if not has_read_repokit:
+            missing_file_perms.append(f"repokit ({repokit_read})")
+        print_warning(
+            f"Native File Access: Required read_file permission(s) missing from permissions.allow ({', '.join(missing_file_perms)})"
+        )
+
+    # 7. Color Scheme Check
+    total_checks += 1
+    if settings.get("colorScheme") == "dark":
+        print_success("UI Theme: 'colorScheme' set to 'dark'")
+        passed_checks += 1
+    else:
+        print_info(f"UI Theme: 'colorScheme' is '{settings.get('colorScheme', 'not set')}'")
+        passed_checks += 1
+
+    # 8. PATH verification for ~/.local/bin
+    total_checks += 1
+    local_bin = str(Path.home() / ".local" / "bin")
+    current_path = os.environ.get("PATH", "")
+    if f":{local_bin}:" in f":{current_path}:":
+        print_success(f"Environment PATH includes {local_bin}")
+        passed_checks += 1
+    else:
+        print_warning(f"Environment PATH missing {local_bin}")
+
+    # 9. MCP Server Standards & Environment Diagnostics
+    if not getattr(args, "no_mcp", False):
+        mcp_path = (
+            Path(getattr(args, "mcp_path", None)).expanduser().resolve()
+            if getattr(args, "mcp_path", None)
+            else harness.get_default_mcp_path()
+        )
+        mcp_catalog = get_standard_mcp_catalog()
+        std_servers = mcp_catalog.get("mcpServers", {})
+
+        total_checks += 1
+        user_mcp, mcp_exists = load_user_mcp_config(mcp_path)
+        configured_servers = user_mcp.get("mcpServers", {})
+        missing_mcp = [s for s in std_servers.keys() if s not in configured_servers]
+
+        if not missing_mcp:
+            print_success(f"MCP Configuration: All {len(std_servers)} standard servers configured ({mcp_path})")
+            passed_checks += 1
+        else:
+            print_failure(
+                f"MCP Configuration: {len(missing_mcp)} of {len(std_servers)} standard servers missing ({', '.join(missing_mcp)})"
+            )
+
+        # Environment & Binary Diagnostics
+        mcp_diagnostics = audit_mcp_requirements(mcp_catalog)
+        missing_env_advisories = []
+        for diag in mcp_diagnostics:
+            s_name = diag["server"]
+            if diag["ready"]:
+                if args.verbose:
+                    print_success(f"MCP '{s_name}': Dependencies and environment ready")
+            else:
+                if diag["missing_bins"]:
+                    print_warning(f"MCP '{s_name}': Missing required binary in PATH: {', '.join(diag['missing_bins'])}")
+                if diag["missing_env"]:
+                    print_warning(f"MCP '{s_name}': Missing environment variable: {', '.join(diag['missing_env'])}")
+                    if diag["setup_hint"]:
+                        missing_env_advisories.append((s_name, diag["setup_hint"]))
+
+        if missing_env_advisories and args.verbose:
+            print_step("MCP Environment Setup Advisories")
+            for s_name, hint in missing_env_advisories:
+                print(f"  {CYAN}ℹ{RESET} {BOLD}{s_name}{RESET}: {hint}")
+
+    # 10. Standard Plugins Audit
+    if not getattr(args, "no_plugins", False):
+        plugins_dir = (
+            Path(getattr(args, "plugins_dir", None)).expanduser().resolve()
+            if getattr(args, "plugins_dir", None)
+            else harness.get_default_plugins_dir()
+        )
+        if PLUGINS_SRC_DIR.exists():
+            for plugin_path in sorted(PLUGINS_SRC_DIR.iterdir()):
+                if plugin_path.is_dir() and (plugin_path / "plugin.json").exists():
+                    total_checks += 1
+                    target_plugin = plugins_dir / plugin_path.name
+                    target_manifest = target_plugin / "plugin.json"
+                    if target_manifest.exists():
+                        scripts_dir = target_plugin / "scripts"
+                        all_executable = True
+                        if scripts_dir.exists():
+                            for script in scripts_dir.iterdir():
+                                if script.is_file() and not os.access(script, os.X_OK):
+                                    all_executable = False
+                        if all_executable:
+                            print_success(f"Plugin '{plugin_path.name}' installed and operational ({target_plugin})")
+                            passed_checks += 1
+                        else:
+                            print_warning(f"Plugin '{plugin_path.name}' scripts missing executable permission (+x)")
+                            passed_checks += 1
+                    else:
+                        print_failure(f"Plugin '{plugin_path.name}' missing ({target_plugin})")
+
+    # 11. Multi-Model Orchestration Profile Audit
+    total_checks += 1
+    orch_catalog = get_orchestration_catalog()
+    configured_profile: Optional[str] = None
+
+    if exists:
+        configured_profile = settings.get("orchestrationProfile") or (
+            settings.get("orchestration", {}).get("profile")
+            if isinstance(settings.get("orchestration"), dict)
+            else None
+        )
+
+    orch_path = resolve_orchestration_config_path(args, harness)
+    if not configured_profile and orch_path.exists():
+        try:
+            orch_data = load_json(orch_path)
+            configured_profile = orch_data.get("active_profile")
+        except Exception:
+            pass
+
+    if configured_profile:
+        prof_info = orch_catalog.get("profiles", {}).get(configured_profile, {})
+        prof_desc = prof_info.get("description", configured_profile)
+        print_success(f"Orchestration Profile: '{configured_profile}' active ({prof_desc})")
+        passed_checks += 1
+    else:
+        print_warning(
+            f"Orchestration Profile: No profile explicitly recorded (default fallback: {getattr(args, 'model_profile', 'argon-flash')})"
+        )
+
+    # Summary
+    print("\n" + "─" * 60)
+    score_pct = int((passed_checks / total_checks) * 100) if total_checks else 0
+    if passed_checks == total_checks:
+        print(
+            f"{BOLD}{GREEN}[SUCCESS]{RESET} {harness.display_name} configuration is fully compliant! "
+            f"({passed_checks}/{total_checks} checks passed)"
+        )
+        return 0
+    else:
+        print(
+            f"{BOLD}{YELLOW}[NON-COMPLIANT]{RESET} Compliance score: {score_pct}% "
+            f"({passed_checks}/{total_checks} checks passed)."
+        )
+        print(f"Run {BOLD}agentkit apply{RESET} to bring your workstation into compliance.")
+        return 1
+
+
+def cmd_apply(args: argparse.Namespace) -> int:
+    """Apply standard permissions, MCP servers, plugins, directives, and orchestration profiles."""
+    harness = get_harness_adapter(getattr(args, "harness", "antigravity"))
+    settings_path = (
+        Path(args.settings_path).expanduser().resolve()
+        if getattr(args, "settings_path", None)
+        else harness.get_default_settings_path()
+    )
+    print_step(f"Applying {harness.display_name} Standards via agentkit: {settings_path}")
+
+    catalog = get_standard_permissions_catalog()
+    standard_permissions = get_flat_standard_permissions(catalog)
+    default_settings = load_json(SETTINGS_DEFAULT_FILE) if SETTINGS_DEFAULT_FILE.exists() else {}
+
+    existing_settings, exists = load_user_settings(settings_path)
+    merged_settings, added = merge_permissions(existing_settings, standard_permissions, default_settings)
+
+    # 1. Show permission additions
+    if added:
+        print_info(f"Adding {len(added)} missing standard permissions:")
+        for perm in added:
+            print(f"    {GREEN}+{RESET} {perm}")
+    else:
+        print_success("All standard permissions are already present.")
+
+    # 2. Multi-Model Orchestration Profile
+    model_profile = getattr(args, "model_profile", "argon-flash")
+    orch_catalog = get_orchestration_catalog()
+    profile_info = orch_catalog.get("profiles", {}).get(model_profile, {})
+    profile_desc = profile_info.get("description", model_profile)
+
+    print_step(f"Configuring Orchestration Profile: {BOLD}{model_profile}{RESET}")
+    print_info(f"Tier: {profile_desc}")
+    print_info(f"Root: {profile_info.get('root_model', 'N/A')} | Worker: {profile_info.get('worker_model', 'N/A')}")
+
+    merged_settings["orchestrationProfile"] = model_profile
+    merged_settings["orchestration"] = {
+        "profile": model_profile,
+        "description": profile_desc,
+        "root_model": profile_info.get("root_model", ""),
+        "worker_model": profile_info.get("worker_model", ""),
+        "root_slug": profile_info.get("root_slug", ""),
+    }
+
+    # 3. Backup and Write Settings
+    if not args.dry_run:
+        if exists and not args.no_backup:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = settings_path.with_name(f"{settings_path.name}.bak.{timestamp}")
+            shutil.copy2(settings_path, backup_path)
+            print_success(f"Created backup: {backup_path}")
+
+        save_json(settings_path, merged_settings)
+        print_success(f"Updated {settings_path}")
+    else:
+        print_warning("[DRY-RUN] Skipped writing settings.json updates.")
+
+    # 4. Harness Orchestration JSON Record
+    orch_path = resolve_orchestration_config_path(args, harness)
+    if not args.dry_run:
+        orch_record = {
+            "active_profile": model_profile,
+            "updated_at": datetime.datetime.now().isoformat(),
+            "profile": profile_info,
+        }
+        try:
+            save_json(orch_path, orch_record)
+            print_success(f"Recorded active orchestration profile in: {orch_path}")
+        except Exception as e:
+            print_warning(f"Could not record orchestration config at {orch_path}: {e}")
+    else:
+        print_warning(f"[DRY-RUN] Skipped writing orchestration profile to {orch_path}")
+
+    # 5. Global AGENTS.md / GEMINI.md Directives Linking
+    if not GLOBAL_DIRECTIVES_SRC.exists():
+        print_failure(f"Global directives not found at: {GLOBAL_DIRECTIVES_SRC}")
+        return 1
+
+    target_gemini_dir = (
+        Path(getattr(args, "gemini_dir", None)).expanduser().resolve()
+        if getattr(args, "gemini_dir", None)
+        else harness.get_default_directives_dir()
+    )
+    target_agents_file = target_gemini_dir / "AGENTS.md"
+    target_gemini_file = target_gemini_dir / "GEMINI.md"
+
+    if not args.dry_run:
+        target_gemini_dir.mkdir(parents=True, exist_ok=True)
+
+        if target_agents_file.exists() or target_agents_file.is_symlink():
+            target_agents_file.unlink()
+        target_agents_file.symlink_to(GLOBAL_DIRECTIVES_SRC)
+        print_success(f"Linked global directives: {target_agents_file} -> {GLOBAL_DIRECTIVES_SRC}")
+
+        if target_gemini_file.exists() or target_gemini_file.is_symlink():
+            target_gemini_file.unlink()
+        target_gemini_file.symlink_to(GLOBAL_DIRECTIVES_SRC)
+        print_success(f"Linked global directives: {target_gemini_file} -> {GLOBAL_DIRECTIVES_SRC}")
+
+        if args.link_home:
+            home_agents = Path.home() / "AGENTS.md"
+            home_gemini = Path.home() / "GEMINI.md"
+            for h_file in (home_agents, home_gemini):
+                if h_file.exists() or h_file.is_symlink():
+                    h_file.unlink()
+                h_file.symlink_to(GLOBAL_DIRECTIVES_SRC)
+                print_success(f"Linked home directives: {h_file} -> {GLOBAL_DIRECTIVES_SRC}")
+    else:
+        print_warning(f"[DRY-RUN] Skipped symlinking directives in {target_gemini_dir} -> {GLOBAL_DIRECTIVES_SRC}")
+
+    # 6. MCP Servers Configuration
+    if not getattr(args, "no_mcp", False):
+        mcp_path = (
+            Path(getattr(args, "mcp_path", None)).expanduser().resolve()
+            if getattr(args, "mcp_path", None)
+            else harness.get_default_mcp_path()
+        )
+        mcp_catalog = get_standard_mcp_catalog()
+        existing_mcp, mcp_exists = load_user_mcp_config(mcp_path)
+        merged_mcp, added_mcp = merge_mcp_servers(existing_mcp, mcp_catalog)
+
+        print_step(f"Configuring Standard MCP Servers: {mcp_path}")
+        if added_mcp:
+            print_info(f"Adding {len(added_mcp)} standard MCP servers:")
+            for s in added_mcp:
+                print(f"    {GREEN}+{RESET} {s}")
+        else:
+            print_success("All standard MCP servers are already configured.")
+
+        if not args.dry_run:
+            if mcp_exists and not args.no_backup:
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                mcp_backup = mcp_path.with_name(f"{mcp_path.name}.bak.{timestamp}")
+                shutil.copy2(mcp_path, mcp_backup)
+                print_success(f"Created MCP backup: {mcp_backup}")
+
+            save_json(mcp_path, merged_mcp)
+            print_success(f"Updated {mcp_path}")
+        else:
+            print_warning("[DRY-RUN] Skipped writing mcp_config.json updates.")
+
+        # Print Environment Variable Advisories
+        mcp_diagnostics = audit_mcp_requirements(mcp_catalog)
+        missing_env_advisories = [
+            (d["server"], d["missing_env"], d["setup_hint"])
+            for d in mcp_diagnostics
+            if d["missing_env"]
+        ]
+        if missing_env_advisories:
+            print_step("Required Environment Variables for Active MCPs")
+            for s_name, missing_vars, hint in missing_env_advisories:
+                print(f"  {YELLOW}⚠{RESET} {BOLD}{s_name}{RESET} needs: {', '.join(missing_vars)}")
+                if hint:
+                    print(f"    {CYAN}Advisory:{RESET} {hint}")
+
+    # 7. Standard Plugins Deployment
+    if not getattr(args, "no_plugins", False) and PLUGINS_SRC_DIR.exists():
+        plugins_dir = (
+            Path(getattr(args, "plugins_dir", None)).expanduser().resolve()
+            if getattr(args, "plugins_dir", None)
+            else harness.get_default_plugins_dir()
+        )
+        print_step(f"Deploying Standard Plugins: {plugins_dir}")
+        for plugin_path in sorted(PLUGINS_SRC_DIR.iterdir()):
+            if plugin_path.is_dir() and (plugin_path / "plugin.json").exists():
+                target_plugin = plugins_dir / plugin_path.name
+                if not args.dry_run:
+                    target_plugin.mkdir(parents=True, exist_ok=True)
+                    for item in plugin_path.rglob("*"):
+                        rel_path = item.relative_to(plugin_path)
+                        dest = target_plugin / rel_path
+                        if item.is_dir():
+                            dest.mkdir(parents=True, exist_ok=True)
+                        else:
+                            shutil.copy2(item, dest)
+                            if rel_path.parts and rel_path.parts[0] == "scripts":
+                                dest.chmod(dest.stat().st_mode | 0o755)
+                    print_success(f"Deployed standard plugin: {plugin_path.name} -> {target_plugin}")
+                else:
+                    print_warning(f"[DRY-RUN] Skipped deploying plugin {plugin_path.name} -> {target_plugin}")
+
+    print(f"\n{BOLD}{GREEN}[SUCCESS]{RESET} {harness.display_name} standardization successfully applied!")
+    print_info(f"Active orchestration profile: {BOLD}{model_profile}{RESET} ({profile_desc})")
+    return 0
+
+
+def cmd_diff(args: argparse.Namespace) -> int:
+    """Show diff between current local settings and standard baseline."""
+    harness = get_harness_adapter(getattr(args, "harness", "antigravity"))
+    settings_path = (
+        Path(args.settings_path).expanduser().resolve()
+        if getattr(args, "settings_path", None)
+        else harness.get_default_settings_path()
+    )
+    print(f"\n{BOLD}Diffing Settings against Baseline: {CYAN}{settings_path}{RESET}")
+
+    catalog = get_standard_permissions_catalog()
+    standard_permissions = set(get_flat_standard_permissions(catalog))
+
+    existing_settings, exists = load_user_settings(settings_path)
+    if not exists:
+        print_failure(f"Target settings file not found: {settings_path}")
+        return 1
+
+    user_allow = set(existing_settings.get("permissions", {}).get("allow", []))
+
+    missing_standard = sorted(list(standard_permissions - user_allow))
+    extra_local = sorted(list(user_allow - standard_permissions))
+
+    if not missing_standard and not extra_local:
+        print_success("Local permissions perfectly match the repository baseline.")
+        return 0
+
+    if missing_standard:
+        print_step(f"Missing Standard Permissions ({len(missing_standard)} permissions to be added):")
+        for p in missing_standard:
+            print(f"  {RED}-{RESET} {p}")
+
+    if extra_local:
+        print_step(f"Custom / Machine-Specific Permissions ({len(extra_local)} permissions):")
+        for p in extra_local:
+            print(f"  {GREEN}+{RESET} {p}")
+
+    # MCP Server Diff
+    if not getattr(args, "no_mcp", False):
+        mcp_path = (
+            Path(getattr(args, "mcp_path", None)).expanduser().resolve()
+            if getattr(args, "mcp_path", None)
+            else harness.get_default_mcp_path()
+        )
+        mcp_catalog = get_standard_mcp_catalog()
+        std_servers = set(mcp_catalog.get("mcpServers", {}).keys())
+        existing_mcp, _ = load_user_mcp_config(mcp_path)
+        local_servers = set(existing_mcp.get("mcpServers", {}).keys())
+
+        missing_std_mcp = sorted(list(std_servers - local_servers))
+        extra_local_mcp = sorted(list(local_servers - std_servers))
+
+        if missing_std_mcp:
+            print_step(f"Missing Standard MCP Servers ({len(missing_std_mcp)}):")
+            for s in missing_std_mcp:
+                print(f"  {RED}-{RESET} {s}")
+        if extra_local_mcp:
+            print_step(f"Custom / Machine-Specific MCP Servers ({len(extra_local_mcp)}):")
+            for s in extra_local_mcp:
+                print(f"  {GREEN}+{RESET} {s}")
+
+    return 0
+
+
+def cmd_snapshot(args: argparse.Namespace) -> int:
+    """Export or display unmanaged local permissions and MCP servers for syncing back to git."""
+    harness = get_harness_adapter(getattr(args, "harness", "antigravity"))
+    settings_path = (
+        Path(args.settings_path).expanduser().resolve()
+        if getattr(args, "settings_path", None)
+        else harness.get_default_settings_path()
+    )
+    existing_settings, exists = load_user_settings(settings_path)
+    if not exists:
+        print_failure(f"Settings file not found: {settings_path}")
+        return 1
+
+    catalog = get_standard_permissions_catalog()
+    standard_permissions = set(get_flat_standard_permissions(catalog))
+
+    user_allow = existing_settings.get("permissions", {}).get("allow", [])
+    unmanaged_perms = [p for p in user_allow if p not in standard_permissions]
+
+    unmanaged_mcp = []
+    if not getattr(args, "no_mcp", False):
+        mcp_path = (
+            Path(getattr(args, "mcp_path", None)).expanduser().resolve()
+            if getattr(args, "mcp_path", None)
+            else harness.get_default_mcp_path()
+        )
+        mcp_catalog = get_standard_mcp_catalog()
+        std_servers = set(mcp_catalog.get("mcpServers", {}).keys())
+        existing_mcp, _ = load_user_mcp_config(mcp_path)
+        local_servers = set(existing_mcp.get("mcpServers", {}).keys())
+        unmanaged_mcp = [s for s in local_servers if s not in std_servers]
+
+    if args.json:
+        print(json.dumps({
+            "unmanaged_permissions": unmanaged_perms,
+            "unmanaged_mcp_servers": unmanaged_mcp,
+        }, indent=2))
+        return 0
+
+    print(f"\n{BOLD}Snapshot: Unmanaged Local Configurations{RESET}")
+    print(f"Settings: {CYAN}{settings_path}{RESET}")
+
+    if not unmanaged_perms:
+        print_success("No unmanaged permissions found. Local workstation permissions match baseline.")
+    else:
+        print_info(f"Found {len(unmanaged_perms)} permissions allowed locally but not in repository:")
+        for p in unmanaged_perms:
+            print(f"  {CYAN}•{RESET} {p}")
+
+    if not getattr(args, "no_mcp", False):
+        if not unmanaged_mcp:
+            print_success("No unmanaged MCP servers found. Local workstation MCPs match baseline.")
+        else:
+            print_info(f"Found {len(unmanaged_mcp)} MCP servers configured locally but not in repository:")
+            for s in unmanaged_mcp:
+                print(f"  {CYAN}•{RESET} {s}")
+
+    return 0
+
+
+def cmd_template(args: argparse.Namespace) -> int:
+    """Scaffold a project-level AGENTS.md or GEMINI.md."""
+    target_dir = Path(args.output).expanduser().resolve()
+    legacy_mode = getattr(args, "legacy", False)
+
+    if legacy_mode:
+        primary_name = "GEMINI.md"
+        secondary_name = "AGENTS.md"
+    else:
+        primary_name = "AGENTS.md"
+        secondary_name = "GEMINI.md"
+
+    primary_file = target_dir / primary_name
+    secondary_file = target_dir / secondary_name
+
+    if primary_file.exists() and not args.force:
+        print_failure(f"{primary_file} already exists. Use --force to overwrite.")
+        return 1
+
+    template_src = TEMPLATES_DIR / "AGENTS.md"
+    if not template_src.exists():
+        template_src = TEMPLATES_DIR / f"project-{primary_name}"
+    if not template_src.exists():
+        template_src = TEMPLATES_DIR / "project-GEMINI.md"
+    if not template_src.exists():
+        template_src = TEMPLATES_DIR / "project-AGENTS.md"
+    if not template_src.exists():
+        print_failure(f"Template source missing in: {TEMPLATES_DIR}")
+        return 1
+
+    content = template_src.read_text(encoding="utf-8")
+    content = content.replace("{{PROJECT_NAME}}", args.name or target_dir.name)
+    content = content.replace("{{PROJECT_DESCRIPTION}}", args.desc or "Project-specific developer workspace.")
+    content = content.replace("{{PRIMARY_LANGUAGE}}", args.lang or "Python / Polyglot")
+    content = content.replace("{{TEST_COMMAND}}", args.test or "python3 -m unittest discover tests -v")
+
+    target_dir.mkdir(parents=True, exist_ok=True)
+    primary_file.write_text(content, encoding="utf-8")
+    print_success(f"Scaffolded project {primary_name} -> {primary_file}")
+
+    # Symlink secondary to primary
+    if secondary_file.exists() or secondary_file.is_symlink():
+        secondary_file.unlink()
+    secondary_file.symlink_to(primary_name)
+    print_success(f"Created symlink {secondary_name} -> {primary_name} in {target_dir}")
+
+    return 0
+
+
+def cmd_hook_install(args: argparse.Namespace) -> int:
+    """Install Conventional Commits commit-msg git hook."""
+    target_repo = Path(args.repo).expanduser().resolve()
+    git_dir = target_repo / ".git"
+
+    if not git_dir.exists():
+        print_failure(f"Not a git repository: {target_repo}")
+        return 1
+
+    hook_path = git_dir / "hooks" / "commit-msg"
+    hook_script = f"""#!/usr/bin/env python3
+# Conventional Commits commit-msg Hook (managed by agentkit)
+import re
+import sys
+
+COMMIT_PATTERN = r"{COMMIT_PATTERN}"
+
+with open(sys.argv[1], 'r', encoding='utf-8') as f:
+    lines = [line.strip() for line in f if not line.startswith('#')]
+
+if not lines:
+    sys.exit(0)
+
+msg = lines[0]
+if not re.match(COMMIT_PATTERN, msg):
+    print("\\033[1;31m[ERROR]\\033[0m Invalid Conventional Commit message format:")
+    print(f"  Received: '{{msg}}'")
+    print("  Expected: <type>(<scope>): <summary>")
+    print("  Allowed types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert")
+    print("  Example: feat(core): implement permissions merger")
+    sys.exit(1)
+"""
+
+    hook_path.parent.mkdir(parents=True, exist_ok=True)
+    hook_path.write_text(hook_script, encoding="utf-8")
+    hook_path.chmod(0o755)
+    print_success(f"Installed Conventional Commits hook to: {hook_path}")
+    return 0
+
+
+# ==============================================================================
+# Skill & Tool Management Helpers
+# ==============================================================================
+
+
+def parse_skill_md(skill_path: Path) -> Dict[str, Any]:
+    """Parse frontmatter and content from a SKILL.md file."""
+    if not skill_path.exists():
+        return {}
+    content = skill_path.read_text(encoding="utf-8")
+    metadata: Dict[str, Any] = {}
+    body = content
+
+    if content.startswith("---"):
+        parts = content.split("---", 2)
+        if len(parts) >= 3:
+            raw_frontmatter = parts[1].strip()
+            body = parts[2].strip()
+            for line in raw_frontmatter.splitlines():
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if ":" in line:
+                    key, val = line.split(":", 1)
+                    metadata[key.strip()] = val.strip().strip("\"'")
+
+    title = metadata.get("name") or ""
+    for line in body.splitlines():
+        line = line.strip()
+        if line.startswith("# "):
+            title = line[2:].strip()
+            break
+    if not metadata.get("title"):
+        metadata["title"] = title
+
+    metadata["body"] = body
+    return metadata
+
+
+def extract_script_description(script_path: Path) -> str:
+    """Extract description or docstring from a script file."""
+    try:
+        content = script_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return "No description available."
+
+    lines = content.splitlines()
+    desc_lines: List[str] = []
+
+    if script_path.suffix == ".py":
+        import ast
+
+        try:
+            tree = ast.parse(content)
+            doc = ast.get_docstring(tree)
+            if doc:
+                return doc.strip().split("\n\n")[0].replace("\n", " ").strip()
+        except Exception:
+            pass
+
+    in_comment_block = False
+    for line in lines:
+        line_s = line.strip()
+        if line_s.startswith("#!"):
+            continue
+        if line_s.startswith("#"):
+            comment_text = line_s.lstrip("#").strip()
+            if comment_text:
+                desc_lines.append(comment_text)
+                in_comment_block = True
+            elif in_comment_block:
+                break
+        elif in_comment_block:
+            break
+        elif line_s:
+            break
+
+    if desc_lines:
+        return " ".join(desc_lines)
+    return "No description available."
+
+
+def cmd_skill_list(args: argparse.Namespace) -> int:
+    """List available reusable project skills."""
+    print(f"\n{BOLD}Available Project Skills ({PROJECT_SKILLS_DIR}):{RESET}\n")
+    if not PROJECT_SKILLS_DIR.exists():
+        print_info(f"Skills directory missing: {PROJECT_SKILLS_DIR}")
+        return 0
+
+    skills: List[Dict[str, Any]] = []
+    for entry in sorted(PROJECT_SKILLS_DIR.iterdir()):
+        skill_file = entry / "SKILL.md"
+        if entry.is_dir() and skill_file.exists():
+            meta = parse_skill_md(skill_file)
+            skills.append({
+                "dir_name": entry.name,
+                "name": meta.get("name") or entry.name,
+                "description": meta.get("description") or "No description provided.",
+                "title": meta.get("title") or entry.name,
+            })
+
+    if not skills:
+        print_info(f"No reusable skills found in {PROJECT_SKILLS_DIR}.")
+        return 0
+
+    max_name = max(len(s["name"]) for s in skills)
+    for s in skills:
+        print(f"  {BOLD}{CYAN}{s['name'].ljust(max_name + 2)}{RESET} {s['description']}")
+
+    print(f"\nRun {BOLD}agentkit skill info <skill_name>{RESET} for detailed instructions.")
+    return 0
+
+
+def cmd_skill_info(args: argparse.Namespace) -> int:
+    """Display title, description, and instructions from <skill_dir>/SKILL.md."""
+    skill_name = args.skill_name
+    skill_dir = PROJECT_SKILLS_DIR / skill_name
+    skill_file = skill_dir / "SKILL.md"
+
+    if not skill_file.exists() and PROJECT_SKILLS_DIR.exists():
+        for entry in PROJECT_SKILLS_DIR.iterdir():
+            candidate = entry / "SKILL.md"
+            if entry.is_dir() and candidate.exists():
+                meta = parse_skill_md(candidate)
+                if meta.get("name") == skill_name:
+                    skill_dir = entry
+                    skill_file = candidate
+                    break
+
+    if not skill_file.exists():
+        print_failure(f"Skill '{skill_name}' not found in {PROJECT_SKILLS_DIR}")
+        return 1
+
+    meta = parse_skill_md(skill_file)
+    name = meta.get("name") or skill_dir.name
+    title = meta.get("title") or name
+    description = meta.get("description") or "No description provided."
+    body = meta.get("body", "")
+
+    print(f"\n{BOLD}{CYAN}Skill:{RESET} {BOLD}{name}{RESET}")
+    print(f"{BOLD}Title:{RESET} {title}")
+    print(f"{BOLD}Path:{RESET}  {skill_dir}")
+    print(f"{BOLD}Description:{RESET}\n  {description}\n")
+    print(f"{BOLD}Instructions & Reference:{RESET}")
+    print("─" * 60)
+    print(body)
+    print("─" * 60)
+    return 0
+
+
+def cmd_skill_install(args: argparse.Namespace) -> int:
+    """Install a skill into a project directory."""
+    skill_name = args.skill_name
+    skill_dir = PROJECT_SKILLS_DIR / skill_name
+    skill_file = skill_dir / "SKILL.md"
+
+    if not skill_file.exists() and PROJECT_SKILLS_DIR.exists():
+        for entry in PROJECT_SKILLS_DIR.iterdir():
+            candidate = entry / "SKILL.md"
+            if entry.is_dir() and candidate.exists():
+                meta = parse_skill_md(candidate)
+                if meta.get("name") == skill_name:
+                    skill_dir = entry
+                    skill_file = candidate
+                    break
+
+    if not skill_dir.exists() or not skill_file.exists():
+        print_failure(f"Skill '{skill_name}' not found at: {PROJECT_SKILLS_DIR}")
+        return 1
+
+    target_arg = getattr(args, "target", None)
+    if target_arg:
+        target_path = Path(os.path.abspath(os.path.expanduser(target_arg)))
+        if target_path.is_dir() and not target_path.is_symlink() and target_path.name != skill_dir.name and not (target_path / "SKILL.md").exists():
+            target_path = target_path / skill_dir.name
+    else:
+        target_path = Path(os.path.abspath(Path.cwd() / "skills" / skill_dir.name))
+
+    # Guard against targeting the source skill directory itself
+    if target_path == skill_dir or (target_path.exists() and not target_path.is_symlink() and target_path.resolve() == skill_dir.resolve()):
+        print_info(f"Skill '{skill_name}' is already located at {target_path}")
+        return 0
+
+    mode_str = "copy" if getattr(args, "copy", False) else "symlink"
+    print_step(f"Installing skill '{skill_name}' via {mode_str} -> {target_path}")
+
+    if not getattr(args, "copy", False):
+        try:
+            rel_target = os.path.relpath(skill_dir, target_path.parent)
+        except ValueError:
+            rel_target = str(skill_dir)
+
+        if target_path.is_symlink():
+            try:
+                current_target = os.readlink(target_path)
+                if current_target == rel_target or target_path.resolve() == skill_dir.resolve():
+                    print_success(f"Skill '{skill_name}' is already installed at {target_path}")
+                    return 0
+            except OSError:
+                pass
+
+        if not args.dry_run:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            if target_path.is_symlink() or target_path.exists():
+                if target_path.is_dir() and not target_path.is_symlink():
+                    shutil.rmtree(target_path)
+                else:
+                    target_path.unlink()
+            target_path.symlink_to(rel_target)
+            print_success(f"Linked skill: {target_path} -> {rel_target}")
+        else:
+            print_warning(f"[DRY-RUN] Skipped symlinking {target_path} -> {rel_target}")
+    else:
+        if not args.dry_run:
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            if target_path.is_symlink():
+                target_path.unlink()
+            shutil.copytree(skill_dir, target_path, dirs_exist_ok=True)
+            print_success(f"Copied skill: {skill_dir} -> {target_path}")
+        else:
+            print_warning(f"[DRY-RUN] Skipped copying {skill_dir} -> {target_path}")
+
+    return 0
+
+
+def cmd_tool_list(args: argparse.Namespace) -> int:
+    """List available project utility tools."""
+    print(f"\n{BOLD}Available Project Utility Tools ({PROJECT_TOOLS_DIR}):{RESET}\n")
+    if not PROJECT_TOOLS_DIR.exists():
+        print_info(f"Tools directory missing: {PROJECT_TOOLS_DIR}")
+        return 0
+
+    tools: List[Tuple[str, str, Path]] = []
+    for entry in sorted(PROJECT_TOOLS_DIR.iterdir()):
+        if entry.is_file() and entry.name != ".gitkeep":
+            desc = extract_script_description(entry)
+            tools.append((entry.name, desc, entry))
+        elif entry.is_dir() and not entry.name.startswith(".") and not entry.name.startswith("_"):
+            tool_script = entry / f"{entry.name}.py"
+            if not tool_script.exists():
+                tool_script = entry / f"{entry.name}.sh"
+            if not tool_script.exists():
+                tool_script = entry / "main.py"
+            desc = extract_script_description(tool_script) if tool_script.exists() else "Tool package."
+            tools.append((entry.name, desc, entry))
+
+    if not tools:
+        print_info(f"No utility tools found in {PROJECT_TOOLS_DIR}.")
+        return 0
+
+    max_name_len = max(len(t[0]) for t in tools)
+    for name, desc, _ in tools:
+        print(f"  {BOLD}{CYAN}{name.ljust(max_name_len + 2)}{RESET} {desc}")
+
+    return 0
+
+
+def _print_subparser_help(parser_obj: argparse.ArgumentParser):
+    """Return a callback that prints help for the given subparser and returns 0."""
+    def _func(args: argparse.Namespace) -> int:
+        parser_obj.print_help()
+        return 0
+    return _func
+
+
+# ==============================================================================
+# Obsidian Vault CLI Engine & Knowledge Graph Integration
+# ==============================================================================
+
+DEFAULT_VAULT_PATH = Path.home() / "Documents" / "AgentVault"
+
+
+def resolve_vault_path(explicit_path: Optional[str] = None) -> Path:
+    """Resolve Obsidian vault root path from CLI args, environment variables, or standard default."""
+    if explicit_path:
+        return Path(explicit_path).expanduser().resolve()
+    env = os.environ.get("AGENTKIT_VAULT_PATH") or os.environ.get("AGENTKIT_AGENTVAULT_PATH") or os.environ.get("OBSIDIAN_VAULT_PATH")
+    if env:
+        return Path(env).expanduser().resolve()
+    return DEFAULT_VAULT_PATH.resolve()
+
+
+def parse_frontmatter_and_body(text: str) -> Tuple[Dict[str, Any], str]:
+    """Parse YAML frontmatter and markdown body."""
+    if not text.startswith("---"):
+        return {}, text
+    parts = text.split("---", 2)
+    if len(parts) < 3:
+        return {}, text
+    raw_fm = parts[1].strip()
+    body = parts[2].lstrip("\n")
+    meta: Dict[str, Any] = {}
+    current_key: Optional[str] = None
+    for line in raw_fm.splitlines():
+        line_str = line.strip()
+        if not line_str or line_str.startswith("#"):
+            continue
+        if line_str.startswith("- ") and current_key:
+            val = line_str[2:].strip()
+            if not isinstance(meta.get(current_key), list):
+                meta[current_key] = []
+            meta[current_key].append(val)
+        elif ":" in line:
+            k, v = line.split(":", 1)
+            k = k.strip()
+            v = v.strip()
+            current_key = k
+            if v:
+                meta[k] = v
+            else:
+                meta[k] = []
+        else:
+            current_key = None
+    return meta, body
+
+
+def format_frontmatter(
+    tags: List[str],
+    note_type: str,
+    updated_by: str = "agentkit",
+    extra: Optional[Dict[str, Any]] = None,
+) -> str:
+    """Format clean YAML frontmatter with tags, type, last_updated, and updated_by."""
+    today_iso = datetime.date.today().isoformat()
+    lines = ["---"]
+    if tags:
+        lines.append("tags:")
+        for t in tags:
+            lines.append(f"  - {t}")
+    lines.append(f"type: {note_type}")
+    lines.append(f"last_updated: {today_iso}")
+    lines.append(f"updated_by: {updated_by}")
+    if extra:
+        for k, v in extra.items():
+            if k in ("tags", "type", "last_updated", "updated_by"):
+                continue
+            if isinstance(v, list):
+                lines.append(f"{k}:")
+                for item in v:
+                    lines.append(f"  - {item}")
+            else:
+                lines.append(f"{k}: {v}")
+    lines.append("---")
+    return "\n".join(lines)
+
+
+def write_vault_note_if_missing(file_path: Path, content: str) -> bool:
+    """Write content to file_path if it doesn't already exist. Returns True if created."""
+    if file_path.exists():
+        return False
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(content, encoding="utf-8")
+    return True
+
+
+def get_dashboard_template() -> str:
+    """Return dataview-friendly Dashboard.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - dashboard
+  - hub
+type: dashboard
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# 🌌 Workstation AgentVault
+
+> [!info] Autonomous Workstation Knowledge Graph
+> Central intelligence repository linking the 4-layer developer workstation stack, active applications, architecture contracts, and agent session history.
+
+## 🚀 Active Projects
+
+```dataview
+TABLE type, status, last_updated
+FROM "Projects"
+SORT file.name ASC
+```
+
+- [[Projects/agentkit|agentkit]] — Layer 2: Agent Harness Governance & Directive Standards
+- [[Projects/repokit|repokit]] — Layer 3: GitHub Governance, Squash Merges & PR Automation
+- [[Projects/riced-kubuntu-os|riced-kubuntu-os]] — Layer 0: Kubuntu OS Packages & KDE Plasma System Config
+- [[Projects/workstation-setup|workstation-setup]] — Layer 1: Developer Toolchains & Environment Bridging
+- [[Projects/augurs-bazaar|augurs-bazaar]] — Cross-exchange prediction market trading platform
+- [[Projects/augurs-saber|augurs-saber]] — Algorithmic execution & market making engine
+
+## 🏛️ Architecture & Governance
+
+- [[Architecture/00-Overview|Architecture Overview]] — 4-layer workstation stack & component interactions
+- [[Architecture/contracts|System Contracts]] — Model tiering, zero-prompt discipline, quota rules
+- [[Architecture/decisions/README|Architecture Decision Records (ADRs)]] — Record of architectural choices
+
+## 📥 Directives & User Inputs
+
+> [!todo] User Input Queue
+> Place notes, tasks, and directives into `User-Input/pending/` for ingestion into active agent contexts.
+- [[User-Input/README|User Input Guide]]
+
+## 📜 Recent Sessions
+
+```dataview
+TABLE date, summary
+FROM "Sessions"
+SORT file.ctime DESC
+LIMIT 5
+```
+- [[Sessions/README|Sessions Archive]]
+"""
+
+
+def get_user_input_readme_template() -> str:
+    """Return User-Input/README.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - user-input
+  - directives
+type: reference
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# User Input & Offline Directives Inbox
+
+> [!info] Purpose
+> This directory serves as an offline inbox for user guidance, prompt drafts, task requests, and backlog directives.
+
+## Workflow
+
+1. **Write**: Place your markdown file in `User-Input/pending/<your-note>.md`.
+2. **Ingest**: The agent runs `agentkit vault ingest` (or `agentkit vault ingest --project <name>`).
+3. **Archive**: Processed notes are automatically moved to `User-Input/processed/YYYY-MM-DD-<your-note>.md` with an audit stamp:
+   > [!check] Ingested by agentkit on <iso_timestamp>
+
+> [!note] Project-Specific Inputs
+> You can also write offline notes directly inside project notes like [[Projects/agentkit|agentkit]] under the `## Offline User Input & Notes` section.
+"""
+
+
+def get_architecture_overview_template() -> str:
+    """Return Architecture/00-Overview.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - architecture
+  - overview
+type: architecture
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# Workstation Stack Architecture Overview
+
+> [!info] 4-Layer Workstation Stack
+> The developer workstation environment is strictly partitioned into 4 distinct layers:
+> - **Layer 0**: [[Projects/riced-kubuntu-os|riced-kubuntu-os]] (OS packages, KDE Plasma dotfiles)
+> - **Layer 1**: [[Projects/workstation-setup|workstation-setup]] (Language toolchains, shell profiles)
+> - **Layer 2**: [[Projects/agentkit|agentkit]] (Agent harness standards, permissions, quota governance)
+> - **Layer 3**: [[Projects/repokit|repokit]] (GitHub governance, squash merges, semantic checks)
+
+## System Boundaries
+See [[Architecture/contracts|System Contracts]] for operational guarantees and model tiering specifications.
+"""
+
+
+def get_architecture_contracts_template() -> str:
+    """Return Architecture/contracts.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - architecture
+  - contracts
+type: architecture
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# System Architecture Contracts & Standards
+
+> [!note] Architectural Invariants
+> Directives governing cognitive tiering, zero-prompt command discipline, and quota wrap-up.
+
+## 1. Cognitive Architecture & Model Tiering
+- **Root Orchestrator**: Gemini 4 Argon (`pro`) / Flash High (`flash`) / Claude Opus 5.5 (`opus`).
+- **Subagent Workers**: Partitioned by complexity (`low`: `flash_lite`, `med`: `flash`, `high`: `flash`/`pro`).
+- Zero project editing by Root Orchestrator: All code implementation delegated to worker subagents.
+
+## 2. Quota Awareness & Graceful Wrap-Up
+- Automated fallback routing when provider quota falls below 15%.
+- Circuit breaker and graceful wrap-up when all provider quotas reach critical levels (<5%).
+
+## 3. Tooling & Ecosystem Links
+- [[Projects/agentkit|agentkit]]
+- [[Projects/repokit|repokit]]
+- [[Projects/riced-kubuntu-os|riced-kubuntu-os]]
+- [[Projects/workstation-setup|workstation-setup]]
+"""
+
+
+def get_architecture_decisions_readme_template() -> str:
+    """Return Architecture/decisions/README.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - architecture
+  - adr
+type: reference
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# Architecture Decision Records (ADRs)
+
+> [!info] ADR Repository
+> Stores records of significant architectural choices and structural contracts.
+"""
+
+
+def get_sessions_readme_template() -> str:
+    """Return Sessions/README.md template."""
+    today_iso = datetime.date.today().isoformat()
+    return f"""---
+tags:
+  - sessions
+  - history
+type: reference
+last_updated: {today_iso}
+updated_by: agentkit
+---
+
+# Agent Session Archive
+
+> [!info] Session Logs
+> Completed agent pair-programming summaries, handoffs, and audit trails are logged here.
+"""
+
+
+def get_project_template(project_name: str) -> str:
+    """Return markdown template for a project note."""
+    today_iso = datetime.date.today().isoformat()
+    project_meta = {
+        "agentkit": {
+            "tags": ["project", "layer-2", "agentkit"],
+            "title": "agentkit",
+            "desc": "Layer 2: Agent Harness Governance & Directive Standards",
+            "long_desc": "Audits, enforces, and standardizes harness-agnostic AI agent permissions, directives, cognitive model profiles, and quota governance across workstations.",
+            "layer": "Layer 2 (Agent Harness Governance)",
+            "siblings": "[[Projects/riced-kubuntu-os|riced-kubuntu-os]] (Layer 0), [[Projects/workstation-setup|workstation-setup]] (Layer 1), [[Projects/repokit|repokit]] (Layer 3)",
+            "tasks": [
+                "Maintain pre-approved permissions catalog",
+                "Enforce quota guardian thresholds and fallback routing",
+                "Expand Obsidian vault synchronization and ingest workflows",
+            ],
+        },
+        "repokit": {
+            "tags": ["project", "layer-3", "repokit"],
+            "title": "repokit",
+            "desc": "Layer 3: GitHub Governance, Squash Merges & PR Automation",
+            "long_desc": "Automates GitHub repository governance, branch protection rulesets, squash merge enforcement, and semantic PR checks.",
+            "layer": "Layer 3 (GitHub Repository Governance)",
+            "siblings": "[[Projects/agentkit|agentkit]] (Layer 2)",
+            "tasks": [
+                "Automate branch protection rulesets across repositories",
+                "Enforce Conventional Commits 1.0.0 squash merge titles",
+            ],
+        },
+        "riced-kubuntu-os": {
+            "tags": ["project", "layer-0", "riced-kubuntu-os"],
+            "title": "riced-kubuntu-os",
+            "desc": "Layer 0: Kubuntu OS Packages & KDE Plasma System Config",
+            "long_desc": "Manages Kubuntu base packages, KDE Plasma 6 configurations, and system-level dotfiles.",
+            "layer": "Layer 0 (Base Operating System)",
+            "siblings": "[[Projects/workstation-setup|workstation-setup]] (Layer 1)",
+            "tasks": [
+                "Maintain declarative package manifests",
+                "Sync KDE Plasma configuration snapshots",
+            ],
+        },
+        "workstation-setup": {
+            "tags": ["project", "layer-1", "workstation-setup"],
+            "title": "workstation-setup",
+            "desc": "Layer 1: Developer Toolchains & Environment Bridging",
+            "long_desc": "Configures language runtimes (Node.js, Python, uv), shell profiles (~/.profile, ~/.bashrc), keyrings, and environment bridging.",
+            "layer": "Layer 1 (Developer Toolchains)",
+            "siblings": "[[Projects/riced-kubuntu-os|riced-kubuntu-os]] (Layer 0), [[Projects/agentkit|agentkit]] (Layer 2)",
+            "tasks": [
+                "Manage developer SDK and CLI installations",
+                "Provide idempotent bootstrap and setup scripts",
+            ],
+        },
+        "augurs-bazaar": {
+            "tags": ["project", "augurs-bazaar"],
+            "title": "augurs-bazaar",
+            "desc": "Cross-Exchange Prediction Market Trading Platform",
+            "long_desc": "Decentralized and multi-exchange prediction market data ingestion, cross-venue pricing, and order routing platform.",
+            "layer": "Application Layer",
+            "siblings": "[[Projects/augurs-saber|augurs-saber]]",
+            "tasks": [
+                "Real-time market feed ingestion",
+                "Liquidity pool indexing and pricing models",
+            ],
+        },
+        "augurs-saber": {
+            "tags": ["project", "augurs-saber"],
+            "title": "augurs-saber",
+            "desc": "Algorithmic Execution & Market Making Engine",
+            "long_desc": "High-throughput order execution, risk management, and market making engine paired with augurs-bazaar.",
+            "layer": "Application Layer",
+            "siblings": "[[Projects/augurs-bazaar|augurs-bazaar]]",
+            "tasks": [
+                "Market making latency optimization",
+                "Execution risk limits and circuit breakers",
+            ],
+        },
+    }
+
+    meta = project_meta.get(
+        project_name,
+        {
+            "tags": ["project", project_name],
+            "title": project_name,
+            "desc": f"Project {project_name}",
+            "long_desc": f"Workspace project note for {project_name}.",
+            "layer": "Application",
+            "siblings": "None",
+            "tasks": ["Initialize project tasks"],
+        },
+    )
+
+    tasks_md = "\n".join(f"- [ ] {t}" for t in meta["tasks"])
+    tags_yaml = "\n".join(f"  - {t}" for t in meta["tags"])
+
+    return f"""---
+tags:
+{tags_yaml}
+type: project
+last_updated: {today_iso}
+updated_by: agentkit
+status: active
+---
+
+# {meta["title"]}
+
+> [!info] {meta["desc"]}
+> {meta["long_desc"]}
+
+## Architecture & Contracts
+- Layer: {meta["layer"]}
+- Sibling Systems: {meta["siblings"]}
+- Specification: [[Architecture/contracts|System Contracts]]
+- Decisions: [[Architecture/decisions/README|ADRs]]
+
+## Active Tasks
+{tasks_md}
+
+## Offline User Input & Notes
+> [!todo] Pending Notes
+> Add task requests or design considerations here for automatic ingestion.
+"""
+
+
+def cmd_vault_init(args: argparse.Namespace) -> int:
+    """Idempotently initialize Obsidian vault directory tree, Dashboard, and initial projects."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    print_step(f"Initializing Obsidian AgentVault at {vault_path}")
+
+    # 1. Directories
+    vault_path.mkdir(parents=True, exist_ok=True)
+    (vault_path / ".obsidian").mkdir(exist_ok=True)
+    (vault_path / "00-Inbox").mkdir(exist_ok=True)
+    (vault_path / "User-Input" / "pending").mkdir(parents=True, exist_ok=True)
+    (vault_path / "User-Input" / "processed").mkdir(parents=True, exist_ok=True)
+    (vault_path / "Projects").mkdir(exist_ok=True)
+    (vault_path / "Architecture" / "decisions").mkdir(parents=True, exist_ok=True)
+    (vault_path / "Sessions").mkdir(exist_ok=True)
+
+    # 2. Markers & gitkeeps
+    for keep_dir in [
+        vault_path / "00-Inbox",
+        vault_path / "User-Input" / "pending",
+        vault_path / "User-Input" / "processed",
+        vault_path / "Architecture" / "decisions",
+    ]:
+        gitkeep = keep_dir / ".gitkeep"
+        if not gitkeep.exists():
+            gitkeep.touch()
+
+    # 3. Root notes
+    write_vault_note_if_missing(vault_path / "Dashboard.md", get_dashboard_template())
+    write_vault_note_if_missing(vault_path / "User-Input" / "README.md", get_user_input_readme_template())
+    write_vault_note_if_missing(vault_path / "Architecture" / "00-Overview.md", get_architecture_overview_template())
+    write_vault_note_if_missing(vault_path / "Architecture" / "contracts.md", get_architecture_contracts_template())
+    write_vault_note_if_missing(vault_path / "Architecture" / "decisions" / "README.md", get_architecture_decisions_readme_template())
+    write_vault_note_if_missing(vault_path / "Sessions" / "README.md", get_sessions_readme_template())
+
+    # 4. Initial project notes
+    initial_projects = [
+        "agentkit",
+        "repokit",
+        "riced-kubuntu-os",
+        "workstation-setup",
+        "augurs-bazaar",
+        "augurs-saber",
+    ]
+    for proj in initial_projects:
+        write_vault_note_if_missing(vault_path / "Projects" / f"{proj}.md", get_project_template(proj))
+
+    # 5. Maintain convenient symlink: Path.home() / "AgentVault" -> vault_path
+    convenient_link = Path.home() / "AgentVault"
+    if convenient_link != vault_path:
+        try:
+            if convenient_link.is_symlink():
+                if convenient_link.resolve() != vault_path:
+                    convenient_link.unlink()
+                    convenient_link.symlink_to(vault_path)
+            elif not convenient_link.exists():
+                convenient_link.symlink_to(vault_path)
+        except OSError:
+            pass
+
+    print_success(f"AgentVault initialized successfully: {vault_path}")
+    print_info(f"Dashboard available at: {vault_path / 'Dashboard.md'}")
+
+    # 6. Ensure vault_path and default AgentVault are in trustedWorkspaces
+    harness = get_harness_adapter(getattr(args, "harness", "antigravity"))
+    settings_path = (
+        Path(args.settings_path).expanduser().resolve()
+        if getattr(args, "settings_path", None)
+        else (
+            Path(os.environ["AGENTKIT_SETTINGS_PATH"]).expanduser().resolve()
+            if os.environ.get("AGENTKIT_SETTINGS_PATH")
+            else harness.get_default_settings_path()
+        )
+    )
+    settings, exists = load_user_settings(settings_path)
+    if "trustedWorkspaces" not in settings or not isinstance(settings["trustedWorkspaces"], list):
+        settings["trustedWorkspaces"] = []
+
+    target_workspaces = [
+        str(vault_path),
+        str(Path.home() / "AgentVault"),
+    ]
+    seen_workspaces: Set[str] = set()
+    deduped_workspaces: List[str] = []
+    for tw in settings["trustedWorkspaces"]:
+        if tw not in seen_workspaces:
+            deduped_workspaces.append(tw)
+            seen_workspaces.add(tw)
+
+    modified = False
+    for tw in target_workspaces:
+        if tw not in seen_workspaces:
+            deduped_workspaces.append(tw)
+            seen_workspaces.add(tw)
+            modified = True
+
+    if deduped_workspaces != settings["trustedWorkspaces"]:
+        settings["trustedWorkspaces"] = deduped_workspaces
+        modified = True
+
+    if modified:
+        save_json(settings_path, settings)
+        print_success(f"Registered AgentVault in trustedWorkspaces: {settings_path}")
+
+    return 0
+
+
+def cmd_vault_status(args: argparse.Namespace) -> int:
+    """Report status and note inventory of Obsidian AgentVault."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists() or not (vault_path / ".obsidian").is_dir():
+        if is_json:
+            print(json.dumps({
+                "exists": False,
+                "path": str(vault_path),
+                "error": "Obsidian AgentVault does not exist or is not initialized."
+            }, indent=2))
+        else:
+            print_failure(f"Obsidian AgentVault not found at {vault_path}. Run 'agentkit vault init' to initialize.")
+        return 1
+
+    total_notes = sum(1 for p in vault_path.rglob("*.md") if ".obsidian" not in p.parts)
+    pending_dir = vault_path / "User-Input" / "pending"
+    pending_files = sorted([p.name for p in pending_dir.glob("*.md") if not p.name.startswith(".")]) if pending_dir.exists() else []
+
+    projects_dir = vault_path / "Projects"
+    project_files = sorted([p.stem for p in projects_dir.glob("*.md") if not p.name.startswith(".")]) if projects_dir.exists() else []
+
+    sessions_dir = vault_path / "Sessions"
+    recent_session: Optional[str] = None
+    if sessions_dir.exists():
+        session_files = [p for p in sessions_dir.glob("*.md") if p.name != "README.md" and not p.name.startswith(".")]
+        if session_files:
+            session_files.sort(key=lambda p: (p.stat().st_mtime, p.name), reverse=True)
+            recent_session = session_files[0].name
+
+    if is_json:
+        print(json.dumps({
+            "exists": True,
+            "path": str(vault_path),
+            "total_notes": total_notes,
+            "pending_notes": len(pending_files),
+            "pending_files": pending_files,
+            "active_projects": len(project_files),
+            "projects": project_files,
+            "recent_session": recent_session,
+        }, indent=2))
+        return 0
+
+    print_step("Obsidian AgentVault Status")
+    print_success(f"Vault Path: {vault_path}")
+    print_success(f"Total Notes: {total_notes}")
+    print_success(f"Active Projects: {len(project_files)} ({', '.join(project_files)})")
+    if pending_files:
+        print_warning(f"Pending User Notes: {len(pending_files)} ({', '.join(pending_files)})")
+    else:
+        print_success("Pending User Notes: 0")
+    print_info(f"Most Recent Session: {recent_session or 'None'}")
+    return 0
+
+
+def cmd_vault_ingest(args: argparse.Namespace) -> int:
+    """Ingest pending user directives from User-Input/pending/ and project notes in Obsidian AgentVault."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists():
+        if is_json:
+            print(json.dumps({"error": f"Obsidian AgentVault does not exist at {vault_path}", "ingested_count": 0, "items": []}, indent=2))
+        else:
+            print_failure(f"Obsidian AgentVault does not exist at {vault_path}")
+        return 1
+
+    pending_dir = vault_path / "User-Input" / "pending"
+    processed_dir = vault_path / "User-Input" / "processed"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+
+    ingested_items: List[Dict[str, Any]] = []
+    iso_date = datetime.date.today().isoformat()
+    iso_ts = datetime.datetime.now().astimezone().isoformat()
+
+    # 1. Inspect User-Input/pending/
+    if pending_dir.exists():
+        for note_file in sorted(pending_dir.glob("*.md")):
+            if note_file.name.startswith("."):
+                continue
+            raw_text = note_file.read_text(encoding="utf-8")
+            meta, body = parse_frontmatter_and_body(raw_text)
+
+            # Destination filename with date prefix
+            if note_file.name.startswith(iso_date):
+                dest_name = note_file.name
+            else:
+                dest_name = f"{iso_date}-{note_file.name}"
+            dest_file = processed_dir / dest_name
+            if dest_file.exists():
+                counter = 1
+                base_stem = dest_file.stem
+                while dest_file.exists():
+                    dest_file = processed_dir / f"{base_stem}_{counter}.md"
+                    counter += 1
+
+            audit_stamp = f"\n\n> [!check] Ingested by agentkit on {iso_ts}\n"
+            processed_text = raw_text.rstrip() + audit_stamp
+            dest_file.write_text(processed_text, encoding="utf-8")
+            note_file.unlink()
+
+            ingested_items.append({
+                "source": f"User-Input/pending/{note_file.name}",
+                "processed_path": f"User-Input/processed/{dest_file.name}",
+                "title": meta.get("title", note_file.stem),
+                "project": meta.get("project", getattr(args, "project", None) or "general"),
+                "tags": meta.get("tags", []),
+                "content": raw_text.strip(),
+            })
+
+    # 2. If --project specified, check Projects/<project>.md for ## Offline User Input & Notes
+    project_arg = getattr(args, "project", None)
+    if project_arg:
+        proj_stem = project_arg[:-3] if project_arg.endswith(".md") else project_arg
+        proj_file = vault_path / "Projects" / f"{proj_stem}.md"
+        if proj_file.exists():
+            proj_text = proj_file.read_text(encoding="utf-8")
+            section_header = "## Offline User Input & Notes"
+            if section_header in proj_text:
+                parts = proj_text.split(section_header, 1)
+                before_section = parts[0]
+                section_and_after = parts[1]
+                next_h2 = section_and_after.find("\n## ")
+                if next_h2 != -1:
+                    section_content = section_and_after[:next_h2]
+                    after_section = section_and_after[next_h2:]
+                else:
+                    section_content = section_and_after
+                    after_section = ""
+
+                # Only lines before ### Processed Directives (or before audit stamps) are pending
+                pending_section = section_content
+                processed_section = ""
+                if "### Processed Directives" in section_content:
+                    parts_p = section_content.split("### Processed Directives", 1)
+                    pending_section = parts_p[0]
+                    processed_section = "### Processed Directives" + parts_p[1]
+
+                meaningful_lines = []
+                for line in pending_section.strip().splitlines():
+                    line_s = line.strip()
+                    if not line_s:
+                        continue
+                    if line_s.startswith("> [!todo]") or line_s.startswith("> Add task requests") or line_s.startswith("> [!check] Ingested"):
+                        continue
+                    meaningful_lines.append(line)
+
+                if meaningful_lines:
+                    directive_text = "\n".join(meaningful_lines).strip()
+                    ingested_items.append({
+                        "source": f"Projects/{proj_stem}.md",
+                        "section": "Offline User Input & Notes",
+                        "title": f"{proj_stem} Offline Notes",
+                        "project": proj_stem,
+                        "content": directive_text,
+                    })
+                    audit_entry = (
+                        f"\n\n### Processed Directives\n"
+                        f"{directive_text}\n\n"
+                        f"> [!check] Ingested by agentkit on {iso_ts}\n"
+                    )
+                    if processed_section:
+                        combined_processed = audit_entry + "\n" + processed_section.replace("### Processed Directives\n", "")
+                    else:
+                        combined_processed = audit_entry
+
+                    reset_pending = "\n> [!todo] Pending Notes\n> Add task requests or design considerations here for automatic ingestion.\n"
+                    new_section = reset_pending + combined_processed
+                    updated_text = before_section + section_header + new_section + after_section
+                    proj_file.write_text(updated_text, encoding="utf-8")
+
+    if is_json:
+        print(json.dumps({
+            "ingested_count": len(ingested_items),
+            "items": ingested_items,
+        }, indent=2))
+        return 0
+
+    if not ingested_items:
+        print_info("No pending user inputs found.")
+        return 0
+
+    print_step(f"Ingested {len(ingested_items)} Pending Directive(s)")
+    for item in ingested_items:
+        src = item["source"]
+        dest = item.get("processed_path", src)
+        print_success(f"{src} -> {dest}")
+        snippet = item["content"].replace("\n", " ")
+        if len(snippet) > 80:
+            snippet = snippet[:77] + "..."
+        print(f"    {BOLD}Directives:{RESET} {snippet}")
+
+    return 0
+
+
+def cmd_vault_sync(args: argparse.Namespace) -> int:
+    """Idempotently sync project state, tasks, and ADR links in Obsidian AgentVault Projects/<project>.md."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists():
+        if is_json:
+            print(json.dumps({"error": f"Obsidian AgentVault does not exist at {vault_path}", "synced": []}, indent=2))
+        else:
+            print_failure(f"Obsidian AgentVault does not exist at {vault_path}")
+        return 1
+
+    projects_dir = vault_path / "Projects"
+    projects_dir.mkdir(parents=True, exist_ok=True)
+
+    project_arg = getattr(args, "project", None)
+    if project_arg:
+        target_projects = [project_arg[:-3] if project_arg.endswith(".md") else project_arg]
+    else:
+        found_projs = [p.stem for p in projects_dir.glob("*.md") if not p.name.startswith(".")]
+        target_projects = found_projs if found_projs else [
+            "agentkit",
+            "repokit",
+            "riced-kubuntu-os",
+            "workstation-setup",
+            "augurs-bazaar",
+            "augurs-saber",
+        ]
+
+    # Collect available ADRs from Architecture/decisions
+    decisions_dir = vault_path / "Architecture" / "decisions"
+    adr_links: List[str] = []
+    if decisions_dir.exists():
+        for adr_file in sorted(decisions_dir.glob("*.md")):
+            if adr_file.name == "README.md" or adr_file.name.startswith("."):
+                continue
+            adr_links.append(f"- [[Architecture/decisions/{adr_file.stem}|{adr_file.stem}]]")
+
+    synced_projects: List[str] = []
+    for proj in target_projects:
+        proj_file = projects_dir / f"{proj}.md"
+        if proj_file.exists():
+            content = proj_file.read_text(encoding="utf-8")
+            meta, body = parse_frontmatter_and_body(content)
+            meta["last_updated"] = datetime.date.today().isoformat()
+            meta["updated_by"] = "agentkit"
+            if "status" not in meta:
+                meta["status"] = "active"
+
+            if adr_links:
+                adr_block = "\n".join(adr_links)
+                if "## Architecture Decisions (ADRs)" not in body:
+                    body = body.rstrip() + f"\n\n## Architecture Decisions (ADRs)\n{adr_block}\n"
+
+            if "## Active Tasks" not in body:
+                body = body.rstrip() + "\n\n## Active Tasks\n- [ ] Sync project state and directives\n"
+
+            tags = meta.pop("tags", ["project", proj])
+            if isinstance(tags, str):
+                tags = [tags]
+            note_type = meta.pop("type", "project")
+            updated_by = meta.pop("updated_by", "agentkit")
+            new_fm = format_frontmatter(tags, note_type, updated_by, extra=meta)
+            proj_file.write_text(new_fm + "\n\n" + body.strip() + "\n", encoding="utf-8")
+        else:
+            proj_file.write_text(get_project_template(proj), encoding="utf-8")
+
+        synced_projects.append(proj)
+        if not is_json:
+            print_success(f"Synced project note: Projects/{proj}.md")
+
+    if is_json:
+        print(json.dumps({"synced": synced_projects}, indent=2))
+
+    return 0
+
+
+def cmd_vault_note(args: argparse.Namespace) -> int:
+    """Create a structured note or append a section in Obsidian AgentVault."""
+    vault_path = resolve_vault_path(getattr(args, "path", None))
+    is_json = getattr(args, "json", False)
+
+    if not vault_path.exists():
+        if is_json:
+            print(json.dumps({"error": f"Obsidian AgentVault does not exist at {vault_path}"}, indent=2))
+        else:
+            print_failure(f"Obsidian AgentVault does not exist at {vault_path}")
+        return 1
+
+    proj_arg = args.project
+    proj_stem = proj_arg[:-3] if proj_arg.endswith(".md") else proj_arg
+    title = args.title.strip()
+    content = args.content.strip()
+
+    # Collect tags
+    tags: List[str] = ["project", proj_stem]
+    if getattr(args, "tag", None):
+        raw_tags = args.tag if isinstance(args.tag, list) else [args.tag]
+        for item in raw_tags:
+            for part in str(item).split(","):
+                cleaned = part.strip()
+                if cleaned and cleaned not in tags:
+                    tags.append(cleaned)
+
+    # Check if user specified a section to append into the project note directly
+    section_arg = getattr(args, "section", None)
+    if section_arg:
+        proj_file = vault_path / "Projects" / f"{proj_stem}.md"
+        if not proj_file.exists():
+            proj_file.parent.mkdir(parents=True, exist_ok=True)
+            proj_file.write_text(get_project_template(proj_stem), encoding="utf-8")
+
+        proj_text = proj_file.read_text(encoding="utf-8")
+        section_heading = f"## {section_arg}"
+        if section_heading in proj_text:
+            parts = proj_text.split(section_heading, 1)
+            updated = parts[0] + section_heading + "\n" + content + "\n\n" + parts[1].lstrip("\n")
+        else:
+            updated = proj_text.rstrip() + f"\n\n{section_heading}\n{content}\n"
+        proj_file.write_text(updated, encoding="utf-8")
+
+        if is_json:
+            print(json.dumps({
+                "success": True,
+                "action": "appended_section",
+                "path": str(proj_file),
+                "section": section_arg,
+                "project": proj_stem,
+            }, indent=2))
+        else:
+            print_success(f"Appended section '{section_arg}' to Projects/{proj_stem}.md")
+        return 0
+
+    # Otherwise, create or append to structured note in Projects/
+    safe_title = re.sub(r"[^\w\-\s]", "", title).strip().replace(" ", "-")
+    if not safe_title:
+        safe_title = "note"
+
+    note_file = vault_path / "Projects" / f"{safe_title}.md"
+    action = "created"
+
+    if note_file.exists():
+        existing_text = note_file.read_text(encoding="utf-8")
+        timestamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%d %H:%M")
+        appended_block = f"\n\n## {timestamp} Entry\n\n{content}\n"
+        note_file.write_text(existing_text.rstrip() + appended_block, encoding="utf-8")
+        action = "appended"
+    else:
+        note_file.parent.mkdir(parents=True, exist_ok=True)
+        fm = format_frontmatter(tags=tags, note_type="note", updated_by="agentkit", extra={"project": proj_stem})
+        body = f"""# {title}
+
+> [!note] Project: [[Projects/{proj_stem}|{proj_stem}]]
+
+{content}
+"""
+        note_file.write_text(fm + "\n\n" + body, encoding="utf-8")
+
+    # Link from Projects/<project>.md if exists
+    proj_file = vault_path / "Projects" / f"{proj_stem}.md"
+    if proj_file.exists() and proj_file != note_file:
+        proj_text = proj_file.read_text(encoding="utf-8")
+        wikilink = f"- [[Projects/{safe_title}|{title}]]"
+        if wikilink not in proj_text:
+            if "## Related Notes" in proj_text:
+                parts = proj_text.split("## Related Notes", 1)
+                updated_proj = parts[0] + "## Related Notes\n" + wikilink + "\n" + parts[1].lstrip("\n")
+            else:
+                updated_proj = proj_text.rstrip() + f"\n\n## Related Notes\n{wikilink}\n"
+            proj_file.write_text(updated_proj, encoding="utf-8")
+
+    if is_json:
+        print(json.dumps({
+            "success": True,
+            "action": action,
+            "path": str(note_file),
+            "project": proj_stem,
+            "title": title,
+            "tags": tags,
+        }, indent=2))
+    else:
+        if action == "created":
+            print_success(f"Created structured note: Projects/{note_file.name}")
+        else:
+            print_success(f"Appended content to existing note: Projects/{note_file.name}")
+
+    return 0
+
+
+# ==============================================================================
+# Main Argument Parser
+# ==============================================================================
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Construct full agentkit CLI argument parser with modular harness options."""
+    harness_parent = argparse.ArgumentParser(add_help=False)
+    harness_parent.add_argument(
+        "--harness",
+        choices=["antigravity"],
+        default=os.environ.get("AGENTKIT_HARNESS", "antigravity"),
+        help="Target AI harness (default: antigravity, env: AGENTKIT_HARNESS)",
+    )
+
+    parser = argparse.ArgumentParser(
+        prog="agentkit",
+        description="agentkit: Harness-agnostic AI agent configuration, permissions, directives, and orchestration toolkit.",
+        parents=[harness_parent],
+    )
+    subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
+
+    # audit
+    p_audit = subparsers.add_parser(
+        "audit",
+        parents=[harness_parent],
+        help="Audit local AI agent configuration against standards",
+    )
+    p_audit.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
+    p_audit.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_audit.add_argument("--plugins-dir", default=str(DEFAULT_GLOBAL_PLUGINS_DIR), help="Path to plugins directory")
+    p_audit.add_argument("--gemini-dir", default=str(DEFAULT_GLOBAL_GEMINI_DIR), help="Path to directives / .gemini directory")
+    p_audit.add_argument("--orchestration-path", help="Path to orchestration.json config")
+    p_audit.add_argument(
+        "--model-profile",
+        type=profile_arg,
+        choices=list_model_profiles(),
+        default="argon-flash",
+        help="Expected orchestration model profile to verify against (default: argon-flash)",
+    )
+    p_audit.add_argument("--no-mcp", action="store_true", help="Skip MCP server checks")
+    p_audit.add_argument("--no-plugins", action="store_true", help="Skip plugin checks")
+    p_audit.add_argument("-v", "--verbose", action="store_true", help="Show detailed breakdown of all checks")
+    p_audit.set_defaults(func=cmd_audit)
+
+    # apply / configure
+    p_apply = subparsers.add_parser(
+        "apply",
+        aliases=["configure"],
+        parents=[harness_parent],
+        help="Apply standards to local workstation",
+    )
+    p_apply.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
+    p_apply.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_apply.add_argument("--plugins-dir", default=str(DEFAULT_GLOBAL_PLUGINS_DIR), help="Path to plugins directory")
+    p_apply.add_argument("--gemini-dir", default=str(DEFAULT_GLOBAL_GEMINI_DIR), help="Path to directives / .gemini directory")
+    p_apply.add_argument("--orchestration-path", help="Path to orchestration.json config")
+    p_apply.add_argument(
+        "--model-profile",
+        type=profile_arg,
+        choices=list_model_profiles(),
+        default="argon-flash",
+        help="Active multi-model orchestration profile (default: argon-flash)",
+    )
+    p_apply.add_argument("--no-mcp", action="store_true", help="Skip MCP server configuration")
+    p_apply.add_argument("--no-plugins", action="store_true", help="Skip plugin deployment")
+    p_apply.add_argument("--dry-run", action="store_true", help="Simulate changes without writing to disk")
+    p_apply.add_argument("--no-backup", action="store_true", help="Do not create backup before writing")
+    p_apply.add_argument("--link-home", action="store_true", help="Also symlink directives into $HOME")
+    p_apply.set_defaults(func=cmd_apply)
+
+    # diff
+    p_diff = subparsers.add_parser(
+        "diff",
+        parents=[harness_parent],
+        help="Diff local settings against standard permissions baseline",
+    )
+    p_diff.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
+    p_diff.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_diff.add_argument("--no-mcp", action="store_true", help="Skip MCP server diffing")
+    p_diff.set_defaults(func=cmd_diff)
+
+    # snapshot / export
+    p_snap = subparsers.add_parser(
+        "snapshot",
+        aliases=["export"],
+        parents=[harness_parent],
+        help="Inspect or export unmanaged local permissions",
+    )
+    p_snap.add_argument("--settings-path", default=str(DEFAULT_SETTINGS_PATH), help="Path to settings.json")
+    p_snap.add_argument("--mcp-path", default=str(DEFAULT_MCP_CONFIG_PATH), help="Path to mcp_config.json")
+    p_snap.add_argument("--no-mcp", action="store_true", help="Skip MCP server snapshot")
+    p_snap.add_argument("--json", action="store_true", help="Output results in JSON format")
+    p_snap.set_defaults(func=cmd_snapshot)
+
+    # template
+    p_tmpl = subparsers.add_parser(
+        "template",
+        parents=[harness_parent],
+        help="Scaffold project-level AGENTS.md rules",
+    )
+    p_tmpl.add_argument("--output", default=".", help="Target project directory")
+    p_tmpl.add_argument("--name", help="Project name")
+    p_tmpl.add_argument("--desc", help="Project description")
+    p_tmpl.add_argument("--lang", help="Primary language / framework")
+    p_tmpl.add_argument("--test", help="Test command")
+    p_tmpl.add_argument("-f", "--force", action="store_true", help="Overwrite existing files")
+    p_tmpl.add_argument("--legacy", action="store_true", help="Scaffold GEMINI.md primarily and symlink AGENTS.md (legacy mode)")
+    p_tmpl.set_defaults(func=cmd_template)
+
+    # hook
+    p_hook = subparsers.add_parser(
+        "hook",
+        parents=[harness_parent],
+        help="Git hook management",
+    )
+    hook_sub = p_hook.add_subparsers(dest="hook_command")
+    p_hook_inst = hook_sub.add_parser(
+        "install",
+        parents=[harness_parent],
+        help="Install Conventional Commits hook",
+    )
+    p_hook_inst.add_argument("--repo", default=".", help="Target git repository path")
+    p_hook_inst.set_defaults(func=cmd_hook_install)
+    p_hook.set_defaults(func=_print_subparser_help(p_hook))
+
+    # skill
+    p_skill = subparsers.add_parser(
+        "skill",
+        parents=[harness_parent],
+        help="Reusable project skill management",
+    )
+    skill_sub = p_skill.add_subparsers(dest="skill_command", help="Skill subcommands")
+
+    # skill list
+    p_skill_list = skill_sub.add_parser(
+        "list",
+        parents=[harness_parent],
+        help="List available reusable project skills",
+    )
+    p_skill_list.set_defaults(func=cmd_skill_list)
+
+    # skill info
+    p_skill_info = skill_sub.add_parser(
+        "info",
+        parents=[harness_parent],
+        help="Display detailed information for a skill",
+    )
+    p_skill_info.add_argument("skill_name", help="Name of the skill to inspect")
+    p_skill_info.set_defaults(func=cmd_skill_info)
+
+    # skill install
+    p_skill_inst = skill_sub.add_parser(
+        "install",
+        parents=[harness_parent],
+        help="Install a skill into a project",
+    )
+    p_skill_inst.add_argument("skill_name", help="Name of the skill to install")
+    p_skill_inst.add_argument("--target", help="Target installation path (default: ./skills/<skill_name>)")
+    p_skill_inst.add_argument("--copy", action="store_true", help="Copy skill files instead of creating a symlink")
+    p_skill_inst.add_argument("--dry-run", action="store_true", help="Simulate installation without writing")
+    p_skill_inst.set_defaults(func=cmd_skill_install)
+    p_skill.set_defaults(func=_print_subparser_help(p_skill))
+
+    # tool
+    p_tool = subparsers.add_parser(
+        "tool",
+        parents=[harness_parent],
+        help="Reusable project utility script management",
+    )
+    tool_sub = p_tool.add_subparsers(dest="tool_command", help="Tool subcommands")
+
+    # tool list
+    p_tool_list = tool_sub.add_parser(
+        "list",
+        parents=[harness_parent],
+        help="List available reusable project tools",
+    )
+    p_tool_list.set_defaults(func=cmd_tool_list)
+    p_tool.set_defaults(func=_print_subparser_help(p_tool))
+
+    # profile
+    p_prof = subparsers.add_parser(
+        "profile",
+        parents=[harness_parent],
+        help="Orchestration model profile inspection",
+    )
+    prof_sub = p_prof.add_subparsers(dest="profile_command", help="Profile subcommands")
+    p_prof_list = prof_sub.add_parser("list", parents=[harness_parent], help="List profiles with thinking levels and fallback")
+    p_prof_list.set_defaults(func=cmd_profile_list)
+    p_prof_show = prof_sub.add_parser("show", parents=[harness_parent], help="Show one profile")
+    p_prof_show.add_argument("profile_name", type=profile_arg, help="Profile name")
+    p_prof_show.set_defaults(func=cmd_profile_show)
+    p_prof.set_defaults(func=_print_subparser_help(p_prof))
+
+    # quota
+    p_quota = subparsers.add_parser(
+        "quota",
+        parents=[harness_parent],
+        help="Quota-aware model routing (delegates to quota-guardian plugin)",
+    )
+    quota_sub = p_quota.add_subparsers(dest="quota_command", help="Quota subcommands")
+    p_q_status = quota_sub.add_parser("status", parents=[harness_parent], help="Show model-group quota status")
+    p_q_status.add_argument("--json", action="store_true", help="Output JSON")
+    p_q_status.set_defaults(func=cmd_quota_status)
+    p_q_route = quota_sub.add_parser("route", parents=[harness_parent], help="Recommend root/worker model for a task complexity")
+    p_q_route.add_argument("--complexity", required=True, choices=["low", "med", "high"], help="Task complexity")
+    p_q_route.add_argument("--json", action="store_true", help="Output JSON")
+    p_q_route.set_defaults(func=cmd_quota_route)
+    p_quota.set_defaults(func=_print_subparser_help(p_quota))
+
+    # vault
+    p_vault = subparsers.add_parser(
+        "vault",
+        parents=[harness_parent],
+        help="Obsidian AgentVault management and offline directives integration",
+    )
+    vault_sub = p_vault.add_subparsers(dest="vault_command", help="Vault subcommands")
+
+    vault_parent = argparse.ArgumentParser(add_help=False)
+    vault_parent.add_argument(
+        "--path",
+        help="Custom Obsidian AgentVault root path (defaults to AGENTKIT_VAULT_PATH, AGENTKIT_AGENTVAULT_PATH, OBSIDIAN_VAULT_PATH, or ~/Documents/AgentVault)",
+    )
+    vault_parent.add_argument(
+        "--settings-path",
+        help="Path to settings.json (defaults to active harness settings path)",
+    )
+
+    # vault init
+    p_v_init = vault_sub.add_parser(
+        "init",
+        parents=[harness_parent, vault_parent],
+        help="Idempotently initialize Obsidian AgentVault directory tree, Dashboard, and initial projects",
+    )
+    p_v_init.set_defaults(func=cmd_vault_init)
+
+    # vault status
+    p_v_status = vault_sub.add_parser(
+        "status",
+        parents=[harness_parent, vault_parent],
+        help="Report Obsidian AgentVault health, note count, and pending user directives",
+    )
+    p_v_status.add_argument("--json", action="store_true", help="Output status in JSON format")
+    p_v_status.set_defaults(func=cmd_vault_status)
+
+    # vault ingest
+    p_v_ingest = vault_sub.add_parser(
+        "ingest",
+        parents=[harness_parent, vault_parent],
+        help="Ingest offline user directives from User-Input/pending and project notes",
+    )
+    p_v_ingest.add_argument("--project", help="Target project to ingest directives for")
+    p_v_ingest.add_argument("--json", action="store_true", help="Output ingested items in JSON format")
+    p_v_ingest.set_defaults(func=cmd_vault_ingest)
+
+    # vault sync
+    p_v_sync = vault_sub.add_parser(
+        "sync",
+        parents=[harness_parent, vault_parent],
+        help="Idempotently sync project state, tasks, and ADR links",
+    )
+    p_v_sync.add_argument("--project", help="Specific project to sync (defaults to all projects)")
+    p_v_sync.add_argument("--json", action="store_true", help="Output sync summary in JSON format")
+    p_v_sync.set_defaults(func=cmd_vault_sync)
+
+    # vault note
+    p_v_note = vault_sub.add_parser(
+        "note",
+        parents=[harness_parent, vault_parent],
+        help="Create a structured note or append a section in the vault",
+    )
+    p_v_note.add_argument("--project", required=True, help="Associated project name")
+    p_v_note.add_argument("--title", required=True, help="Note or section title")
+    p_v_note.add_argument("--content", required=True, help="Body content for the note")
+    p_v_note.add_argument("--tag", action="append", help="Tag to attach to note (can be specified multiple times)")
+    p_v_note.add_argument("--section", help="Optional section heading to append into project note directly")
+    p_v_note.add_argument("--json", action="store_true", help="Output note creation details in JSON format")
+    p_v_note.set_defaults(func=cmd_vault_note)
+
+    p_vault.set_defaults(func=_print_subparser_help(p_vault))
+
+    return parser
+
+
+def main() -> None:
+    parser = build_parser()
+    args = parser.parse_args()
+    if not hasattr(args, "func"):
+        parser.print_help()
+        sys.exit(1)
+
+    sys.exit(args.func(args))
+
+
+if __name__ == "__main__":
+    main()

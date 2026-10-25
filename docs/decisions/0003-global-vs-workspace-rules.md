@@ -9,7 +9,7 @@ Placing extensive, language-specific rules globally pollutes the context window 
 1. **Global Directives (`~/.gemini/GEMINI.md` and `~/.gemini/AGENTS.md`)**:
    Establish universal developer principles that are language-agnostic: Conventional Commits, clean architecture, idempotence, dynamic path requirements, and verification before task completion.
 2. **Project-Scoped Directives (`templates/project-GEMINI.md`)**:
-   Language-specific dependencies, framework architectures, and custom test runners are scaffolded into individual project repositories using `agy-standardise template`.
+   Language-specific dependencies, framework architectures, and custom test runners are scaffolded into individual project repositories using `agentkit template`.
 
 ## Consequences
 - **Positive**: Lightweight global context window overhead.

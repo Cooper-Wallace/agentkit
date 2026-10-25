@@ -39,3 +39,8 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# Local databases
+*.db
+${SQLITE_DEV_DB}
+

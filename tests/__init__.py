@@ -1,3 +1,3 @@
 """
-Tests package for antigravity-standardise.
+Tests package for agentkit.
 """
