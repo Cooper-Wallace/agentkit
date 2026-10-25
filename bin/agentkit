@@ -360,17 +360,19 @@ def merge_permissions(
     else:
         result["trustedWorkspaces"] = list(result["trustedWorkspaces"])
 
-    # Add default AgentVault paths dynamically if not already present
-    agent_vault_paths: List[str] = [
+    # Add default AgentVault and standard project paths dynamically if not already present
+    standard_trusted_workspaces: List[str] = [
         str(Path.home() / "Documents" / "AgentVault"),
         str(Path.home() / "AgentVault"),
+        str(Path.home() / "Projects" / "agentkit"),
+        str(Path.home() / "Projects" / "repokit"),
     ]
     for env_var in ("AGENTKIT_VAULT_PATH", "AGENTKIT_AGENTVAULT_PATH"):
         env_val = os.environ.get(env_var)
         if env_val and env_val.strip():
             resolved_env_path = str(Path(env_val).expanduser().resolve())
-            if resolved_env_path not in agent_vault_paths:
-                agent_vault_paths.append(resolved_env_path)
+            if resolved_env_path not in standard_trusted_workspaces:
+                standard_trusted_workspaces.append(resolved_env_path)
 
     seen_workspaces: Set[str] = set()
     deduped_workspaces: List[str] = []
@@ -379,7 +381,7 @@ def merge_permissions(
             deduped_workspaces.append(ws)
             seen_workspaces.add(ws)
 
-    for p in agent_vault_paths:
+    for p in standard_trusted_workspaces:
         if p not in seen_workspaces:
             deduped_workspaces.append(p)
             seen_workspaces.add(p)
@@ -806,7 +808,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     else:
         print_warning("Workspace Boundary: 'allowNonWorkspaceAccess' not explicitly enabled")
 
-    # 5. Trusted Workspaces (AgentVault) Check
+    # 5. Trusted Workspaces (AgentVault, agentkit, repokit) Check
     total_checks += 1
     user_workspaces = settings.get("trustedWorkspaces", [])
     if not isinstance(user_workspaces, list):
@@ -821,13 +823,27 @@ def cmd_audit(args: argparse.Namespace) -> int:
         if env_val and env_val.strip():
             expected_vault_paths.add(str(Path(env_val).expanduser().resolve()))
 
+    agentkit_path = str(Path.home() / "Projects" / "agentkit")
+    repokit_path = str(Path.home() / "Projects" / "repokit")
+
     found_vault_paths = [w for w in user_workspaces if w in expected_vault_paths]
-    if found_vault_paths:
-        print_success(f"Trusted Workspaces: AgentVault path whitelisted ({found_vault_paths[0]})")
+    has_vault = bool(found_vault_paths)
+    has_agentkit = agentkit_path in user_workspaces
+    has_repokit = repokit_path in user_workspaces
+
+    if has_vault and has_agentkit and has_repokit:
+        print_success("Trusted Workspaces: AgentVault, agentkit, and repokit whitelisted")
         passed_checks += 1
     else:
+        missing_workspaces = []
+        if not has_vault:
+            missing_workspaces.append(f"AgentVault ({str(Path.home() / 'Documents' / 'AgentVault')})")
+        if not has_agentkit:
+            missing_workspaces.append(f"agentkit ({agentkit_path})")
+        if not has_repokit:
+            missing_workspaces.append(f"repokit ({repokit_path})")
         print_warning(
-            f"Trusted Workspaces: AgentVault path missing from trustedWorkspaces ({str(Path.home() / 'Documents' / 'AgentVault')})"
+            f"Trusted Workspaces: Required workspace path(s) missing from trustedWorkspaces ({', '.join(missing_workspaces)})"
         )
 
     # 6. Color Scheme Check

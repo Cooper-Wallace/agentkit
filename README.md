@@ -91,7 +91,7 @@ agentkit profile set opus-flash
   - Discovers reusable project scripts and analytical utilities via `agentkit tool list`.
 - **Obsidian AgentVault & Offline Collaboration**:
   - Replaces opaque MCP memory stores with a durable, human-readable local Obsidian Markdown vault (`~/Documents/AgentVault` or `~/AgentVault`) adhering to the open **Obsidian Skills** specification by Steph Ango (kepano).
-  - Automatically whitelisted in Antigravity's `trustedWorkspaces` via `agentkit apply` and `agentkit vault init` to eliminate read/write confirmation prompts during autonomous workflows.
+  - Automatically whitelisted in Antigravity's `trustedWorkspaces` (alongside core repositories `~/Projects/agentkit` and `~/Projects/repokit`) via `agentkit apply` and `agentkit vault init` to eliminate read/write confirmation prompts during autonomous workflows and cross-repo introspection.
   - Enables asynchronous offline collaboration: developers review session handoffs, refine project living notes, and drop offline directives into `User-Input/pending/` during conversation breaks.
   - Generates visual architecture maps and multi-agent workflows using the open **JSON Canvas** (`.canvas`) specification (`jsoncanvas.org`).
   - Integrated CLI commands (`agentkit vault init`, `agentkit vault ingest`, `agentkit vault handoff`, `agentkit vault status`).
