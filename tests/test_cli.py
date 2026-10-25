@@ -84,6 +84,30 @@ class TestPermissionsCatalog(unittest.TestCase):
                     f"Unexpected tool permission: {perm}"
                 )
 
+    def test_gh_pr_permissions_and_no_merge(self):
+        catalog = agy_std.get_standard_permissions_catalog()
+        gh_gov_commands = catalog["categories"]["github_governance"]["commands"]
+        self.assertNotIn("gh pr", gh_gov_commands)
+        self.assertNotIn("gh pr merge", gh_gov_commands)
+
+        safe_gh_pr = [
+            "gh pr create",
+            "gh pr list",
+            "gh pr view",
+            "gh pr status",
+            "gh pr checks",
+            "gh pr diff",
+            "gh pr comment",
+        ]
+        for cmd in safe_gh_pr:
+            self.assertIn(cmd, gh_gov_commands)
+
+        flat = agy_std.get_flat_standard_permissions()
+        self.assertNotIn("command(gh pr)", flat)
+        self.assertNotIn("command(gh pr merge)", flat)
+        for cmd in safe_gh_pr:
+            self.assertIn(f"command({cmd})", flat)
+
     def test_settings_default_file_exists(self):
         default_settings = agy_std.load_json(agy_std.SETTINGS_DEFAULT_FILE)
         self.assertIn("allowNonWorkspaceAccess", default_settings)
@@ -128,6 +152,23 @@ class TestTemplatesAndArchetypes(unittest.TestCase):
 
         sample_skill = plugin_dir / "skills" / "sample-skill" / "SKILL.md"
         self.assertTrue(sample_skill.exists())
+
+    def test_human_only_trunk_promotion_directives(self):
+        directive_files = [
+            REPO_ROOT / "AGENTS.md",
+            REPO_ROOT / "harness" / "rules" / "AGENTS.md",
+            REPO_ROOT / "project" / "templates" / "AGENTS.md",
+        ]
+        phrase = "Human-Only Trunk Promotion & Auto-Merge Prohibition"
+        for path in directive_files:
+            content = path.read_text(encoding="utf-8")
+            self.assertIn(phrase, content, f"Missing directive in {path}")
+            self.assertIn("MUST NEVER execute `gh pr merge`", content, f"Missing merge prohibition in {path}")
+
+        skill_file = REPO_ROOT / "harness" / "plugins" / "autonomous-orchestrator" / "skills" / "auto-lifecycle" / "SKILL.md"
+        skill_content = skill_file.read_text(encoding="utf-8")
+        self.assertIn("Human-Only Trunk Promotion Gate", skill_content)
+        self.assertIn("Autonomous agents MUST NEVER execute `gh pr merge`", skill_content)
 
 
 class TestBinaryExecutable(unittest.TestCase):
