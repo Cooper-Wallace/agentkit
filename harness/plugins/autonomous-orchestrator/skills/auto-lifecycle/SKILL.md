@@ -78,10 +78,12 @@ flowchart LR
    ```bash
    git push -u origin feat/<feature-name>
    ```
-5. **Create Pull Request**:
-   Use the GitHub CLI (`gh pr create`) or GitHub MCP to open a PR:
+5. **Create Pull Request & Post Review Audit**:
+   Use the GitHub CLI (`gh pr create`) or GitHub MCP to open a PR and verify check suites:
    ```bash
    gh pr create --title "feat(scope): concise description" \
                 --body "### Summary... ### Verification..."
+   gh pr checks
    ```
-6. **Trunk Promotion**: Let GitHub CI quality gates and `repokit` rulesets govern the Squash and Merge into `main`.
+   Post the Phase 3 adversarial review report to the PR using `gh pr comment` or directly in the PR description.
+6. **Human-Only Trunk Promotion Gate**: Autonomous agents MUST NEVER execute `gh pr merge`, enable GitHub auto-merge, or automate trunk merging. Phase 4 concludes by presenting the PR URL and verification report to the user for human review and manual squash merge via the GitHub web UI once all quality gates pass.

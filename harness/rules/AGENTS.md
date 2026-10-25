@@ -98,6 +98,8 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 - **Trunk Hygiene & Merge Governance**:
   - Repositories follow the **Squash and Merge** model governed by `repokit`.
   - Squash titles default to `PR_TITLE` and bodies to `PR_BODY`. Direct pushes to `main` and local trunk merges are strictly prohibited.
+- **Human-Only Trunk Promotion & Auto-Merge Prohibition**:
+  - Merging Pull Requests into `main` is strictly a human-in-the-loop action. Autonomous agents MUST NEVER execute `gh pr merge`, enable GitHub auto-merge, or automate trunk merging. Agents are restricted to opening Pull Requests (`gh pr create`), posting adversarial review audits, and verifying check suites (`gh pr checks`). PR promotion into `main` must only occur via manual human review and approval in the GitHub web UI once all quality gates pass.
 
 ---
 
