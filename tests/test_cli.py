@@ -51,18 +51,32 @@ class TestPermissionsCatalog(unittest.TestCase):
             self.assertIn("permissions", tool_data, f"Tool category {tool_name} missing 'permissions'")
             self.assertGreater(len(tool_data["permissions"]), 0, f"Tool category {tool_name} has empty permissions")
 
+        # Test that config/permissions.json contains file_access
+        self.assertIn("file_access", catalog)
+        self.assertGreater(len(catalog["file_access"]), 0)
+        for fa_name, fa_data in catalog["file_access"].items():
+            self.assertIn("permissions", fa_data, f"File access category {fa_name} missing 'permissions'")
+            self.assertGreater(len(fa_data["permissions"]), 0, f"File access category {fa_name} has empty permissions")
+
+    test_standard_permissions_catalog_validity = test_permissions_json_validity
+
     def test_flat_permissions_generation(self):
         flat = agy_std.get_flat_standard_permissions()
         self.assertGreater(len(flat), 20)
 
         command_perms = [p for p in flat if p.startswith("command(")]
         mcp_perms = [p for p in flat if p.startswith("mcp(")]
-        tool_perms = [p for p in flat if not p.startswith("command(") and not p.startswith("mcp(")]
+        file_perms = [p for p in flat if p.startswith("read_file(") or p.startswith("write_file(")]
+        tool_perms = [
+            p for p in flat
+            if not p.startswith("command(") and not p.startswith("mcp(") and not p.startswith("read_file(") and not p.startswith("write_file(")
+        ]
 
-        # Test that get_flat_standard_permissions() contains command(...), mcp(...), and tool permissions
+        # Test that get_flat_standard_permissions() contains command(...), mcp(...), tool, and file access permissions
         self.assertGreater(len(command_perms), 0, "Expected command(...) permissions in flat list")
         self.assertGreater(len(mcp_perms), 0, "Expected mcp(...) permissions in flat list")
         self.assertGreater(len(tool_perms), 0, "Expected tool permissions in flat list")
+        self.assertGreater(len(file_perms), 0, "Expected read_file/write_file permissions in flat list")
 
         # Specifically assert that mcp(memory/create_entities), mcp(memory/add_observations), and mcp(memory) are present
         self.assertIn("mcp(memory/create_entities)", flat)
@@ -72,12 +86,22 @@ class TestPermissionsCatalog(unittest.TestCase):
         # Specifically assert that call_mcp_tool is present
         self.assertIn("call_mcp_tool", flat)
 
+        # Specifically assert that native file access grants are present
+        self.assertIn(f"read_file({Path.home() / 'Documents' / 'AgentVault'})", flat)
+        self.assertIn(f"write_file({Path.home() / 'Documents' / 'AgentVault'})", flat)
+        self.assertIn(f"read_file({Path.home() / 'Projects' / 'agentkit'})", flat)
+        self.assertIn(f"write_file({Path.home() / 'Projects' / 'agentkit'})", flat)
+        self.assertIn(f"read_file({Path.home() / 'Projects' / 'repokit'})", flat)
+        self.assertIn(f"write_file({Path.home() / 'Projects' / 'repokit'})", flat)
+
         # Validate formatting of each item
         for perm in flat:
             if perm.startswith("command("):
                 self.assertTrue(perm.endswith(")"), f"Invalid command format: {perm}")
             elif perm.startswith("mcp("):
                 self.assertTrue(perm.endswith(")"), f"Invalid mcp format: {perm}")
+            elif perm.startswith("read_file(") or perm.startswith("write_file("):
+                self.assertTrue(perm.endswith(")"), f"Invalid file access format: {perm}")
             else:
                 self.assertTrue(
                     perm in {"call_mcp_tool", "list_resources", "read_resource"} or perm.startswith("call_mcp_tool("),
@@ -319,6 +343,18 @@ class TestHarnessAbstraction(unittest.TestCase):
             self.assertEqual(res.returncode, 0)
 
 
+EXPECTED_FILE_PERMS = [
+    f"read_file({Path.home() / 'Documents' / 'AgentVault'})",
+    f"write_file({Path.home() / 'Documents' / 'AgentVault'})",
+    f"read_file({Path.home() / 'AgentVault'})",
+    f"write_file({Path.home() / 'AgentVault'})",
+    f"read_file({Path.home() / 'Projects' / 'agentkit'})",
+    f"write_file({Path.home() / 'Projects' / 'agentkit'})",
+    f"read_file({Path.home() / 'Projects' / 'repokit'})",
+    f"write_file({Path.home() / 'Projects' / 'repokit'})",
+]
+
+
 class TestPermissionMerger(unittest.TestCase):
     def test_merge_into_empty_settings(self):
         standard = ["command(ls)", "command(cat)"]
@@ -326,8 +362,8 @@ class TestPermissionMerger(unittest.TestCase):
         merged, added = agy_std.merge_permissions({}, standard, default_settings)
 
         self.assertEqual(merged["colorScheme"], "dark")
-        self.assertEqual(added, ["command(ls)", "command(cat)"])
-        self.assertEqual(merged["permissions"]["allow"], ["command(ls)", "command(cat)"])
+        self.assertEqual(added, ["command(ls)", "command(cat)"] + EXPECTED_FILE_PERMS)
+        self.assertEqual(merged["permissions"]["allow"], ["command(ls)", "command(cat)"] + EXPECTED_FILE_PERMS)
         expected_workspaces = [
             str(Path.home() / "Documents" / "AgentVault"),
             str(Path.home() / "AgentVault"),
@@ -347,11 +383,13 @@ class TestPermissionMerger(unittest.TestCase):
         standard = ["command(ls)", "command(cat)", "command(grep)"]
         merged, added = agy_std.merge_permissions(existing, standard)
 
-        self.assertEqual(added, ["command(cat)", "command(grep)"])
+        self.assertEqual(added, ["command(cat)", "command(grep)"] + EXPECTED_FILE_PERMS)
         self.assertIn("command(custom_script.sh)", merged["permissions"]["allow"])
         self.assertIn("command(ls)", merged["permissions"]["allow"])
         self.assertIn("command(cat)", merged["permissions"]["allow"])
         self.assertIn("command(grep)", merged["permissions"]["allow"])
+        for perm in EXPECTED_FILE_PERMS:
+            self.assertIn(perm, merged["permissions"]["allow"])
         self.assertIn("/custom/path", merged["trustedWorkspaces"])
         self.assertIn(str(Path.home() / "Documents" / "AgentVault"), merged["trustedWorkspaces"])
         self.assertIn(str(Path.home() / "AgentVault"), merged["trustedWorkspaces"])
@@ -364,7 +402,10 @@ class TestPermissionMerger(unittest.TestCase):
         custom_vault = "/tmp/custom_agentkit_vault"
         with unittest.mock.patch.dict(os.environ, {"AGENTKIT_VAULT_PATH": custom_vault}):
             merged, _ = agy_std.merge_permissions({}, standard)
-            self.assertIn(str(Path(custom_vault).expanduser().resolve()), merged["trustedWorkspaces"])
+            resolved_vault = str(Path(custom_vault).expanduser().resolve())
+            self.assertIn(resolved_vault, merged["trustedWorkspaces"])
+            self.assertIn(f"read_file({resolved_vault})", merged["permissions"]["allow"])
+            self.assertIn(f"write_file({resolved_vault})", merged["permissions"]["allow"])
             self.assertIn(str(Path.home() / "Documents" / "AgentVault"), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "AgentVault"), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "Projects" / "agentkit"), merged["trustedWorkspaces"])
@@ -375,7 +416,10 @@ class TestPermissionMerger(unittest.TestCase):
         custom_vault = "/tmp/custom_agentvault_path"
         with unittest.mock.patch.dict(os.environ, {"AGENTKIT_AGENTVAULT_PATH": custom_vault}):
             merged, _ = agy_std.merge_permissions({}, standard)
-            self.assertIn(str(Path(custom_vault).expanduser().resolve()), merged["trustedWorkspaces"])
+            resolved_vault = str(Path(custom_vault).expanduser().resolve())
+            self.assertIn(resolved_vault, merged["trustedWorkspaces"])
+            self.assertIn(f"read_file({resolved_vault})", merged["permissions"]["allow"])
+            self.assertIn(f"write_file({resolved_vault})", merged["permissions"]["allow"])
             self.assertIn(str(Path.home() / "Documents" / "AgentVault"), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "AgentVault"), merged["trustedWorkspaces"])
             self.assertIn(str(Path.home() / "Projects" / "agentkit"), merged["trustedWorkspaces"])
@@ -409,14 +453,14 @@ class TestPermissionMerger(unittest.TestCase):
     def test_merge_idempotence(self):
         existing = {
             "permissions": {
-                "allow": ["command(ls)", "command(cat)"]
+                "allow": ["command(ls)", "command(cat)"] + EXPECTED_FILE_PERMS
             }
         }
         standard = ["command(ls)", "command(cat)"]
         merged, added = agy_std.merge_permissions(existing, standard)
 
         self.assertEqual(added, [])
-        self.assertEqual(len(merged["permissions"]["allow"]), 2)
+        self.assertEqual(len(merged["permissions"]["allow"]), 2 + len(EXPECTED_FILE_PERMS))
 
     def test_merge_mixed_command_mcp_and_tool_permissions(self):
         existing = {
@@ -440,7 +484,7 @@ class TestPermissionMerger(unittest.TestCase):
             "mcp(memory/create_entities)",
             "call_mcp_tool",
             "list_resources",
-        ]
+        ] + EXPECTED_FILE_PERMS
         self.assertEqual(added, expected_added)
         self.assertIn("command(git status)", merged["permissions"]["allow"])
         self.assertIn("command(pytest)", merged["permissions"]["allow"])
@@ -449,6 +493,14 @@ class TestPermissionMerger(unittest.TestCase):
         self.assertIn("mcp(memory/create_entities)", merged["permissions"]["allow"])
         self.assertIn("call_mcp_tool", merged["permissions"]["allow"])
         self.assertIn("list_resources", merged["permissions"]["allow"])
+        for perm in EXPECTED_FILE_PERMS:
+            self.assertIn(perm, merged["permissions"]["allow"])
+
+    def test_merge_native_file_access_grants(self):
+        merged, added = agy_std.merge_permissions({}, [])
+        for perm in EXPECTED_FILE_PERMS:
+            self.assertIn(perm, merged["permissions"]["allow"])
+            self.assertIn(perm, added)
 
 
 class TestCLIOperations(unittest.TestCase):
@@ -511,6 +563,12 @@ class TestCLIOperations(unittest.TestCase):
         self.assertIn("permissions", saved)
         self.assertIn("command(git status)", saved["permissions"]["allow"])
         self.assertIn("command(pytest)", saved["permissions"]["allow"])
+        self.assertIn(f"read_file({Path.home() / 'Documents' / 'AgentVault'})", saved["permissions"]["allow"])
+        self.assertIn(f"write_file({Path.home() / 'Documents' / 'AgentVault'})", saved["permissions"]["allow"])
+        self.assertIn(f"read_file({Path.home() / 'Projects' / 'agentkit'})", saved["permissions"]["allow"])
+        self.assertIn(f"write_file({Path.home() / 'Projects' / 'agentkit'})", saved["permissions"]["allow"])
+        self.assertIn(f"read_file({Path.home() / 'Projects' / 'repokit'})", saved["permissions"]["allow"])
+        self.assertIn(f"write_file({Path.home() / 'Projects' / 'repokit'})", saved["permissions"]["allow"])
         self.assertTrue(saved.get("allowNonWorkspaceAccess"))
         self.assertIn("trustedWorkspaces", saved)
         self.assertIn(str(Path.home() / "Documents" / "AgentVault"), saved["trustedWorkspaces"])
@@ -543,6 +601,7 @@ class TestCLIOperations(unittest.TestCase):
         )
         self.assertEqual(res_audit.returncode, 0, f"Audit failed: {res_audit.stderr}")
         self.assertIn("Trusted Workspaces: AgentVault, agentkit, and repokit whitelisted", res_audit.stdout)
+        self.assertIn("Native File Access: AgentVault, agentkit, and repokit read permissions active", res_audit.stdout)
 
     def test_apply_dry_run_does_not_modify_file(self):
         initial_data = {"permissions": {"allow": ["command(ls)"]}}

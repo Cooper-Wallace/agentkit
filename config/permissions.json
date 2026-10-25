@@ -220,5 +220,25 @@
         "read_resource"
       ]
     }
+  },
+  "file_access": {
+    "agentvault": {
+      "description": "Pre-approved read/write file access to the Obsidian AgentVault.",
+      "permissions": [
+        "read_file(${HOME}/Documents/AgentVault)",
+        "write_file(${HOME}/Documents/AgentVault)",
+        "read_file(${HOME}/AgentVault)",
+        "write_file(${HOME}/AgentVault)"
+      ]
+    },
+    "governance_repos": {
+      "description": "Pre-approved read/write file access to core governance repositories.",
+      "permissions": [
+        "read_file(${HOME}/Projects/agentkit)",
+        "write_file(${HOME}/Projects/agentkit)",
+        "read_file(${HOME}/Projects/repokit)",
+        "write_file(${HOME}/Projects/repokit)"
+      ]
+    }
   }
 }

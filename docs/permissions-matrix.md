@@ -10,8 +10,8 @@ This document outlines the security classification, categories, and safety ratio
 
 | Tier | Classification | Risk Level | Policy | Examples |
 | :--- | :--- | :--- | :--- | :--- |
-| **Tier 1** | Read-Only Inspection | Negligible | Pre-Approved | `ls`, `cat`, `grep`, `pwd`, `diff`, `find`, `which` |
-| **Tier 2** | Non-Destructive Workspace Ops | Low | Pre-Approved | `mkdir`, `touch`, `cp`, `mv`, `chmod`, `ln` |
+| **Tier 1** | Read-Only Inspection | Negligible | Pre-Approved | `ls`, `cat`, `grep`, `pwd`, `diff`, `find`, `which`, `read_file` |
+| **Tier 2** | Non-Destructive Workspace Ops | Low | Pre-Approved | `mkdir`, `touch`, `cp`, `mv`, `chmod`, `ln`, `write_file` |
 | **Tier 3** | Version Control Hygiene | Low | Pre-Approved | `git status`, `git diff`, `git log`, `git add`, `git commit` |
 | **Tier 4** | Build & Test Harnesses | Low–Medium | Pre-Approved | `pytest`, `python3 -m unittest`, `npm test`, `cargo test` |
 | **Tier 5** | Workstation Introspection | Negligible | Pre-Approved | `fastfetch`, `uname`, `hostname`, `whoami`, `date` |
@@ -83,7 +83,37 @@ In addition to terminal command execution permissions (`command(...)`), autonomo
 
 ---
 
-## 4. Auditing & Syncing New Commands
+## 4. Native File Access Permissions (`file_access`)
+
+In the Google Antigravity CLI and modern agent harnesses, file inspection and mutation tools (`read_file`, `write_file`) enforce authorization boundaries. While `trustedWorkspaces` whitelists directory trees for workspace context, AGY's authorization engine evaluates `permissions.allow` for explicit native grants:
+- `read_file(<absolute_path>)`
+- `write_file(<absolute_path>)`
+
+According to the Antigravity specification, `read_file` and `write_file` apply to both individual files and directory paths, providing recursive access to directory contents.
+
+### Rationale & Boundary Design
+- **Eliminating File Access Prompts**: Without explicit `read_file(...)` grants in `permissions.allow`, accessing durable documentation, living architecture notes, and cross-repo contracts triggers interactive approval prompts (e.g., `"Read: /home/cooper/Documents/AgentVault/Projects/agentkit.md. Allow access to this file?"`).
+- **Scoped Least Privilege**: Only the local Obsidian AgentVault knowledge base and core governance repositories (`agentkit`, `repokit`) are granted pre-approved file read/write permissions. System root, user configuration folders (`~/.ssh`, `~/.gnupg`), and unmanaged personal directories remain strictly protected and require manual interactive approval.
+
+### A. Obsidian AgentVault (`agentvault`)
+- **Permissions**:
+  - `read_file(${HOME}/Documents/AgentVault)`
+  - `write_file(${HOME}/Documents/AgentVault)`
+  - `read_file(${HOME}/AgentVault)`
+  - `write_file(${HOME}/AgentVault)`
+- **Rationale**: Enables autonomous agents to read human-in-the-loop directives (`User-Input/pending/`), update living project notes (`Projects/<project>.md`), and record session handoff artifacts (`Sessions/handoff-*.md`) without prompt interruptions.
+
+### B. Core Governance Repositories (`governance_repos`)
+- **Permissions**:
+  - `read_file(${HOME}/Projects/agentkit)`
+  - `write_file(${HOME}/Projects/agentkit)`
+  - `read_file(${HOME}/Projects/repokit)`
+  - `write_file(${HOME}/Projects/repokit)`
+- **Rationale**: Allows cross-repository introspection between Layer 2 agent standardisation (`agentkit`) and Layer 3 GitHub governance (`repokit`), enabling agents to read contracts and update configuration files seamlessly.
+
+---
+
+## 5. Auditing & Syncing New Commands
 
 If an interactive session prompts you to allow a safe command, selecting **"Always allow"** appends it to your settings file.
 

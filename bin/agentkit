@@ -304,6 +304,15 @@ def get_flat_standard_permissions(catalog: Optional[Dict[str, Any]] = None) -> L
             if perm not in permissions:
                 permissions.append(perm)
 
+    # Native file access -> strings in permissions list with ${HOME} / $HOME replaced
+    home_dir = str(Path.home())
+    for fa_data in catalog.get("file_access", {}).values():
+        perm_list = fa_data.get("permissions", []) if isinstance(fa_data, dict) else fa_data
+        for perm in perm_list:
+            resolved_perm = perm.replace("${HOME}", home_dir).replace("$HOME", home_dir)
+            if resolved_perm not in permissions:
+                permissions.append(resolved_perm)
+
     return permissions
 
 
@@ -352,8 +361,6 @@ def merge_permissions(
             added_permissions.append(perm)
             current_set.add(perm)
 
-    result["permissions"]["allow"] = merged_allow
-
     # Ensure trustedWorkspaces exists as a list if not already present
     if "trustedWorkspaces" not in result or not isinstance(result["trustedWorkspaces"], list):
         result["trustedWorkspaces"] = []
@@ -387,6 +394,17 @@ def merge_permissions(
             seen_workspaces.add(p)
 
     result["trustedWorkspaces"] = deduped_workspaces
+
+    # Dynamically ensure native read_file and write_file permissions are present for standard workspaces
+    for p in standard_trusted_workspaces:
+        for op in ("read_file", "write_file"):
+            file_perm = f"{op}({p})"
+            if file_perm not in current_set:
+                merged_allow.append(file_perm)
+                added_permissions.append(file_perm)
+                current_set.add(file_perm)
+
+    result["permissions"]["allow"] = merged_allow
 
     return result, added_permissions
 
@@ -781,6 +799,16 @@ def cmd_audit(args: argparse.Namespace) -> int:
             status_color = GREEN if len(tool_present) == len(tool_perms) else YELLOW
             print(f"  {status_color}•{RESET} {BOLD}{tool_name}{RESET} ({len(tool_present)}/{len(tool_perms)} active)")
 
+        print_step("Native File Access Permissions")
+        for fa_name, fa_data in catalog.get("file_access", {}).items():
+            fa_perms = [
+                p.replace("${HOME}", str(Path.home())).replace("$HOME", str(Path.home()))
+                for p in (fa_data.get("permissions", []) if isinstance(fa_data, dict) else fa_data)
+            ]
+            fa_present = [p for p in fa_perms if p in user_allow_set]
+            status_color = GREEN if len(fa_present) == len(fa_perms) else YELLOW
+            print(f"  {status_color}•{RESET} {BOLD}{fa_name}{RESET} ({len(fa_present)}/{len(fa_perms)} active)")
+
         print(f"\n  {BOLD}Total Active Permissions:{RESET} {len(active_permissions)}/{len(standard_permissions)} active")
 
     # 3. Global Agent Directives Check (AGENTS.md and GEMINI.md)
@@ -846,7 +874,40 @@ def cmd_audit(args: argparse.Namespace) -> int:
             f"Trusted Workspaces: Required workspace path(s) missing from trustedWorkspaces ({', '.join(missing_workspaces)})"
         )
 
-    # 6. Color Scheme Check
+    # 6. Native File Access Permissions (AgentVault, agentkit, repokit) Check
+    total_checks += 1
+    expected_read_vault = {
+        f"read_file({str(Path.home() / 'Documents' / 'AgentVault')})",
+        f"read_file({str(Path.home() / 'AgentVault')})",
+    }
+    for env_var in ("AGENTKIT_VAULT_PATH", "AGENTKIT_AGENTVAULT_PATH"):
+        env_val = os.environ.get(env_var)
+        if env_val and env_val.strip():
+            expected_read_vault.add(f"read_file({str(Path(env_val).expanduser().resolve())})")
+
+    agentkit_read = f"read_file({str(Path.home() / 'Projects' / 'agentkit')})"
+    repokit_read = f"read_file({str(Path.home() / 'Projects' / 'repokit')})"
+
+    has_read_vault = bool([p for p in expected_read_vault if p in user_allow_set])
+    has_read_agentkit = agentkit_read in user_allow_set
+    has_read_repokit = repokit_read in user_allow_set
+
+    if has_read_vault and has_read_agentkit and has_read_repokit:
+        print_success("Native File Access: AgentVault, agentkit, and repokit read permissions active")
+        passed_checks += 1
+    else:
+        missing_file_perms = []
+        if not has_read_vault:
+            missing_file_perms.append(f"AgentVault (read_file({str(Path.home() / 'Documents' / 'AgentVault')}))")
+        if not has_read_agentkit:
+            missing_file_perms.append(f"agentkit ({agentkit_read})")
+        if not has_read_repokit:
+            missing_file_perms.append(f"repokit ({repokit_read})")
+        print_warning(
+            f"Native File Access: Required read_file permission(s) missing from permissions.allow ({', '.join(missing_file_perms)})"
+        )
+
+    # 7. Color Scheme Check
     total_checks += 1
     if settings.get("colorScheme") == "dark":
         print_success("UI Theme: 'colorScheme' set to 'dark'")
@@ -855,7 +916,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
         print_info(f"UI Theme: 'colorScheme' is '{settings.get('colorScheme', 'not set')}'")
         passed_checks += 1
 
-    # 7. PATH verification for ~/.local/bin
+    # 8. PATH verification for ~/.local/bin
     total_checks += 1
     local_bin = str(Path.home() / ".local" / "bin")
     current_path = os.environ.get("PATH", "")
@@ -865,7 +926,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
     else:
         print_warning(f"Environment PATH missing {local_bin}")
 
-    # 8. MCP Server Standards & Environment Diagnostics
+    # 9. MCP Server Standards & Environment Diagnostics
     if not getattr(args, "no_mcp", False):
         mcp_path = (
             Path(getattr(args, "mcp_path", None)).expanduser().resolve()
@@ -909,7 +970,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
             for s_name, hint in missing_env_advisories:
                 print(f"  {CYAN}ℹ{RESET} {BOLD}{s_name}{RESET}: {hint}")
 
-    # 9. Standard Plugins Audit
+    # 10. Standard Plugins Audit
     if not getattr(args, "no_plugins", False):
         plugins_dir = (
             Path(getattr(args, "plugins_dir", None)).expanduser().resolve()
@@ -938,7 +999,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
                     else:
                         print_failure(f"Plugin '{plugin_path.name}' missing ({target_plugin})")
 
-    # 10. Multi-Model Orchestration Profile Audit
+    # 11. Multi-Model Orchestration Profile Audit
     total_checks += 1
     orch_catalog = get_orchestration_catalog()
     configured_profile: Optional[str] = None
