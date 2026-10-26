@@ -12,6 +12,7 @@ permissions:
 
 jobs:
   validate-pr:
+    if: github.event_name == 'pull_request'
     uses: Cooper-Wallace/repokit/.github/workflows/semantic-pr.yml@main
 
   ci:
