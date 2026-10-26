@@ -7,7 +7,9 @@ exposing status, notify, override, and history endpoints.
 
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
+import socket
 import threading
+import time
 from typing import Any, Optional
 import urllib.parse
 import urllib.request
@@ -183,6 +185,15 @@ class GuardServer:
             return self._server.server_address
         return (self.host, self.requested_port)
 
+    def serve_forever(self) -> None:
+        """Run the HTTP server synchronously in current thread."""
+        if self._server is None:
+            self._server = ThreadingHTTPServer(
+                (self.host, self.requested_port), _GuardRequestHandler
+            )
+            self._server.engine = self.engine  # type: ignore
+        self._server.serve_forever()
+
     def start_background(self) -> None:
         """Start the HTTP server on a background daemon thread."""
         if self._server is not None:
@@ -195,6 +206,13 @@ class GuardServer:
         self._server = server
         self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
         self._thread.start()
+        deadline = time.time() + 1.0
+        while time.time() < deadline:
+            try:
+                with socket.create_connection((self.host, self.port), timeout=0.1):
+                    break
+            except (ConnectionRefusedError, OSError):
+                time.sleep(0.01)
 
     def stop(self) -> None:
         """Shutdown and terminate the HTTP server and engine timers."""
@@ -235,8 +253,9 @@ def send_notification(
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with opener.open(req, timeout=timeout) as resp:
             return resp.status == 200
     except Exception:
         return False
@@ -246,8 +265,9 @@ def fetch_status(port: int = 18820, timeout: float = 1.0) -> Optional[dict]:
     """Fetch current activity and inhibition status from guard service."""
     url = f"http://127.0.0.1:{port}/v1/status"
     req = urllib.request.Request(url, method="GET")
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with opener.open(req, timeout=timeout) as resp:
             if resp.status == 200:
                 body = resp.read().decode("utf-8")
                 return json.loads(body)
@@ -276,8 +296,9 @@ def send_override(
         headers={"Content-Type": "application/json"},
         method="POST",
     )
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with opener.open(req, timeout=timeout) as resp:
             return resp.status == 200
     except Exception:
         return False

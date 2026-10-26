@@ -41,6 +41,8 @@ RESET = "\033[0m"
 # Project root and directory resolution
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 CONFIG_DIR = REPO_ROOT / "config"
 HARNESS_DIR = REPO_ROOT / "harness"
 PROJECT_DIR = REPO_ROOT / "project"
@@ -2600,6 +2602,175 @@ def cmd_vault_note(args: argparse.Namespace) -> int:
 
 
 # ==============================================================================
+# Sleep Guard Command Handlers
+# ==============================================================================
+
+
+def cmd_guard_status(args: argparse.Namespace) -> int:
+    """Fetch and print sleep guard status."""
+    from project.tools.guard.server import fetch_status
+    port = getattr(args, "port", 18820)
+    is_json = getattr(args, "json", False)
+    status = fetch_status(port=port)
+    if status is None:
+        if is_json:
+            print(json.dumps({"error": "Guard daemon is not running", "active": False}, indent=2))
+        else:
+            print_failure("AgentKit Sleep Guard daemon is not running.")
+            print(f"  Start daemon with: {BOLD}agentkit guard daemon{RESET} or {BOLD}agentkit guard tray{RESET}")
+        return 1
+    if is_json:
+        print(json.dumps(status, indent=2))
+    else:
+        state = status.get("state", "idle")
+        inhibited = status.get("inhibited", False)
+        active_count = status.get("active_count", 0)
+        cooldown_remaining = status.get("cooldown_remaining", 0.0)
+        print_step("AgentKit Sleep Guard Status")
+        state_color = GREEN if state == "idle" else (YELLOW if state == "cooldown" else CYAN)
+        print(f"  {BOLD}State:{RESET} {state_color}{state.upper()}{RESET}")
+        print(f"  {BOLD}Sleep Inhibited:{RESET} {'Yes' if inhibited else 'No'}")
+        print(f"  {BOLD}Active Agent Prompts:{RESET} {active_count}")
+        if state == "cooldown":
+            print(f"  {BOLD}Cooldown Remaining:{RESET} {cooldown_remaining:.1f}s")
+        sessions = status.get("sessions", [])
+        if sessions:
+            print(f"\n  {BOLD}Active Sessions:{RESET}")
+            for s in sessions:
+                print(f"    - {BOLD}{s.get('agent_name', 'agent')}{RESET} (PID {s.get('pid', 0)}): {s.get('task', 'active')} [{s.get('session_id', '')}]")
+    return 0
+
+
+def cmd_guard_daemon(args: argparse.Namespace) -> int:
+    """Start guard server daemon."""
+    from project.tools.guard.engine import GuardEngine
+    from project.tools.guard.inhibitor import get_system_inhibitor
+    from project.tools.guard.server import GuardServer
+    port = getattr(args, "port", 18820)
+    print_step(f"Starting AgentKit Sleep Guard daemon on 127.0.0.1:{port}...")
+    inhibitor = get_system_inhibitor()
+    engine = GuardEngine(inhibitor=inhibitor)
+    server = GuardServer(engine=engine, host="127.0.0.1", port=port)
+    print_success(f"Guard daemon running (PID {os.getpid()}). Press Ctrl+C to terminate.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping guard daemon...")
+    finally:
+        server.stop()
+    return 0
+
+
+def cmd_guard_tray(args: argparse.Namespace) -> int:
+    """Start cross-platform system tray indicator."""
+    from project.tools.guard.tray import run_tray
+    embed_engine = getattr(args, "embed_engine", False)
+    return run_tray(port=18820, embed_engine=embed_engine)
+
+
+def cmd_guard_notify(args: argparse.Namespace) -> int:
+    """Ping guard server with active/idle state."""
+    from project.tools.guard.server import send_notification
+    state = args.state
+    session_id = getattr(args, "session", os.environ.get("ANTIGRAVITY_SESSION_ID", "default"))
+    agent = getattr(args, "agent", os.environ.get("AGENTKIT_HARNESS", "agent"))
+    task = getattr(args, "task", "")
+    quiet = getattr(args, "quiet", False)
+    ok = send_notification(session_id=session_id, state=state, agent=agent, task=task)
+    if not quiet:
+        if ok:
+            print_success(f"Notified guard: {state} [{session_id}]")
+        else:
+            print_warning("Guard daemon not reachable (notification skipped).")
+    return 0 if ok else 0  # hooks should not fail caller
+
+
+def cmd_guard_watch(args: argparse.Namespace) -> int:
+    """Live terminal ANSI loop of guard status."""
+    import time
+    from project.tools.guard.server import fetch_status
+    print_step("AgentKit Sleep Guard Terminal Watcher (Press Ctrl+C to exit)")
+    try:
+        while True:
+            status = fetch_status()
+            sys.stdout.write("\x1b[2J\x1b[H")  # clear screen
+            if status is None:
+                print(f"{YELLOW}● Guard daemon is offline.{RESET} Waiting for connection...")
+            else:
+                state = status.get("state", "idle").upper()
+                inhibited = "LOCKED" if status.get("inhibited") else "RELEASED"
+                color = CYAN if state == "ACTIVE" else (YELLOW if state == "COOLDOWN" else GREEN)
+                print(f"{BOLD}AgentKit Sleep Guard:{RESET} {color}{state}{RESET} | Power Sleep: {BOLD}{inhibited}{RESET}")
+                sessions = status.get("sessions", [])
+                print(f"Active Agent Count: {len(sessions)}")
+                for s in sessions:
+                    print(f"  ⚡ {s.get('agent_name')} [{s.get('session_id')}]: {s.get('task')}")
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\nExiting watcher.")
+    return 0
+
+
+def cmd_guard_autostart(args: argparse.Namespace) -> int:
+    """Manage system startup autostart entry."""
+    from project.tools.guard.autostart import enable_autostart, disable_autostart, is_autostart_enabled, get_autostart_path
+    if getattr(args, "enable", False):
+        ok, msg = enable_autostart()
+        if ok:
+            print_success(msg)
+            return 0
+        print_failure(msg)
+        return 1
+    elif getattr(args, "disable", False):
+        ok, msg = disable_autostart()
+        if ok:
+            print_success(msg)
+            return 0
+        print_failure(msg)
+        return 1
+    else:
+        # status check
+        enabled = is_autostart_enabled()
+        path = get_autostart_path()
+        status_text = f"{GREEN}Enabled{RESET}" if enabled else f"{YELLOW}Disabled{RESET}"
+        print(f"AgentKit Guard Autostart: {status_text} ({path})")
+        return 0
+
+
+def cmd_guard_override(args: argparse.Namespace) -> int:
+    """Toggle manual sleep inhibition override."""
+    from project.tools.guard.server import send_override
+    enabled = getattr(args, "on", False)
+    if getattr(args, "off", False):
+        enabled = False
+    ok = send_override(enabled=enabled)
+    if ok:
+        print_success(f"Guard manual awake override set to: {'ON' if enabled else 'OFF'}")
+        return 0
+    print_failure("Guard daemon not reachable.")
+    return 1
+
+
+def cmd_guard_log(args: argparse.Namespace) -> int:
+    """Read and print session history journal."""
+    import time
+    from project.tools.guard.engine import GuardEngine
+    from project.tools.guard.inhibitor import MockSleepInhibitor
+    limit = getattr(args, "limit", 50)
+    engine = GuardEngine(inhibitor=MockSleepInhibitor())
+    history = engine.get_history(limit=limit)
+    if not history:
+        print_step("No sleep guard sessions recorded yet.")
+        return 0
+    print_step(f"Recent Guard Sessions (Last {len(history)}):")
+    for entry in history:
+        dur = entry.get("duration_seconds", 0)
+        ts = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(entry.get("end_time", time.time())))
+        print(f"  {ts} | {BOLD}{entry.get('agent_name', 'agent')}{RESET} ({entry.get('session_id', '')}): {entry.get('task', '')} [{dur:.1f}s prevented]")
+    return 0
+
+
+# ==============================================================================
 # Main Argument Parser
 # ==============================================================================
 
@@ -2880,6 +3051,63 @@ def build_parser() -> argparse.ArgumentParser:
     p_v_note.set_defaults(func=cmd_vault_note)
 
     p_vault.set_defaults(func=_print_subparser_help(p_vault))
+
+    # guard
+    p_guard = subparsers.add_parser(
+        "guard",
+        parents=[harness_parent],
+        help="Agent sleep inhibition & visual status guard",
+    )
+    guard_sub = p_guard.add_subparsers(dest="guard_command", help="Guard subcommands")
+
+    # guard status
+    p_g_status = guard_sub.add_parser("status", parents=[harness_parent], help="Fetch and print sleep guard status")
+    p_g_status.add_argument("--json", action="store_true", help="Output JSON status")
+    p_g_status.set_defaults(func=cmd_guard_status)
+
+    # guard daemon
+    p_g_daemon = guard_sub.add_parser("daemon", parents=[harness_parent], help="Start guard server daemon")
+    p_g_daemon.add_argument("--port", type=int, default=18820, help="Daemon port")
+    p_g_daemon.add_argument("--foreground", action="store_true", help="Run in foreground")
+    p_g_daemon.set_defaults(func=cmd_guard_daemon)
+
+    # guard tray
+    p_g_tray = guard_sub.add_parser("tray", parents=[harness_parent], help="Start system tray indicator")
+    p_g_tray.add_argument("--embed-engine", action="store_true", help="Embed daemon server inside tray process")
+    p_g_tray.set_defaults(func=cmd_guard_tray)
+
+    # guard notify
+    p_g_notify = guard_sub.add_parser("notify", parents=[harness_parent], help="Ping guard server with active/idle state")
+    p_g_notify.add_argument("state", choices=["active", "idle"], help="Execution state")
+    p_g_notify.add_argument("--session", default=os.environ.get("ANTIGRAVITY_SESSION_ID", "default"), help="Session ID")
+    p_g_notify.add_argument("--agent", default=os.environ.get("AGENTKIT_HARNESS", "agent"), help="Agent name")
+    p_g_notify.add_argument("--task", default="", help="Task description")
+    p_g_notify.add_argument("--quiet", action="store_true", help="Suppress output")
+    p_g_notify.set_defaults(func=cmd_guard_notify)
+
+    # guard watch
+    p_g_watch = guard_sub.add_parser("watch", parents=[harness_parent], help="Live terminal ANSI loop of guard status")
+    p_g_watch.set_defaults(func=cmd_guard_watch)
+
+    # guard autostart
+    p_g_autostart = guard_sub.add_parser("autostart", parents=[harness_parent], help="Manage system startup autostart entry")
+    p_g_autostart.add_argument("--enable", action="store_true", help="Enable autostart")
+    p_g_autostart.add_argument("--disable", action="store_true", help="Disable autostart")
+    p_g_autostart.add_argument("--status", action="store_true", help="Check autostart status")
+    p_g_autostart.set_defaults(func=cmd_guard_autostart)
+
+    # guard override
+    p_g_override = guard_sub.add_parser("override", parents=[harness_parent], help="Toggle manual sleep inhibition override")
+    p_g_override.add_argument("--on", action="store_true", help="Enable manual override")
+    p_g_override.add_argument("--off", action="store_true", help="Disable manual override")
+    p_g_override.set_defaults(func=cmd_guard_override)
+
+    # guard log
+    p_g_log = guard_sub.add_parser("log", parents=[harness_parent], help="Read and print session history journal")
+    p_g_log.add_argument("--limit", type=int, default=50, help="Number of recent log lines")
+    p_g_log.set_defaults(func=cmd_guard_log)
+
+    p_guard.set_defaults(func=_print_subparser_help(p_guard))
 
     return parser
 

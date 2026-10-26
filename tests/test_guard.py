@@ -403,31 +403,32 @@ class TestGuardServer(unittest.TestCase):
 
     def test_server_get_endpoints_and_history(self) -> None:
         import urllib.request
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
         # 1. Test GET /v1/notify
         url_notify = f"http://127.0.0.1:{self.port}/v1/notify?session=get-s1&state=active&agent=get-worker&task=get-task"
-        with urllib.request.urlopen(url_notify) as resp:
+        with opener.open(url_notify) as resp:
             self.assertEqual(resp.status, 200)
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data["state"], "active")
 
         # 2. Test GET /status
         url_status = f"http://127.0.0.1:{self.port}/status"
-        with urllib.request.urlopen(url_status) as resp:
+        with opener.open(url_status) as resp:
             self.assertEqual(resp.status, 200)
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data["active_count"], 1)
 
         # 3. Test GET /v1/notify idle
         url_idle = f"http://127.0.0.1:{self.port}/notify?session=get-s1&state=idle"
-        with urllib.request.urlopen(url_idle) as resp:
+        with opener.open(url_idle) as resp:
             self.assertEqual(resp.status, 200)
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data["state"], "cooldown")
 
         # 4. Test GET /v1/history
         url_hist = f"http://127.0.0.1:{self.port}/v1/history"
-        with urllib.request.urlopen(url_hist) as resp:
+        with opener.open(url_hist) as resp:
             self.assertEqual(resp.status, 200)
             data = json.loads(resp.read().decode("utf-8"))
             self.assertIsInstance(data, list)
@@ -435,14 +436,14 @@ class TestGuardServer(unittest.TestCase):
         # 5. Test 404 for unknown endpoint
         url_404 = f"http://127.0.0.1:{self.port}/unknown"
         with self.assertRaises(urllib.error.HTTPError) as ctx:
-            urllib.request.urlopen(url_404)
+            opener.open(url_404)
         self.assertEqual(ctx.exception.code, 404)
         ctx.exception.close()
 
         # 6. Test 400 for missing notify params
         url_bad = f"http://127.0.0.1:{self.port}/v1/notify"
         with self.assertRaises(urllib.error.HTTPError) as ctx:
-            urllib.request.urlopen(url_bad)
+            opener.open(url_bad)
         self.assertEqual(ctx.exception.code, 400)
         ctx.exception.close()
 
@@ -463,6 +464,77 @@ class TestGuardServer(unittest.TestCase):
 
         res_send = send_notification("s", "active", port=1)
         self.assertFalse(res_send)
+
+
+class TestGuardAutostart(unittest.TestCase):
+    """Test platform autostart configuration for Linux and Windows."""
+
+    def test_autostart_path_linux(self) -> None:
+        from project.tools.guard.autostart import get_autostart_path
+        with mock.patch("sys.platform", "linux"), mock.patch.dict("os.environ", {"XDG_CONFIG_HOME": "/custom/config"}):
+            p = get_autostart_path()
+            self.assertEqual(str(p), "/custom/config/autostart/agentkit-guard.desktop")
+
+    def test_autostart_path_windows(self) -> None:
+        from project.tools.guard.autostart import get_autostart_path
+        with mock.patch("sys.platform", "win32"), mock.patch.dict("os.environ", {"APPDATA": "C:\\Users\\User\\AppData\\Roaming"}):
+            p = get_autostart_path()
+            self.assertIn("agentkit-guard.cmd", str(p))
+
+    def test_enable_and_disable_autostart_linux(self) -> None:
+        from project.tools.guard.autostart import enable_autostart, disable_autostart, is_autostart_enabled
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            with mock.patch("sys.platform", "linux"), mock.patch.dict("os.environ", {"XDG_CONFIG_HOME": tmp_dir}):
+                self.assertFalse(is_autostart_enabled())
+                ok, msg = enable_autostart(agentkit_bin="/usr/bin/agentkit")
+                self.assertTrue(ok)
+                self.assertTrue(is_autostart_enabled())
+
+                # Verify desktop file content
+                desktop_path = Path(tmp_dir) / "autostart" / "agentkit-guard.desktop"
+                self.assertTrue(desktop_path.exists())
+                content = desktop_path.read_text(encoding="utf-8")
+                self.assertIn("Exec=/usr/bin/agentkit guard tray", content)
+
+                # Disable
+                ok, msg = disable_autostart()
+                self.assertTrue(ok)
+                self.assertFalse(is_autostart_enabled())
+
+
+class TestGuardCLI(unittest.TestCase):
+    """Test agentkit guard command line invocations."""
+
+    def test_guard_status_offline(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        res = subprocess.run(
+            [sys.executable, str(agentkit_bin), "guard", "status", "--json"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 1)
+        data = json.loads(res.stdout)
+        self.assertFalse(data.get("active"))
+        self.assertIn("error", data)
+
+    def test_guard_notify_offline_does_not_fail(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        res = subprocess.run(
+            [sys.executable, str(agentkit_bin), "guard", "notify", "active", "--quiet"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+
+    def test_guard_autostart_status(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        res = subprocess.run(
+            [sys.executable, str(agentkit_bin), "guard", "autostart", "--status"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("AgentKit Guard Autostart:", res.stdout)
 
 
 if __name__ == "__main__":
