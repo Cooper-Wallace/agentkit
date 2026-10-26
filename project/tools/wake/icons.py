@@ -1,7 +1,7 @@
 """
-Dynamic vector status icon generation for agentkit sleep inhibition guard.
+Dynamic vector status icon generation for agentkit sleep inhibition wake lock.
 
-Generates high-resolution vector icons across all 4 guard states:
+Generates high-resolution vector icons across all 4 wake states:
 - idle: Slate/grey shield with subtle sleeping moon/dot.
 - active: Vibrant cyan shield with bright lightning bolt and glowing ring.
 - cooldown: Warm amber shield with hourglass timer.
@@ -116,7 +116,7 @@ def _ensure_qt_gui_app() -> bool:
             if not has_wayland and not has_x11:
                 os.environ["QT_QPA_PLATFORM"] = "offscreen"
         try:
-            _HEADLESS_APP = QtGui.QGuiApplication(["agentkit-guard", "-platform", os.environ.get("QT_QPA_PLATFORM", "offscreen")])
+            _HEADLESS_APP = QtGui.QGuiApplication(["agentkit-wake", "-platform", os.environ.get("QT_QPA_PLATFORM", "offscreen")])
             return True
         except Exception:
             return False

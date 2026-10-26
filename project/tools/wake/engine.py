@@ -19,7 +19,7 @@ from .inhibitor import BaseSleepInhibitor, get_system_inhibitor
 
 
 class ActivityState(Enum):
-    """Activity states for the guard engine."""
+    """Activity states for the wake engine."""
 
     IDLE = "idle"
     ACTIVE = "active"
@@ -40,18 +40,18 @@ class SessionInfo:
 
 
 def get_default_history_path() -> Path:
-    """Return platform-standard path for guard history journal."""
+    """Return platform-standard path for wake history journal."""
     if sys.platform == "win32":
         local_app_data = os.environ.get("LOCALAPPDATA")
         base = Path(local_app_data) if local_app_data else Path.home() / "AppData" / "Local"
-        return base / "agentkit" / "guard_history.jsonl"
+        return base / "agentkit" / "wake_history.jsonl"
     else:
         state_home = os.environ.get("XDG_STATE_HOME")
         base = Path(state_home) if state_home else Path.home() / ".local" / "state"
-        return base / "agentkit" / "guard_history.jsonl"
+        return base / "agentkit" / "wake_history.jsonl"
 
 
-class GuardEngine:
+class WakeEngine:
     """State arbiter controlling sleep inhibition based on active agent sessions."""
 
     def __init__(
@@ -275,3 +275,7 @@ class GuardEngine:
             self._flush_history()
             if self.inhibitor.is_active():
                 self.inhibitor.release()
+
+
+# Backward compatibility alias
+GuardEngine = WakeEngine

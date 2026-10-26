@@ -17,13 +17,14 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from project.tools.guard.engine import (
+from project.tools.wake.engine import (
     ActivityState,
     GuardEngine,
     SessionInfo,
+    WakeEngine,
     get_default_history_path,
 )
-from project.tools.guard.inhibitor import (
+from project.tools.wake.inhibitor import (
     BaseSleepInhibitor,
     LinuxSleepInhibitor,
     MacOSSleepInhibitor,
@@ -31,8 +32,9 @@ from project.tools.guard.inhibitor import (
     WindowsSleepInhibitor,
     get_system_inhibitor,
 )
-from project.tools.guard.server import (
+from project.tools.wake.server import (
     GuardServer,
+    WakeServer,
     fetch_status,
     send_notification,
     send_override,
@@ -119,7 +121,7 @@ class TestInhibitors(unittest.TestCase):
                 self.assertTrue(lin_inh.acquire(reason="Linux Task", keep_screen_on=False))
                 self.assertTrue(lin_inh.is_active())
                 mock_manager.Inhibit.assert_called_with(
-                    "idle:sleep", "agentkit-guard", "Linux Task", "block"
+                    "idle:sleep", "agentkit-wake", "Linux Task", "block"
                 )
 
                 self.assertTrue(lin_inh.release())
@@ -129,7 +131,7 @@ class TestInhibitors(unittest.TestCase):
                 # Test with keep_screen_on=True
                 self.assertTrue(lin_inh.acquire(reason="Screen Task", keep_screen_on=True))
                 mock_manager.Inhibit.assert_called_with(
-                    "idle:sleep:handle-lid-switch", "agentkit-guard", "Screen Task", "block"
+                    "idle:sleep:handle-lid-switch", "agentkit-wake", "Screen Task", "block"
                 )
                 lin_inh.release()
 
@@ -149,7 +151,7 @@ class TestInhibitors(unittest.TestCase):
                 cmd = mock_popen.call_args[0][0]
                 self.assertIn("systemd-inhibit", cmd[0])
                 self.assertIn("--what=idle:sleep", cmd)
-                self.assertIn("--who=agentkit-guard", cmd)
+                self.assertIn("--who=agentkit-wake", cmd)
                 self.assertIn("--why=Fallback active", cmd)
 
                 self.assertTrue(lin_inh.release())
@@ -208,14 +210,14 @@ class TestInhibitors(unittest.TestCase):
             self.assertIsInstance(inh, MockSleepInhibitor)
 
 
-class TestGuardEngine(unittest.TestCase):
+class TestWakeEngine(unittest.TestCase):
     """Test state engine transitions, cooldown handling, journal persistence, and override."""
 
     def setUp(self) -> None:
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.history_path = Path(self.tmp_dir.name) / "test_history.jsonl"
         self.mock_inhibitor = MockSleepInhibitor()
-        self.engine = GuardEngine(
+        self.engine = WakeEngine(
             inhibitor=self.mock_inhibitor,
             cooldown_seconds=45.0,
             history_path=self.history_path,
@@ -269,7 +271,7 @@ class TestGuardEngine(unittest.TestCase):
 
     def test_cooldown_expiration_and_history_persistence(self) -> None:
         # Create fast engine with 0.05s cooldown
-        fast_engine = GuardEngine(
+        fast_engine = WakeEngine(
             inhibitor=self.mock_inhibitor,
             cooldown_seconds=0.05,
             history_path=self.history_path,
@@ -331,19 +333,19 @@ class TestGuardEngine(unittest.TestCase):
             self.engine.notify("s1", "invalid_state")
 
 
-class TestGuardServer(unittest.TestCase):
+class TestWakeServer(unittest.TestCase):
     """Test HTTP server endpoints and client helper functions on ephemeral port."""
 
     def setUp(self) -> None:
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.history_path = Path(self.tmp_dir.name) / "test_history.jsonl"
         self.mock_inhibitor = MockSleepInhibitor()
-        self.engine = GuardEngine(
+        self.engine = WakeEngine(
             inhibitor=self.mock_inhibitor,
             cooldown_seconds=10.0,
             history_path=self.history_path,
         )
-        self.server = GuardServer(engine=self.engine, host="127.0.0.1", port=0)
+        self.server = WakeServer(engine=self.engine, host="127.0.0.1", port=0)
         self.server.start_background()
         self.port = self.server.port
         self.assertGreater(self.port, 0)
@@ -451,11 +453,11 @@ class TestGuardServer(unittest.TestCase):
         with mock.patch("sys.platform", "win32"), mock.patch.dict("os.environ", {"LOCALAPPDATA": "C:\\AppData\\Local"}):
             p = get_default_history_path()
             self.assertIn("agentkit", str(p))
-            self.assertIn("guard_history.jsonl", str(p))
+            self.assertIn("wake_history.jsonl", str(p))
 
         with mock.patch("sys.platform", "linux"), mock.patch.dict("os.environ", {"XDG_STATE_HOME": "/tmp/state"}):
             p = get_default_history_path()
-            self.assertEqual(str(p), "/tmp/state/agentkit/guard_history.jsonl")
+            self.assertEqual(str(p), "/tmp/state/agentkit/wake_history.jsonl")
 
     def test_fetch_status_offline_server_returns_none(self) -> None:
         # Connecting to unused port returns None gracefully
@@ -466,23 +468,23 @@ class TestGuardServer(unittest.TestCase):
         self.assertFalse(res_send)
 
 
-class TestGuardAutostart(unittest.TestCase):
+class TestWakeAutostart(unittest.TestCase):
     """Test platform autostart configuration for Linux and Windows."""
 
     def test_autostart_path_linux(self) -> None:
-        from project.tools.guard.autostart import get_autostart_path
+        from project.tools.wake.autostart import get_autostart_path
         with mock.patch("sys.platform", "linux"), mock.patch.dict("os.environ", {"XDG_CONFIG_HOME": "/custom/config"}):
             p = get_autostart_path()
-            self.assertEqual(str(p), "/custom/config/autostart/agentkit-guard.desktop")
+            self.assertEqual(str(p), "/custom/config/autostart/agentkit-wake.desktop")
 
     def test_autostart_path_windows(self) -> None:
-        from project.tools.guard.autostart import get_autostart_path
+        from project.tools.wake.autostart import get_autostart_path
         with mock.patch("sys.platform", "win32"), mock.patch.dict("os.environ", {"APPDATA": "C:\\Users\\User\\AppData\\Roaming"}):
             p = get_autostart_path()
-            self.assertIn("agentkit-guard.cmd", str(p))
+            self.assertIn("agentkit-wake.cmd", str(p))
 
     def test_enable_and_disable_autostart_linux(self) -> None:
-        from project.tools.guard.autostart import enable_autostart, disable_autostart, is_autostart_enabled
+        from project.tools.wake.autostart import enable_autostart, disable_autostart, is_autostart_enabled
         with tempfile.TemporaryDirectory() as tmp_dir:
             with mock.patch("sys.platform", "linux"), mock.patch.dict("os.environ", {"XDG_CONFIG_HOME": tmp_dir}):
                 self.assertFalse(is_autostart_enabled())
@@ -491,10 +493,11 @@ class TestGuardAutostart(unittest.TestCase):
                 self.assertTrue(is_autostart_enabled())
 
                 # Verify desktop file content
-                desktop_path = Path(tmp_dir) / "autostart" / "agentkit-guard.desktop"
+                desktop_path = Path(tmp_dir) / "autostart" / "agentkit-wake.desktop"
                 self.assertTrue(desktop_path.exists())
                 content = desktop_path.read_text(encoding="utf-8")
-                self.assertIn("Exec=/usr/bin/agentkit guard tray", content)
+                self.assertIn("Exec=/usr/bin/agentkit wake tray", content)
+                self.assertIn("Name=AgentKit WakeLock", content)
 
                 # Disable
                 ok, msg = disable_autostart()
@@ -502,39 +505,91 @@ class TestGuardAutostart(unittest.TestCase):
                 self.assertFalse(is_autostart_enabled())
 
 
-class TestGuardCLI(unittest.TestCase):
-    """Test agentkit guard command line invocations."""
+class TestWakeCLI(unittest.TestCase):
+    """Test agentkit wake command line invocations."""
 
-    def test_guard_status_offline(self) -> None:
+    def test_wake_status_offline(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        for subcmd in ("wake", "wakelock"):
+            res = subprocess.run(
+                [sys.executable, str(agentkit_bin), subcmd, "status", "--json"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 1)
+            data = json.loads(res.stdout)
+            self.assertFalse(data.get("active"))
+            self.assertIn("error", data)
+
+    def test_wake_notify_offline_does_not_fail(self) -> None:
         agentkit_bin = REPO_ROOT / "bin" / "agentkit"
         res = subprocess.run(
-            [sys.executable, str(agentkit_bin), "guard", "status", "--json"],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(res.returncode, 1)
-        data = json.loads(res.stdout)
-        self.assertFalse(data.get("active"))
-        self.assertIn("error", data)
-
-    def test_guard_notify_offline_does_not_fail(self) -> None:
-        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
-        res = subprocess.run(
-            [sys.executable, str(agentkit_bin), "guard", "notify", "active", "--quiet"],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(res.returncode, 0)
-
-    def test_guard_autostart_status(self) -> None:
-        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
-        res = subprocess.run(
-            [sys.executable, str(agentkit_bin), "guard", "autostart", "--status"],
+            [sys.executable, str(agentkit_bin), "wake", "notify", "active", "--quiet"],
             capture_output=True,
             text=True,
         )
         self.assertEqual(res.returncode, 0)
-        self.assertIn("AgentKit Guard Autostart:", res.stdout)
+
+    def test_wake_autostart_status(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        res = subprocess.run(
+            [sys.executable, str(agentkit_bin), "wake", "autostart", "--status"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("AgentKit Wake Autostart:", res.stdout)
+
+    def test_agentkit_apply_deploys_wake_lock_and_autostart(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            settings_path = tmp_path / "settings.json"
+            plugins_dir = tmp_path / "plugins"
+            gemini_dir = tmp_path / ".gemini"
+            config_home = tmp_path / "config"
+
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    str(agentkit_bin),
+                    "apply",
+                    "--settings-path",
+                    str(settings_path),
+                    "--plugins-dir",
+                    str(plugins_dir),
+                    "--gemini-dir",
+                    str(gemini_dir),
+                    "--no-mcp",
+                ],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "XDG_CONFIG_HOME": str(config_home)},
+            )
+            self.assertEqual(res.returncode, 0, f"agentkit apply failed: {res.stderr}")
+
+            # Verify wake-lock plugin was deployed
+            wake_plugin_dir = plugins_dir / "wake-lock"
+            self.assertTrue(wake_plugin_dir.exists(), "wake-lock plugin directory was not deployed")
+            self.assertTrue((wake_plugin_dir / "plugin.json").exists(), "wake-lock plugin.json missing")
+            self.assertTrue((wake_plugin_dir / "hooks.json").exists(), "wake-lock hooks.json missing")
+            self.assertTrue(
+                (wake_plugin_dir / "scripts" / "notify-wake.py").exists(),
+                "wake-lock notify-wake.py missing",
+            )
+
+            # Verify autostart desktop entry was created
+            autostart_entry = config_home / "autostart" / "agentkit-wake.desktop"
+            self.assertTrue(autostart_entry.exists(), "agentkit-wake.desktop autostart was not created")
+            content = autostart_entry.read_text(encoding="utf-8")
+            self.assertIn("agentkit wake tray", content)
+
+
+# Backward compatibility aliases
+TestGuardEngine = TestWakeEngine
+TestGuardServer = TestWakeServer
+TestGuardAutostart = TestWakeAutostart
+TestGuardCLI = TestWakeCLI
 
 
 if __name__ == "__main__":

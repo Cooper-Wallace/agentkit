@@ -29,12 +29,12 @@ try:
 except ImportError:
     HAS_PYQT6 = False
 
-from .engine import ActivityState, GuardEngine, get_default_history_path
+from .engine import ActivityState, GuardEngine, WakeEngine, get_default_history_path
 from .icons import get_status_icon, get_status_pixmap
 from .inhibitor import get_system_inhibitor
-from .server import GuardServer, fetch_status, send_override
+from .server import GuardServer, WakeServer, fetch_status, send_override
 
-logger = logging.getLogger("agentkit.guard.tray")
+logger = logging.getLogger("agentkit.wake.tray")
 
 
 def format_duration(seconds: float) -> str:
@@ -51,7 +51,7 @@ def format_duration(seconds: float) -> str:
         return f"00:{secs:02d}"
 
 
-def get_platform_lock_name(engine: Optional[GuardEngine] = None) -> str:
+def get_platform_lock_name(engine: Optional[WakeEngine] = None) -> str:
     """Return descriptive name of underlying platform sleep lock mechanism."""
     if engine is not None and getattr(engine, "inhibitor", None) is not None:
         try:
@@ -124,9 +124,9 @@ def calculate_today_prevented_seconds(
     return total
 
 
-class GuardDashboardDialog(QtWidgets.QDialog):
+class WakeDashboardDialog(QtWidgets.QDialog):
     """
-    Modern dark-mode flyout dashboard for AgentKit Sleep Guard.
+    Modern dark-mode flyout dashboard for AgentKit WakeLock.
 
     Displays real-time status banners, active agent session table, battery/power stats,
     cumulative prevented time, and quick toggle actions.
@@ -134,12 +134,12 @@ class GuardDashboardDialog(QtWidgets.QDialog):
 
     def __init__(
         self,
-        tray_app: GuardTrayApp,
+        tray_app: WakeTrayApp,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self.tray_app = tray_app
-        self.setWindowTitle("AgentKit Sleep Guard Dashboard")
+        self.setWindowTitle("AgentKit WakeLock Dashboard")
         self.setMinimumSize(580, 480)
         self.resize(620, 520)
 
@@ -232,7 +232,7 @@ class GuardDashboardDialog(QtWidgets.QDialog):
         title_box.addWidget(self.icon_label)
 
         title_text_box = QtWidgets.QVBoxLayout()
-        title_text = QtWidgets.QLabel("AgentKit Sleep Guard")
+        title_text = QtWidgets.QLabel("AgentKit WakeLock")
         title_text.setStyleSheet("font-size: 16px; font-weight: bold; color: #f0f4f8;")
         self.lock_status_label = QtWidgets.QLabel("Lock: Detecting...")
         self.lock_status_label.setStyleSheet("font-size: 11px; color: #94a3b8;")
@@ -353,7 +353,7 @@ class GuardDashboardDialog(QtWidgets.QDialog):
     def refresh(
         self,
         status: Optional[Dict[str, Any]] = None,
-        engine: Optional[GuardEngine] = None,
+        engine: Optional[WakeEngine] = None,
     ) -> None:
         """Update all visual dashboard components with fresh data."""
         if status is None:
@@ -496,9 +496,9 @@ class GuardDashboardDialog(QtWidgets.QDialog):
         self.refresh()
 
 
-class GuardTrayApp(QtCore.QObject):
+class WakeTrayApp(QtCore.QObject):
     """
-    Cross-platform PyQt6 system tray application for AgentKit Sleep Guard.
+    Cross-platform PyQt6 system tray application for AgentKit WakeLock.
 
     Features:
     - Dynamic vector status icons (idle, active, cooldown, override).
@@ -511,21 +511,21 @@ class GuardTrayApp(QtCore.QObject):
         self,
         port: int = 18820,
         embed_engine: bool = False,
-        engine: Optional[GuardEngine] = None,
+        engine: Optional[WakeEngine] = None,
         parent: Optional[QtCore.QObject] = None,
     ) -> None:
         super().__init__(parent)
         self.port = port
         self.embed_engine = embed_engine
-        self.engine: Optional[GuardEngine] = engine
-        self.server: Optional[GuardServer] = None
+        self.engine: Optional[WakeEngine] = engine
+        self.server: Optional[WakeServer] = None
         self.keep_display_on: bool = False
         self.current_state: str = "idle"
         self.current_status: Dict[str, Any] = {}
-        self.dashboard: Optional[GuardDashboardDialog] = None
+        self.dashboard: Optional[WakeDashboardDialog] = None
 
         if self.embed_engine and self.engine is None:
-            self.engine = GuardEngine()
+            self.engine = WakeEngine()
 
         self.is_tray_available = (
             HAS_PYQT6 and QtWidgets.QSystemTrayIcon.isSystemTrayAvailable()
@@ -552,7 +552,7 @@ class GuardTrayApp(QtCore.QObject):
         """Initialize QSystemTrayIcon and context menu."""
         self.tray_icon = QtWidgets.QSystemTrayIcon(self)
         self.tray_icon.setIcon(get_status_icon("idle"))
-        self.tray_icon.setToolTip("AgentKit Sleep Guard: Initializing...")
+        self.tray_icon.setToolTip("AgentKit WakeLock: Initializing...")
 
         # Build context menu
         self.menu = QtWidgets.QMenu()
@@ -580,7 +580,7 @@ class GuardTrayApp(QtCore.QObject):
         """)
 
         # Title header
-        title_action = QtGui.QAction("🛡️ AgentKit Sleep Guard", self.menu)
+        title_action = QtGui.QAction("🛡️ AgentKit WakeLock", self.menu)
         title_font = title_action.font()
         title_font.setBold(True)
         title_action.setFont(title_font)
@@ -696,7 +696,7 @@ class GuardTrayApp(QtCore.QObject):
             if hasattr(self, "tray_icon"):
                 self.tray_icon.setIcon(get_status_icon("idle"))
                 self.tray_icon.setToolTip(
-                    f"AgentKit Sleep Guard: Offline (connecting to 127.0.0.1:{self.port}...)"
+                    f"AgentKit WakeLock: Offline (connecting to 127.0.0.1:{self.port}...)"
                 )
             if hasattr(self, "status_action"):
                 self.status_action.setText(f"Status: Offline (127.0.0.1:{self.port})")
@@ -714,12 +714,12 @@ class GuardTrayApp(QtCore.QObject):
 
         # Format Tooltip based on specifications
         if st == "idle":
-            tooltip = "AgentKit Sleep Guard: Idle (System sleep allowed)"
+            tooltip = "AgentKit WakeLock: Idle (System sleep allowed)"
             status_text = "Status: Idle (Sleep allowed)"
         elif st == "active":
             count = status.get("active_count", 0)
             sessions: List[Dict[str, Any]] = status.get("sessions", [])
-            lines = [f"⚡ Active Inhibit: {count} Agent(s) running"]
+            lines = [f"⚡ Active WakeLock: {count} Agent(s) running"]
             now = time.time()
             for s in sessions[:3]:  # Show top 3 in tooltip
                 agent = s.get("agent_name", "agent")
@@ -729,7 +729,7 @@ class GuardTrayApp(QtCore.QObject):
             if len(sessions) > 3:
                 lines.append(f"+{len(sessions) - 3} more...")
             tooltip = "\n".join(lines)
-            status_text = f"Status: Active Inhibit ({count} running)"
+            status_text = f"Status: Active WakeLock ({count} running)"
         elif st == "cooldown":
             cooldown_rem = int(round(status.get("cooldown_remaining", 0)))
             tooltip = f"⏳ Cooldown: {cooldown_rem}s remaining before release"
@@ -738,7 +738,7 @@ class GuardTrayApp(QtCore.QObject):
             tooltip = "🔒 Manual Awake Override Active"
             status_text = "Status: Manual Override (Awake)"
         else:
-            tooltip = f"AgentKit Sleep Guard: {st.title()}"
+            tooltip = f"AgentKit WakeLock: {st.title()}"
             status_text = f"Status: {st.title()}"
 
         if hasattr(self, "tray_icon"):
@@ -760,7 +760,7 @@ class GuardTrayApp(QtCore.QObject):
     def open_dashboard(self) -> None:
         """Open or raise the Flyout Dashboard dialog."""
         if self.dashboard is None:
-            self.dashboard = GuardDashboardDialog(tray_app=self)
+            self.dashboard = WakeDashboardDialog(tray_app=self)
 
         # Position near tray icon if available
         if hasattr(self, "tray_icon"):
@@ -792,15 +792,20 @@ class GuardTrayApp(QtCore.QObject):
         QtWidgets.QApplication.quit()
 
 
+# Backward compatibility aliases
+GuardDashboardDialog = WakeDashboardDialog
+GuardTrayApp = WakeTrayApp
+
+
 def run_tray(port: int = 18820, embed_engine: bool = False) -> int:
     """
-    Launch the agentkit sleep guard system tray application.
+    Launch the agentkit wake-lock system tray application.
 
     Returns exit code (0 for clean termination or graceful headless exit).
     """
     if not HAS_PYQT6:
         print(
-            "PyQt6 is required to run the agentkit guard system tray GUI.",
+            "PyQt6 is required to run the agentkit wake system tray GUI.",
             file=sys.stderr,
         )
         return 1
@@ -814,7 +819,7 @@ def run_tray(port: int = 18820, embed_engine: bool = False) -> int:
 
     app = QtWidgets.QApplication.instance()
     if app is None:
-        app = QtWidgets.QApplication(sys.argv if sys.argv else ["agentkit-guard-tray"])
+        app = QtWidgets.QApplication(sys.argv if sys.argv else ["agentkit-wake-tray"])
 
     app.setQuitOnLastWindowClosed(False)
 
@@ -830,7 +835,7 @@ def run_tray(port: int = 18820, embed_engine: bool = False) -> int:
         )
         return 0
 
-    tray_app = GuardTrayApp(port=port, embed_engine=embed_engine)
+    tray_app = WakeTrayApp(port=port, embed_engine=embed_engine)
     tray_app.show()
 
     return app.exec()

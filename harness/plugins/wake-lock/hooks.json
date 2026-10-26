@@ -1,0 +1,7 @@
+{
+  "hooks": {
+    "UserPrompt": "scripts/notify-wake.py active",
+    "PreToolUse": "scripts/notify-wake.py active",
+    "Stop": "scripts/notify-wake.py idle"
+  }
+}

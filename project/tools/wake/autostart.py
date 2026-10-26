@@ -1,5 +1,5 @@
 """
-Cross-platform autostart manager for agentkit sleep guard.
+Cross-platform autostart manager for agentkit wake-lock.
 Manages user session autostart entry for Linux (~/.config/autostart/) and Windows (%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup\\).
 """
 
@@ -14,11 +14,11 @@ def get_autostart_path() -> Path:
     """Return the platform-specific target autostart file path."""
     if sys.platform == "win32":
         appdata = os.environ.get("APPDATA", str(Path.home() / "AppData" / "Roaming"))
-        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "agentkit-guard.cmd"
+        return Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "agentkit-wake.cmd"
     else:
         # Default Linux / XDG autostart path
         config_home = os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config"))
-        return Path(config_home) / "autostart" / "agentkit-guard.desktop"
+        return Path(config_home) / "autostart" / "agentkit-wake.desktop"
 
 
 def is_autostart_enabled() -> bool:
@@ -41,7 +41,7 @@ def enable_autostart(agentkit_bin: str = None, mode: str = "tray") -> Tuple[bool
             # Windows cmd startup wrapper
             python_exe = sys.executable
             content = f"""@echo off
-start "" "{python_exe}" "{agentkit_bin}" guard tray
+start "" "{python_exe}" "{agentkit_bin}" wake tray
 """
             path.write_text(content, encoding="utf-8")
         else:
@@ -51,9 +51,9 @@ start "" "{python_exe}" "{agentkit_bin}" guard tray
             
             content = f"""[Desktop Entry]
 Type=Application
-Name=AgentKit Sleep Guard
-Comment=Inhibits machine sleep while AI agent CLI prompts are actively executing
-Exec={agentkit_bin} guard tray
+Name=AgentKit WakeLock
+Comment=Prevents system sleep while AI agent CLI prompts are actively executing
+Exec={agentkit_bin} wake tray
 Icon=utilities-system-monitor
 Terminal=false
 Categories=Utility;

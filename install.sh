@@ -35,3 +35,5 @@ if [[ ":$PATH:" != *":$TARGET_DIR:"* ]]; then
 else
     echo "agentkit is ready to use! Try running: agentkit --help"
 fi
+
+echo "To configure plugins and autostart wake-lock, run: agentkit apply"

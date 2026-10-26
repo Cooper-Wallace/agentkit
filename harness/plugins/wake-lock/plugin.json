@@ -1,0 +1,11 @@
+{
+  "name": "wake-lock",
+  "displayName": "Wake Lock",
+  "version": "1.0.0",
+  "description": "Cross-platform AI agent wake-lock and sleep prevention during active prompt turns.",
+  "suggestedPrompts": [
+    "Check agent wake lock status",
+    "Toggle wake lock manual override",
+    "Enable wake lock autostart on login"
+  ]
+}

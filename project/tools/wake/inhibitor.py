@@ -111,7 +111,7 @@ class LinuxSleepInhibitor(BaseSleepInhibitor):
             return True
 
         what = "idle:sleep:handle-lid-switch" if keep_screen_on else "idle:sleep"
-        who = "agentkit-guard"
+        who = "agentkit-wake"
         why = reason
         mode = "block"
 

@@ -1,5 +1,5 @@
 """
-Loopback HTTP server and client utilities for agentkit sleep inhibition guard.
+Loopback HTTP server and client utilities for agentkit sleep inhibition wake lock.
 
 Provides standard library ThreadingHTTPServer binding to 127.0.0.1:18820,
 exposing status, notify, override, and history endpoints.
@@ -14,18 +14,18 @@ from typing import Any, Optional
 import urllib.parse
 import urllib.request
 
-from .engine import GuardEngine
+from .engine import GuardEngine, WakeEngine
 
 
-class _GuardRequestHandler(BaseHTTPRequestHandler):
-    """HTTP request handler for agentkit sleep inhibition guard service."""
+class _WakeRequestHandler(BaseHTTPRequestHandler):
+    """HTTP request handler for agentkit sleep inhibition wake service."""
 
     def log_message(self, format: str, *args: Any) -> None:
         """Suppress default request console logging."""
         pass
 
     @property
-    def engine(self) -> GuardEngine:
+    def engine(self) -> WakeEngine:
         return self.server.engine  # type: ignore
 
     def _send_json(self, status_code: int, data: Any) -> None:
@@ -156,16 +156,16 @@ class _GuardRequestHandler(BaseHTTPRequestHandler):
             self._send_json(404, {"error": f"Unknown endpoint '{path}'"})
 
 
-class GuardServer:
-    """Threaded loopback HTTP server exposing guard status and control endpoints."""
+class WakeServer:
+    """Threaded loopback HTTP server exposing wake status and control endpoints."""
 
     def __init__(
         self,
-        engine: Optional[GuardEngine] = None,
+        engine: Optional[WakeEngine] = None,
         host: str = "127.0.0.1",
         port: int = 18820,
     ) -> None:
-        self.engine: GuardEngine = engine if engine is not None else GuardEngine()
+        self.engine: WakeEngine = engine if engine is not None else WakeEngine()
         self.host: str = host
         self.requested_port: int = port
         self._server: Optional[ThreadingHTTPServer] = None
@@ -189,7 +189,7 @@ class GuardServer:
         """Run the HTTP server synchronously in current thread."""
         if self._server is None:
             self._server = ThreadingHTTPServer(
-                (self.host, self.requested_port), _GuardRequestHandler
+                (self.host, self.requested_port), _WakeRequestHandler
             )
             self._server.engine = self.engine  # type: ignore
         self._server.serve_forever()
@@ -199,7 +199,7 @@ class GuardServer:
         if self._server is not None:
             return
         server = ThreadingHTTPServer(
-            (self.host, self.requested_port), _GuardRequestHandler
+            (self.host, self.requested_port), _WakeRequestHandler
         )
         server.engine = self.engine  # type: ignore
         server.daemon_threads = True
@@ -227,6 +227,11 @@ class GuardServer:
             self.engine.stop()
 
 
+# Backward compatibility aliases
+_GuardRequestHandler = _WakeRequestHandler
+GuardServer = WakeServer
+
+
 def send_notification(
     session_id: str,
     state: str,
@@ -236,7 +241,7 @@ def send_notification(
     timeout: float = 1.0,
     pid: int = 0,
 ) -> bool:
-    """Send activity notification to loopback guard service."""
+    """Send activity notification to loopback wake service."""
     url = f"http://127.0.0.1:{port}/v1/notify"
     data = json.dumps(
         {
@@ -262,7 +267,7 @@ def send_notification(
 
 
 def fetch_status(port: int = 18820, timeout: float = 1.0) -> Optional[dict]:
-    """Fetch current activity and inhibition status from guard service."""
+    """Fetch current activity and inhibition status from wake service."""
     url = f"http://127.0.0.1:{port}/v1/status"
     req = urllib.request.Request(url, method="GET")
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
@@ -282,7 +287,7 @@ def send_override(
     timeout: float = 1.0,
     duration_seconds: int = 0,
 ) -> bool:
-    """Send manual override command to guard service."""
+    """Send manual override command to wake service."""
     url = f"http://127.0.0.1:{port}/v1/override"
     data = json.dumps(
         {

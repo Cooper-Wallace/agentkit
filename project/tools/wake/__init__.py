@@ -6,6 +6,7 @@ from .engine import (
     ActivityState,
     GuardEngine,
     SessionInfo,
+    WakeEngine,
     get_default_history_path,
 )
 from .inhibitor import (
@@ -18,6 +19,7 @@ from .inhibitor import (
 )
 from .server import (
     GuardServer,
+    WakeServer,
     fetch_status,
     send_notification,
     send_override,
@@ -32,8 +34,10 @@ __all__ = [
     "get_system_inhibitor",
     "ActivityState",
     "SessionInfo",
+    "WakeEngine",
     "GuardEngine",
     "get_default_history_path",
+    "WakeServer",
     "GuardServer",
     "send_notification",
     "fetch_status",

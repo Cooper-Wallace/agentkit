@@ -1,7 +1,0 @@
-{
-  "hooks": {
-    "UserPrompt": "scripts/notify-guard.py active",
-    "PreToolUse": "scripts/notify-guard.py active",
-    "Stop": "scripts/notify-guard.py idle"
-  }
-}
