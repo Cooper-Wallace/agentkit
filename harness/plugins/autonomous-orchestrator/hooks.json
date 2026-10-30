@@ -1,4 +1,14 @@
 {
+  "agentkit-compliance-guard": {
+    "enabled": true,
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "./scripts/guard-agentkit-compliance.sh",
+        "timeout": 15
+      }
+    ]
+  },
   "subagent-delegation-guard": {
     "enabled": true,
     "PreToolUse": [

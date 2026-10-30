@@ -14,10 +14,6 @@
       "command": "npx",
       "args": ["-y", "@modelcontextprotocol/server-fetch"]
     },
-    "memory": {
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-memory"]
-    },
     "repomix": {
       "command": "npx",
       "args": ["-y", "repomix", "--mcp"]
@@ -32,12 +28,6 @@
     },
     "fetch": {
       "description": "Web fetch and content conversion tool for retrieving web pages via MCP.",
-      "required_bins": ["npx", "node"],
-      "required_env": [],
-      "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."
-    },
-    "memory": {
-      "description": "Persistent cross-repository knowledge graph for architectural contracts, entity relationships, and multi-session decisions.",
       "required_bins": ["npx", "node"],
       "required_env": [],
       "setup_hint": "Run 'workstation-setup toolchains' to install Node.js and npx."

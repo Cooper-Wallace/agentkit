@@ -41,6 +41,8 @@ RESET = "\033[0m"
 # Project root and directory resolution
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 CONFIG_DIR = REPO_ROOT / "config"
 HARNESS_DIR = REPO_ROOT / "harness"
 PROJECT_DIR = REPO_ROOT / "project"
@@ -716,6 +718,64 @@ def resolve_orchestration_config_path(
     return harness.get_default_orchestration_path()
 
 
+def sync_global_skills_registry(gemini_dir: Path, dry_run: bool = False) -> Tuple[bool, str]:
+    """Ensure project/skills is registered in gemini_dir/config/skills.json."""
+    if not PROJECT_SKILLS_DIR.exists():
+        return True, f"Project skills directory not found at {PROJECT_SKILLS_DIR}"
+
+    skills_json_path = gemini_dir / "config" / "skills.json"
+    skills_path_str = str(PROJECT_SKILLS_DIR.resolve())
+
+    data: Dict[str, Any] = {"entries": []}
+    if skills_json_path.exists():
+        try:
+            data = load_json(skills_json_path)
+            if not isinstance(data, dict):
+                data = {"entries": []}
+        except Exception:
+            data = {"entries": []}
+
+    entries = data.get("entries")
+    if not isinstance(entries, list):
+        entries = []
+        data["entries"] = entries
+
+    already_registered = any(
+        isinstance(e, dict) and e.get("path") in (skills_path_str, str(PROJECT_SKILLS_DIR))
+        for e in entries
+    )
+    if not already_registered:
+        entries.append({"path": skills_path_str})
+
+    if not dry_run:
+        skills_json_path.parent.mkdir(parents=True, exist_ok=True)
+        save_json(skills_json_path, data)
+        return True, f"[OK] Synchronized global skills registry ({skills_json_path})"
+    else:
+        return True, f"[DRY-RUN] Would synchronize global skills registry ({skills_json_path})"
+
+
+def check_global_skills_registry(gemini_dir: Path) -> bool:
+    """Check if project/skills is registered in gemini_dir/config/skills.json."""
+    if not PROJECT_SKILLS_DIR.exists():
+        return True
+    skills_json_path = gemini_dir / "config" / "skills.json"
+    if not skills_json_path.exists():
+        return False
+    try:
+        data = load_json(skills_json_path)
+        entries = data.get("entries")
+        if not isinstance(entries, list):
+            return False
+        skills_path_str = str(PROJECT_SKILLS_DIR.resolve())
+        return any(
+            isinstance(e, dict) and e.get("path") in (skills_path_str, str(PROJECT_SKILLS_DIR))
+            for e in entries
+        )
+    except Exception:
+        return False
+
+
 # ==============================================================================
 # Commands
 # ==============================================================================
@@ -1029,6 +1089,17 @@ def cmd_audit(args: argparse.Namespace) -> int:
             f"Orchestration Profile: No profile explicitly recorded (default fallback: {getattr(args, 'model_profile', 'argon-flash')})"
         )
 
+    # 12. Global Skills Registry Audit (Antigravity skills.json)
+    if harness.name == "antigravity" and PROJECT_SKILLS_DIR.exists():
+        skills_path = target_gemini_dir / "config" / "skills.json"
+        if skills_path.exists():
+            total_checks += 1
+            if check_global_skills_registry(target_gemini_dir):
+                print_success(f"Global Skills Registry: configured ({skills_path})")
+                passed_checks += 1
+            else:
+                print_failure(f"Global Skills Registry: project skills missing from {skills_path}")
+
     # Summary
     print("\n" + "─" * 60)
     score_pct = int((passed_checks / total_checks) * 100) if total_checks else 0
@@ -1227,6 +1298,30 @@ def cmd_apply(args: argparse.Namespace) -> int:
                     print_success(f"Deployed standard plugin: {plugin_path.name} -> {target_plugin}")
                 else:
                     print_warning(f"[DRY-RUN] Skipped deploying plugin {plugin_path.name} -> {target_plugin}")
+
+    # 8. AgentKit Caffeine Autostart Configuration
+    if not getattr(args, "no_caffeine_autostart", False) and not getattr(args, "no_wake_autostart", False):
+        from project.tools.caffeine.autostart import enable_autostart, is_autostart_enabled
+        if not is_autostart_enabled():
+            if not args.dry_run:
+                ok, msg = enable_autostart()
+                if ok:
+                    print_success(f"Configured agentkit caffeine autostart: {msg}")
+                else:
+                    print_warning(f"Could not configure agentkit caffeine autostart: {msg}")
+            else:
+                print_warning("[DRY-RUN] Skipped enabling agentkit caffeine autostart.")
+        else:
+            print_success("AgentKit Caffeine autostart is already configured.")
+
+    # 9. Global Skills Registry Configuration (Antigravity skills.json)
+    if harness.name == "antigravity" and PROJECT_SKILLS_DIR.exists():
+        print_step("Configuring Global Skills Registry: skills.json")
+        ok, msg = sync_global_skills_registry(target_gemini_dir, dry_run=args.dry_run)
+        if args.dry_run:
+            print_warning(msg)
+        else:
+            print_success(msg)
 
     print(f"\n{BOLD}{GREEN}[SUCCESS]{RESET} {harness.display_name} standardization successfully applied!")
     print_info(f"Active orchestration profile: {BOLD}{model_profile}{RESET} ({profile_desc})")
@@ -2600,6 +2695,256 @@ def cmd_vault_note(args: argparse.Namespace) -> int:
 
 
 # ==============================================================================
+# Sleep Inhibition / Caffeine Command Handlers
+# ==============================================================================
+
+
+def parse_duration_seconds(val: Any) -> int:
+    """Parse a human-readable duration string into integer seconds.
+
+    Supports pure integer seconds ('3600'), shorthand units ('45s', '30m', '2h'),
+    and compound durations ('1h30m', '2h15m30s').
+    Returns 0 if empty or None (indicating indefinite).
+    """
+    if not val:
+        return 0
+    if isinstance(val, int):
+        return val
+    s_val = str(val).strip().lower()
+    if s_val.isdigit():
+        return int(s_val)
+    match = re.fullmatch(r"(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?", s_val)
+    if match and any(match.groups()):
+        h = int(match.group(1) or 0)
+        m = int(match.group(2) or 0)
+        s = int(match.group(3) or 0)
+        return h * 3600 + m * 60 + s
+    try:
+        return int(float(s_val))
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"Invalid duration: '{val}'. Expected format like '30m', '2h', '1h30m', or seconds '3600'."
+        )
+
+
+def cmd_caffeine_status(args: argparse.Namespace) -> int:
+    """Fetch and print sleep wake status."""
+    from project.tools.caffeine.server import fetch_status
+    port = getattr(args, "port", 18820)
+    is_json = getattr(args, "json", False)
+    status = fetch_status(port=port)
+    if status is None:
+        if is_json:
+            print(json.dumps({"error": "Caffeine daemon is not running", "active": False}, indent=2))
+        else:
+            print_failure("AgentKit Caffeine daemon is not running.")
+            print(f"  Start daemon with: {BOLD}agentkit caffeine daemon{RESET} or {BOLD}agentkit caffeine tray{RESET}")
+        return 1
+    if is_json:
+        print(json.dumps(status, indent=2))
+    else:
+        state = status.get("state", "idle")
+        inhibited = status.get("inhibited", False)
+        active_count = status.get("active_count", 0)
+        cooldown_remaining = status.get("cooldown_remaining", 0.0)
+        print_step("AgentKit Caffeine Status")
+        state_color = GREEN if state == "idle" else (YELLOW if state == "cooldown" else CYAN)
+        print(f"  {BOLD}State:{RESET} {state_color}{state.upper()}{RESET}")
+        print(f"  {BOLD}Sleep Inhibited:{RESET} {'Yes' if inhibited else 'No'}")
+        print(f"  {BOLD}Active Agent Prompts:{RESET} {active_count}")
+        if state == "cooldown":
+            print(f"  {BOLD}Cooldown Remaining:{RESET} {cooldown_remaining:.1f}s")
+        sessions = status.get("sessions", [])
+        if sessions:
+            print(f"\n  {BOLD}Active Sessions:{RESET}")
+            for s in sessions:
+                print(f"    - {BOLD}{s.get('agent_name', 'agent')}{RESET} (PID {s.get('pid', 0)}): {s.get('task', 'active')} [{s.get('session_id', '')}]")
+    return 0
+
+
+def cmd_caffeine_daemon(args: argparse.Namespace) -> int:
+    """Start caffeine server daemon."""
+    from project.tools.caffeine.engine import WakeEngine
+    from project.tools.caffeine.inhibitor import get_system_inhibitor
+    from project.tools.caffeine.server import WakeServer
+    port = getattr(args, "port", 18820)
+    print_step(f"Starting AgentKit Caffeine daemon on 127.0.0.1:{port}...")
+    inhibitor = get_system_inhibitor()
+    engine = WakeEngine(inhibitor=inhibitor)
+    server = WakeServer(engine=engine, host="127.0.0.1", port=port)
+    print_success(f"Caffeine daemon running (PID {os.getpid()}). Press Ctrl+C to terminate.")
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopping caffeine daemon...")
+    finally:
+        server.stop()
+    return 0
+
+
+def cmd_caffeine_tray(args: argparse.Namespace) -> int:
+    """Start cross-platform system tray indicator."""
+    from project.tools.caffeine.tray import run_tray
+    embed_engine = getattr(args, "embed_engine", False)
+    return run_tray(port=18820, embed_engine=embed_engine)
+
+
+def cmd_caffeine_notify(args: argparse.Namespace) -> int:
+    """Ping caffeine server with active/idle state."""
+    from project.tools.caffeine.server import send_notification
+    state = args.state
+    session_id = getattr(args, "session", os.environ.get("ANTIGRAVITY_SESSION_ID", "default"))
+    agent = getattr(args, "agent", os.environ.get("AGENTKIT_HARNESS", "agent"))
+    task = getattr(args, "task", "")
+    quiet = getattr(args, "quiet", False)
+    ok = send_notification(session_id=session_id, state=state, agent=agent, task=task)
+    if not quiet:
+        if ok:
+            print_success(f"Notified caffeine: {state} [{session_id}]")
+        else:
+            print_warning("Caffeine daemon not reachable (notification skipped).")
+    return 0 if ok else 0  # hooks should not fail caller
+
+
+def cmd_caffeine_watch(args: argparse.Namespace) -> int:
+    """Live terminal ANSI loop of caffeine status."""
+    import time
+    from project.tools.caffeine.server import fetch_status
+    print_step("AgentKit Caffeine Terminal Watcher (Press Ctrl+C to exit)")
+    try:
+        while True:
+            status = fetch_status()
+            sys.stdout.write("\x1b[2J\x1b[H")  # clear screen
+            if status is None:
+                print(f"{YELLOW}● Caffeine daemon is offline.{RESET} Waiting for connection...")
+            else:
+                state = status.get("state", "idle").upper()
+                inhibited = "LOCKED" if status.get("inhibited") else "RELEASED"
+                color = CYAN if state == "ACTIVE" else (YELLOW if state == "COOLDOWN" else GREEN)
+                print(f"{BOLD}AgentKit Caffeine:{RESET} {color}{state}{RESET} | Power Sleep: {BOLD}{inhibited}{RESET}")
+                sessions = status.get("sessions", [])
+                print(f"Active Agent Count: {len(sessions)}")
+                for s in sessions:
+                    print(f"  ⚡ {s.get('agent_name')} [{s.get('session_id')}]: {s.get('task')}")
+            time.sleep(1.0)
+    except KeyboardInterrupt:
+        print("\nExiting watcher.")
+    return 0
+
+
+def cmd_caffeine_autostart(args: argparse.Namespace) -> int:
+    """Manage system startup autostart entry."""
+    from project.tools.caffeine.autostart import enable_autostart, disable_autostart, is_autostart_enabled, get_autostart_path
+    if getattr(args, "enable", False):
+        ok, msg = enable_autostart()
+        if ok:
+            print_success(msg)
+            return 0
+        print_failure(msg)
+        return 1
+    elif getattr(args, "disable", False):
+        ok, msg = disable_autostart()
+        if ok:
+            print_success(msg)
+            return 0
+        print_failure(msg)
+        return 1
+    else:
+        # status check
+        enabled = is_autostart_enabled()
+        path = get_autostart_path()
+        status_text = f"{GREEN}Enabled{RESET}" if enabled else f"{YELLOW}Disabled{RESET}"
+        print(f"AgentKit Caffeine Autostart: {status_text} ({path})")
+        return 0
+
+
+def cmd_caffeine_override(args: argparse.Namespace) -> int:
+    """Toggle manual sleep inhibition override."""
+    from project.tools.caffeine.server import send_override
+    port = getattr(args, "port", 18820)
+    enabled = getattr(args, "on", False)
+    if getattr(args, "off", False):
+        enabled = False
+    raw_duration = getattr(args, "duration", None)
+    duration_seconds = parse_duration_seconds(raw_duration) if raw_duration else 0
+    ok = send_override(enabled=enabled, port=port, duration_seconds=duration_seconds)
+    if ok:
+        state_str = "ON" if enabled else "OFF"
+        dur_msg = f" for {duration_seconds}s" if (enabled and duration_seconds > 0) else ""
+        print_success(f"Caffeine manual awake override set to: {state_str}{dur_msg}")
+        return 0
+    print_failure("Caffeine daemon not reachable.")
+    return 1
+
+
+def cmd_caffeine_log(args: argparse.Namespace) -> int:
+    """Read and print session history journal."""
+    import time
+    from project.tools.caffeine.engine import WakeEngine
+    from project.tools.caffeine.inhibitor import MockSleepInhibitor
+    limit = getattr(args, "limit", 50)
+    engine = WakeEngine(inhibitor=MockSleepInhibitor())
+    history = engine.get_history(limit=limit)
+    if not history:
+        print_step("No caffeine sessions recorded yet.")
+        return 0
+    print_step(f"Recent Caffeine Sessions (Last {len(history)}):")
+    for entry in history:
+        dur = entry.get("duration_seconds", 0)
+        ts = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(entry.get("end_time", time.time())))
+        print(f"  {ts} | {BOLD}{entry.get('agent_name', 'agent')}{RESET} ({entry.get('session_id', '')}): {entry.get('task', '')} [{dur:.1f}s prevented]")
+    return 0
+
+
+# Top-level operational shorthands: wake and sleep
+def cmd_wake(args: argparse.Namespace) -> int:
+    """Operational shorthand: direct manual override ON (keep system awake)."""
+    from project.tools.caffeine.server import send_override
+    port = getattr(args, "port", 18820)
+    raw_duration = getattr(args, "duration", None)
+    duration_seconds = parse_duration_seconds(raw_duration) if raw_duration else 0
+    ok = send_override(enabled=True, port=port, duration_seconds=duration_seconds)
+    if ok:
+        dur_msg = f" for {duration_seconds}s" if duration_seconds > 0 else " (indefinite)"
+        print_success(f"Caffeine manual awake override set to: ON{dur_msg}")
+        return 0
+    print_failure("Caffeine daemon not reachable. Start with: agentkit caffeine daemon or agentkit caffeine tray")
+    return 1
+
+
+def cmd_sleep(args: argparse.Namespace) -> int:
+    """Operational shorthand: direct manual override OFF (restore normal sleep behavior)."""
+    from project.tools.caffeine.server import send_override
+    port = getattr(args, "port", 18820)
+    ok = send_override(enabled=False, port=port)
+    if ok:
+        print_success("Caffeine manual awake override set to: OFF")
+        return 0
+    print_failure("Caffeine daemon not reachable. Start with: agentkit caffeine daemon or agentkit caffeine tray")
+    return 1
+
+
+# Backward compatibility aliases
+cmd_wake_status = cmd_caffeine_status
+cmd_wake_daemon = cmd_caffeine_daemon
+cmd_wake_tray = cmd_caffeine_tray
+cmd_wake_notify = cmd_caffeine_notify
+cmd_wake_watch = cmd_caffeine_watch
+cmd_wake_autostart = cmd_caffeine_autostart
+cmd_wake_override = cmd_caffeine_override
+cmd_wake_log = cmd_caffeine_log
+
+cmd_guard_status = cmd_caffeine_status
+cmd_guard_daemon = cmd_caffeine_daemon
+cmd_guard_tray = cmd_caffeine_tray
+cmd_guard_notify = cmd_caffeine_notify
+cmd_guard_watch = cmd_caffeine_watch
+cmd_guard_autostart = cmd_caffeine_autostart
+cmd_guard_override = cmd_caffeine_override
+cmd_guard_log = cmd_caffeine_log
+
+
+# ==============================================================================
 # Main Argument Parser
 # ==============================================================================
 
@@ -2668,6 +3013,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_apply.add_argument("--dry-run", action="store_true", help="Simulate changes without writing to disk")
     p_apply.add_argument("--no-backup", action="store_true", help="Do not create backup before writing")
     p_apply.add_argument("--link-home", action="store_true", help="Also symlink directives into $HOME")
+    p_apply.add_argument("--no-caffeine-autostart", "--no-wake-autostart", action="store_true", help="Skip enabling agentkit caffeine desktop autostart")
     p_apply.set_defaults(func=cmd_apply)
 
     # diff
@@ -2880,6 +3226,89 @@ def build_parser() -> argparse.ArgumentParser:
     p_v_note.set_defaults(func=cmd_vault_note)
 
     p_vault.set_defaults(func=_print_subparser_help(p_vault))
+
+    # caffeine
+    p_caffeine = subparsers.add_parser(
+        "caffeine",
+        parents=[harness_parent],
+        help="Agent sleep prevention & ambient caffeine power management",
+    )
+    caffeine_sub = p_caffeine.add_subparsers(dest="caffeine_command", help="Caffeine subcommands")
+
+    # caffeine status
+    p_c_status = caffeine_sub.add_parser("status", parents=[harness_parent], help="Fetch and print sleep wake status")
+    p_c_status.add_argument("--json", action="store_true", help="Output JSON status")
+    p_c_status.add_argument("--port", type=int, default=18820, help="Daemon port")
+    p_c_status.set_defaults(func=cmd_caffeine_status)
+
+    # caffeine daemon
+    p_c_daemon = caffeine_sub.add_parser("daemon", parents=[harness_parent], help="Start caffeine server daemon")
+    p_c_daemon.add_argument("--port", type=int, default=18820, help="Daemon port")
+    p_c_daemon.add_argument("--foreground", action="store_true", help="Run in foreground")
+    p_c_daemon.set_defaults(func=cmd_caffeine_daemon)
+
+    # caffeine tray
+    p_c_tray = caffeine_sub.add_parser("tray", parents=[harness_parent], help="Start system tray indicator")
+    p_c_tray.add_argument("--embed-engine", action="store_true", help="Embed daemon server inside tray process")
+    p_c_tray.set_defaults(func=cmd_caffeine_tray)
+
+    # caffeine notify
+    p_c_notify = caffeine_sub.add_parser("notify", parents=[harness_parent], help="Ping caffeine server with active/idle state")
+    p_c_notify.add_argument("state", choices=["active", "idle"], help="Execution state")
+    p_c_notify.add_argument("--session", default=os.environ.get("ANTIGRAVITY_SESSION_ID", "default"), help="Session ID")
+    p_c_notify.add_argument("--agent", default=os.environ.get("AGENTKIT_HARNESS", "agent"), help="Agent name")
+    p_c_notify.add_argument("--task", default="", help="Task description")
+    p_c_notify.add_argument("--quiet", action="store_true", help="Suppress output")
+    p_c_notify.set_defaults(func=cmd_caffeine_notify)
+
+    # caffeine watch
+    p_c_watch = caffeine_sub.add_parser("watch", parents=[harness_parent], help="Live terminal ANSI loop of caffeine status")
+    p_c_watch.set_defaults(func=cmd_caffeine_watch)
+
+    # caffeine autostart
+    p_c_autostart = caffeine_sub.add_parser("autostart", parents=[harness_parent], help="Manage system startup autostart entry")
+    p_c_autostart.add_argument("--enable", action="store_true", help="Enable autostart")
+    p_c_autostart.add_argument("--disable", action="store_true", help="Disable autostart")
+    p_c_autostart.add_argument("--status", action="store_true", help="Check autostart status")
+    p_c_autostart.set_defaults(func=cmd_caffeine_autostart)
+
+    # caffeine override
+    p_c_override = caffeine_sub.add_parser("override", parents=[harness_parent], help="Toggle manual sleep inhibition override")
+    p_c_override.add_argument("--on", action="store_true", help="Enable manual override")
+    p_c_override.add_argument("--off", action="store_true", help="Disable manual override")
+    p_c_override.add_argument("--duration", type=parse_duration_seconds, default=0, help="Optional override duration (e.g. '1h', '30m', '3600')")
+    p_c_override.add_argument("--port", type=int, default=18820, help="Daemon port")
+    p_c_override.set_defaults(func=cmd_caffeine_override)
+
+    # caffeine log
+    p_c_log = caffeine_sub.add_parser("log", parents=[harness_parent], help="Read and print session history journal")
+    p_c_log.add_argument("--limit", type=int, default=50, help="Number of recent log lines")
+    p_c_log.set_defaults(func=cmd_caffeine_log)
+
+    p_caffeine.set_defaults(func=_print_subparser_help(p_caffeine))
+
+    # Top-level operational shorthands: wake and sleep
+    p_wake = subparsers.add_parser(
+        "wake",
+        parents=[harness_parent],
+        help="Direct manual override ON (keep system awake)",
+    )
+    p_wake.add_argument(
+        "--duration",
+        type=parse_duration_seconds,
+        default=0,
+        help="Optional override duration (e.g. '1h', '30m', '3600'; defaults to indefinite)",
+    )
+    p_wake.add_argument("--port", type=int, default=18820, help="Daemon port")
+    p_wake.set_defaults(func=cmd_wake)
+
+    p_sleep = subparsers.add_parser(
+        "sleep",
+        parents=[harness_parent],
+        help="Direct manual override OFF (restore normal sleep behavior)",
+    )
+    p_sleep.add_argument("--port", type=int, default=18820, help="Daemon port")
+    p_sleep.set_defaults(func=cmd_sleep)
 
     return parser
 

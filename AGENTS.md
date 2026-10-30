@@ -106,6 +106,11 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 6. **Dynamic Paths**:
    - Never hardcode `/home/cooper`. Use `$HOME` in bash and `Path.home()` in Python.
 
+7. **Minimally Verbose & Deterministic CLI Design**:
+   - Design CLIs across projects to be clean, self-documenting, and minimally verbose without unnecessary abbreviation or cryptic shortening.
+   - Because developer tools in this ecosystem are predominantly orchestrated agentically (via AI agent workflows, tool calls, scripts, and CI runners), semantic clarity, predictability, and unambiguous command shapes take precedence over rapid human keystroke shortcuts.
+   - Top-level operational shorthands are restricted to explicit, high-frequency state toggles (such as `agentkit wake` and `agentkit sleep` for immediate manual power overrides), while arbitrary contractions (`caff`, `cfg`, `mgr`, `sync-tmp`) are strictly prohibited.
+
 ---
 
 ## 3. Quota Awareness & Graceful Wrap-Up

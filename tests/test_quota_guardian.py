@@ -294,6 +294,195 @@ class TestQuotaGuardian(unittest.TestCase):
         self.assertEqual(data["decision"], "deny")
         self.assertIn("QUOTA WRAP-UP", data["reason"])
 
+    def test_guard_quota_complexity_high_argon_escalation(self):
+        """Test [complexity: high] with default model escalates to pro when Argon is healthy, and stays on flash when degraded."""
+        # 1. Argon healthy (1.0), Gemini healthy (1.0)
+        healthy_fixture = self._create_fixture(
+            {
+                "groups": [
+                    {
+                        "displayName": "gemini",
+                        "buckets": [{"remainingFraction": 1.0, "disabled": False}],
+                    },
+                    {
+                        "displayName": "argon",
+                        "buckets": [{"remainingFraction": 1.0, "disabled": False}],
+                    },
+                ]
+            }
+        )
+        env_healthy = {
+            **os.environ,
+            "AGENTKIT_QUOTA_FIXTURE": str(healthy_fixture),
+            "AGENTKIT_QUOTA_CACHE": str(self.cache_file),
+        }
+
+        # Sub-case: Model omitted
+        payload_omitted = {
+            "toolCall": {
+                "name": "invoke_subagent",
+                "args": {"Prompt": "[complexity: high] Deep architectural refactoring and analysis"},
+            }
+        }
+        res = subprocess.run(
+            [sys.executable, str(GUARD_QUOTA_SCRIPT), "--test", json.dumps(payload_omitted)],
+            capture_output=True,
+            text=True,
+            env=env_healthy,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["decision"], "allow")
+        self.assertEqual(data.get("overwrite", {}).get("Model"), "pro")
+
+        # Sub-case: Model == "inherit"
+        payload_inherit = {
+            "toolCall": {
+                "name": "invoke_subagent",
+                "args": {
+                    "Model": "inherit",
+                    "Prompt": "[complexity: high] Deep architectural refactoring and analysis",
+                },
+            }
+        }
+        res = subprocess.run(
+            [sys.executable, str(GUARD_QUOTA_SCRIPT), "--test", json.dumps(payload_inherit)],
+            capture_output=True,
+            text=True,
+            env=env_healthy,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["decision"], "allow")
+        self.assertEqual(data.get("overwrite", {}).get("Model"), "pro")
+
+        # 2. Argon degraded (0.10), Gemini healthy (1.0)
+        degraded_fixture = self._create_fixture(
+            {
+                "groups": [
+                    {
+                        "displayName": "gemini",
+                        "buckets": [{"remainingFraction": 1.0, "disabled": False}],
+                    },
+                    {
+                        "displayName": "argon",
+                        "buckets": [{"remainingFraction": 0.10, "disabled": False}],
+                    },
+                ]
+            }
+        )
+        env_degraded = {
+            **os.environ,
+            "AGENTKIT_QUOTA_FIXTURE": str(degraded_fixture),
+            "AGENTKIT_QUOTA_CACHE": str(self.cache_file),
+        }
+
+        # Sub-case: Model omitted -> stays on flash
+        res = subprocess.run(
+            [sys.executable, str(GUARD_QUOTA_SCRIPT), "--test", json.dumps(payload_omitted)],
+            capture_output=True,
+            text=True,
+            env=env_degraded,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["decision"], "allow")
+        self.assertEqual(data.get("overwrite", {}).get("Model"), "flash")
+
+        # Sub-case: Model == "inherit" -> stays on flash
+        res = subprocess.run(
+            [sys.executable, str(GUARD_QUOTA_SCRIPT), "--test", json.dumps(payload_inherit)],
+            capture_output=True,
+            text=True,
+            env=env_degraded,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["decision"], "allow")
+        self.assertEqual(data.get("overwrite", {}).get("Model"), "flash")
+
+    def test_guard_quota_root_aware_fallback(self):
+        """Test root-aware inherit fallback resolution when Gemini is degraded."""
+        fixture = self._create_fixture(
+            {
+                "groups": [
+                    {
+                        "displayName": "gemini",
+                        "buckets": [
+                            {
+                                "remainingFraction": 0.10,
+                                "disabled": False,
+                                "resetTime": "2026-10-24T18:00:00Z",
+                            }
+                        ],
+                    },
+                    {
+                        "displayName": "argon",
+                        "buckets": [{"remainingFraction": 0.85, "disabled": False}],
+                    },
+                    {
+                        "displayName": "claude",
+                        "buckets": [{"remainingFraction": 0.90, "disabled": False}],
+                    },
+                ]
+            }
+        )
+        env = {
+            **os.environ,
+            "AGENTKIT_QUOTA_FIXTURE": str(fixture),
+            "AGENTKIT_QUOTA_CACHE": str(self.cache_file),
+        }
+
+        # Case 1: payload explicitly specifies root modelName in the degraded Gemini group
+        payload_with_root = {
+            "modelName": "gemini-3.8-flash",
+            "toolCall": {
+                "name": "invoke_subagent",
+                "args": {
+                    "Model": "flash",
+                    "Prompt": "Implement feature component",
+                },
+            },
+        }
+
+        res = subprocess.run(
+            [sys.executable, str(GUARD_QUOTA_SCRIPT), "--test", json.dumps(payload_with_root)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["decision"], "allow")
+        self.assertIn("overwrite", data)
+        # Reroutes away from gemini to argon/pro
+        self.assertEqual(data["overwrite"]["Model"], "pro")
+        self.assertIn("Quota degraded for gemini", data["reason"])
+        self.assertIn("argon", data["reason"])
+
+        # Case 2: payload without modelName (root_group is None) falls back to inherit
+        payload_no_root = {
+            "toolCall": {
+                "name": "invoke_subagent",
+                "args": {
+                    "Model": "flash",
+                    "Prompt": "Implement feature component",
+                },
+            },
+        }
+        res = subprocess.run(
+            [sys.executable, str(GUARD_QUOTA_SCRIPT), "--test", json.dumps(payload_no_root)],
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        self.assertEqual(res.returncode, 0, res.stderr)
+        data = json.loads(res.stdout)
+        self.assertEqual(data["decision"], "allow")
+        self.assertIn("overwrite", data)
+        self.assertEqual(data["overwrite"]["Model"], "inherit")
+        self.assertIn("Quota degraded for gemini", data["reason"])
+
     def test_cli_status_and_route(self):
         """Test CLI invocations with --json and human tabular output."""
         fixture = self._create_fixture(
