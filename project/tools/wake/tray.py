@@ -26,8 +26,15 @@ except ImportError:
 try:
     from PyQt6 import QtCore, QtGui, QtWidgets
     HAS_PYQT6 = True
+    _DialogBase = QtWidgets.QDialog
+    _ObjectBase = QtCore.QObject
 except ImportError:
     HAS_PYQT6 = False
+    QtCore = None
+    QtGui = None
+    QtWidgets = None
+    _DialogBase = object
+    _ObjectBase = object
 
 from .engine import ActivityState, GuardEngine, WakeEngine, get_default_history_path
 from .icons import get_status_icon, get_status_pixmap
@@ -124,7 +131,7 @@ def calculate_today_prevented_seconds(
     return total
 
 
-class WakeDashboardDialog(QtWidgets.QDialog):
+class WakeDashboardDialog(_DialogBase):
     """
     Modern dark-mode flyout dashboard for AgentKit WakeLock.
 
@@ -137,6 +144,8 @@ class WakeDashboardDialog(QtWidgets.QDialog):
         tray_app: WakeTrayApp,
         parent: Optional[QtWidgets.QWidget] = None,
     ) -> None:
+        if not HAS_PYQT6:
+            raise RuntimeError("PyQt6 is required for system tray and GUI dashboard")
         super().__init__(parent)
         self.tray_app = tray_app
         self.setWindowTitle("AgentKit WakeLock Dashboard")
@@ -496,7 +505,7 @@ class WakeDashboardDialog(QtWidgets.QDialog):
         self.refresh()
 
 
-class WakeTrayApp(QtCore.QObject):
+class WakeTrayApp(_ObjectBase):
     """
     Cross-platform PyQt6 system tray application for AgentKit WakeLock.
 
@@ -514,6 +523,8 @@ class WakeTrayApp(QtCore.QObject):
         engine: Optional[WakeEngine] = None,
         parent: Optional[QtCore.QObject] = None,
     ) -> None:
+        if not HAS_PYQT6:
+            raise RuntimeError("PyQt6 is required for system tray and GUI dashboard")
         super().__init__(parent)
         self.port = port
         self.embed_engine = embed_engine

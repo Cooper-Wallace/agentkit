@@ -45,7 +45,7 @@ from project.tools.wake.server import (
     send_notification,
     send_override,
 )
-from project.tools.wake.tray import GuardTrayApp, WakeTrayApp
+from project.tools.wake.tray import HAS_PYQT6, GuardTrayApp, WakeTrayApp
 
 
 class TestInhibitors(unittest.TestCase):
@@ -811,6 +811,8 @@ class TestWakeLockPluginAndTray(unittest.TestCase):
 
     def test_wake_tray_app_embedded_server_lifecycle(self) -> None:
         """Verify WakeTrayApp(embed_engine=True, port=0) starts embedded server and stops cleanly."""
+        if not HAS_PYQT6:
+            self.skipTest("PyQt6 is not installed in this environment")
         app = WakeTrayApp(embed_engine=True, port=0)
         try:
             self.assertIsNotNone(app.server)
