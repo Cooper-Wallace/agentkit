@@ -88,6 +88,14 @@ class TestPermissionsCatalog(unittest.TestCase):
         self.assertIn("mcp(github)", flat)
         self.assertIn("mcp(fetch)", flat)
 
+        # Assert Go and TypeScript command permissions are present
+        self.assertIn("command(go build)", flat)
+        self.assertIn("command(go test)", flat)
+        self.assertIn("command(go vet)", flat)
+        self.assertIn("command(golangci-lint)", flat)
+        self.assertIn("command(npm run)", flat)
+        self.assertIn("command(npx vitest)", flat)
+
         # Specifically assert that call_mcp_tool is present
         self.assertIn("call_mcp_tool", flat)
 
@@ -1119,6 +1127,33 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
                 self.assertEqual(data_ro.get("decision"), "stop")
             finally:
                 os.unlink(transcript_ro)
+
+        # 6. Clean git repo with non-Python tests/ (e.g. fixture.json, NO .py files) does not trigger pytest
+        with tempfile.TemporaryDirectory() as migrated_repo:
+            subprocess.run(["git", "init"], cwd=migrated_repo, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=migrated_repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=migrated_repo, check=True)
+            (Path(migrated_repo) / "README.md").write_text("# Test\n")
+            tests_dir = Path(migrated_repo) / "tests"
+            tests_dir.mkdir()
+            (tests_dir / "fixture.json").write_text('{"data": 123}\n')
+            subprocess.run(["git", "add", "README.md", "tests/fixture.json"], cwd=migrated_repo, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: init migrated repo"], cwd=migrated_repo, check=True)
+
+            res_migrated = subprocess.run(
+                [str(self.verify_script)],
+                input=json.dumps({
+                    "terminationReason": "NO_TOOL_CALL",
+                    "workspacePaths": [migrated_repo],
+                }),
+                env=dict(os.environ, AGY_VERIFY_RUNNING="0"),
+                cwd=migrated_repo,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_migrated.returncode, 0)
+            data_migrated = json.loads(res_migrated.stdout)
+            self.assertEqual(data_migrated.get("decision"), "stop")
 
     def test_filter_and_wrap_hook(self):
         # 1. Verify --dry-run exits 0

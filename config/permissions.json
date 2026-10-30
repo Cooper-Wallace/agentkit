@@ -108,11 +108,15 @@
         "node",
         "npm test",
         "npm run",
+        "npx vitest",
         "pnpm",
         "yarn",
         "mvn test",
         "cargo test",
-        "go test"
+        "go build",
+        "go test",
+        "go vet",
+        "golangci-lint"
       ]
     },
     "local_workflows": {
