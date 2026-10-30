@@ -78,10 +78,15 @@ class TestPermissionsCatalog(unittest.TestCase):
         self.assertGreater(len(tool_perms), 0, "Expected tool permissions in flat list")
         self.assertGreater(len(file_perms), 0, "Expected read_file/write_file permissions in flat list")
 
-        # Specifically assert that mcp(memory/create_entities), mcp(memory/add_observations), and mcp(memory) are present
-        self.assertIn("mcp(memory/create_entities)", flat)
-        self.assertIn("mcp(memory/add_observations)", flat)
-        self.assertIn("mcp(memory)", flat)
+        # Specifically assert that mcp(memory) permissions are removed
+        self.assertNotIn("mcp(memory)", flat)
+        self.assertNotIn("mcp(memory/create_entities)", flat)
+        self.assertNotIn("mcp(memory/add_observations)", flat)
+
+        # Assert active standard MCP permissions are present
+        self.assertIn("mcp(repomix)", flat)
+        self.assertIn("mcp(github)", flat)
+        self.assertIn("mcp(fetch)", flat)
 
         # Specifically assert that call_mcp_tool is present
         self.assertIn("call_mcp_tool", flat)
@@ -465,14 +470,14 @@ class TestPermissionMerger(unittest.TestCase):
     def test_merge_mixed_command_mcp_and_tool_permissions(self):
         existing = {
             "permissions": {
-                "allow": ["command(git status)", "mcp(memory/read_graph)"]
+                "allow": ["command(git status)", "mcp(repomix/read_repomix_output)"]
             }
         }
         standard = [
             "command(git status)",
             "command(pytest)",
-            "mcp(memory)",
-            "mcp(memory/create_entities)",
+            "mcp(repomix)",
+            "mcp(repomix/pack_codebase)",
             "call_mcp_tool",
             "list_resources",
         ]
@@ -480,17 +485,17 @@ class TestPermissionMerger(unittest.TestCase):
 
         expected_added = [
             "command(pytest)",
-            "mcp(memory)",
-            "mcp(memory/create_entities)",
+            "mcp(repomix)",
+            "mcp(repomix/pack_codebase)",
             "call_mcp_tool",
             "list_resources",
         ] + EXPECTED_FILE_PERMS
         self.assertEqual(added, expected_added)
         self.assertIn("command(git status)", merged["permissions"]["allow"])
         self.assertIn("command(pytest)", merged["permissions"]["allow"])
-        self.assertIn("mcp(memory/read_graph)", merged["permissions"]["allow"])
-        self.assertIn("mcp(memory)", merged["permissions"]["allow"])
-        self.assertIn("mcp(memory/create_entities)", merged["permissions"]["allow"])
+        self.assertIn("mcp(repomix/read_repomix_output)", merged["permissions"]["allow"])
+        self.assertIn("mcp(repomix)", merged["permissions"]["allow"])
+        self.assertIn("mcp(repomix/pack_codebase)", merged["permissions"]["allow"])
         self.assertIn("call_mcp_tool", merged["permissions"]["allow"])
         self.assertIn("list_resources", merged["permissions"]["allow"])
         for perm in EXPECTED_FILE_PERMS:
@@ -777,11 +782,12 @@ class TestMCPManagement(unittest.TestCase):
         self.assertIn("_requirements", catalog)
         self.assertIn("github", catalog["mcpServers"])
         self.assertIn("fetch", catalog["mcpServers"])
-        self.assertIn("memory", catalog["mcpServers"])
         self.assertIn("repomix", catalog["mcpServers"])
+        self.assertNotIn("memory", catalog["mcpServers"])
+        self.assertNotIn("memory", catalog.get("_requirements", {}))
         self.assertNotIn("sqlite", catalog["mcpServers"])
         self.assertNotIn("sqlite", catalog.get("_requirements", {}))
-        self.assertEqual(len(catalog["mcpServers"]), 4)
+        self.assertEqual(len(catalog["mcpServers"]), 3)
 
     def test_mcp_merger_preserves_custom_servers(self):
         existing = {
@@ -949,12 +955,13 @@ class TestMCPManagement(unittest.TestCase):
 
 class TestAutonomousOrchestratorPlugin(unittest.TestCase):
     def setUp(self):
-        self.plugin_dir = REPO_ROOT / "plugins" / "autonomous-orchestrator"
+        self.plugin_dir = REPO_ROOT / "harness" / "plugins" / "autonomous-orchestrator"
         self.guard_script = self.plugin_dir / "scripts" / "guard-git-operations.sh"
         self.verify_script = self.plugin_dir / "scripts" / "verify-clean-completion.sh"
         self.headroom_script = self.plugin_dir / "scripts" / "headroom-wrap.py"
         self.filter_wrap_script = self.plugin_dir / "scripts" / "filter-and-wrap.py"
         self.guard_delegation_script = self.plugin_dir / "scripts" / "guard-subagent-delegation.sh"
+        self.compliance_script = self.plugin_dir / "scripts" / "guard-agentkit-compliance.sh"
 
     def test_plugin_structure(self):
         self.assertTrue(self.plugin_dir.exists())
@@ -967,11 +974,13 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         self.assertTrue(self.headroom_script.exists())
         self.assertTrue(self.filter_wrap_script.exists())
         self.assertTrue(self.guard_delegation_script.exists())
+        self.assertTrue(self.compliance_script.exists())
         self.assertTrue(os.access(self.guard_script, os.X_OK))
         self.assertTrue(os.access(self.verify_script, os.X_OK))
         self.assertTrue(os.access(self.headroom_script, os.X_OK))
         self.assertTrue(os.access(self.filter_wrap_script, os.X_OK))
         self.assertTrue(os.access(self.guard_delegation_script, os.X_OK))
+        self.assertTrue(os.access(self.compliance_script, os.X_OK))
 
     def test_guard_git_operations_hook(self):
         # 1. Direct push to main is blocked
@@ -1054,6 +1063,62 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         data_recursion = json.loads(res_recursion.stdout)
         self.assertEqual(data_recursion.get("decision"), "stop")
         self.assertIn("Recursion circuit breaker", data_recursion.get("reason", ""))
+
+        # 4. Clean git repository resolution via workspacePaths from /tmp
+        with tempfile.TemporaryDirectory() as clean_repo:
+            subprocess.run(["git", "init"], cwd=clean_repo, capture_output=True, check=True)
+            subprocess.run(["git", "config", "user.email", "test@test.com"], cwd=clean_repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=clean_repo, check=True)
+            (Path(clean_repo) / "README.md").write_text("# Test\n")
+            subprocess.run(["git", "add", "README.md"], cwd=clean_repo, check=True)
+            subprocess.run(["git", "commit", "-m", "chore: init"], cwd=clean_repo, check=True)
+
+            res_ws = subprocess.run(
+                [str(self.verify_script)],
+                input=json.dumps({
+                    "terminationReason": "NO_TOOL_CALL",
+                    "workspacePaths": [clean_repo],
+                }),
+                env=dict(os.environ, AGY_VERIFY_RUNNING="0"),
+                cwd=tempfile.gettempdir(),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_ws.returncode, 0)
+            data_ws = json.loads(res_ws.stdout)
+            self.assertEqual(data_ws.get("decision"), "stop")
+
+        # 5. Read-only turn gate allows stop even if repo has untracked files
+        with tempfile.TemporaryDirectory() as dirty_repo:
+            subprocess.run(["git", "init"], cwd=dirty_repo, capture_output=True, check=True)
+            (Path(dirty_repo) / "dirty.txt").write_text("uncommitted")
+
+            with tempfile.NamedTemporaryFile("w", delete=False) as tf:
+                tf.write(json.dumps({"type": "USER_INPUT", "content": "What does file.txt say?"}) + "\n")
+                tf.write(json.dumps({
+                    "type": "PLANNER_RESPONSE",
+                    "tool_calls": [{"name": "read_file", "args": {"Path": "file.txt"}}],
+                }) + "\n")
+                transcript_ro = tf.name
+
+            try:
+                res_ro = subprocess.run(
+                    [str(self.verify_script)],
+                    input=json.dumps({
+                        "terminationReason": "NO_TOOL_CALL",
+                        "workspacePaths": [dirty_repo],
+                        "transcriptPath": transcript_ro,
+                    }),
+                    env=dict(os.environ, AGY_VERIFY_RUNNING="0"),
+                    cwd=dirty_repo,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertEqual(res_ro.returncode, 0)
+                data_ro = json.loads(res_ro.stdout)
+                self.assertEqual(data_ro.get("decision"), "stop")
+            finally:
+                os.unlink(transcript_ro)
 
     def test_filter_and_wrap_hook(self):
         # 1. Verify --dry-run exits 0
@@ -1314,6 +1379,198 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         data_root = json.loads(res_root.stdout)
         self.assertEqual(data_root.get("decision"), "deny")
 
+        # 5. Verify root session with "Fix the agentkit plugins" in USER_INPUT is STILL denied
+        with tempfile.NamedTemporaryFile("w", delete=False) as tf:
+            tf.write(json.dumps({"type": "USER_INPUT", "content": "Fix the agentkit plugins"}) + "\n")
+            transcript_agentkit = tf.name
+
+        try:
+            payload_agentkit_regex = {
+                "toolCall": {
+                    "name": "edit_file",
+                    "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+                },
+                "modelName": "gemini-4-argon",
+                "transcriptPath": transcript_agentkit,
+            }
+            res_regex = subprocess.run(
+                [str(self.guard_delegation_script)],
+                input=json.dumps(payload_agentkit_regex),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_regex.returncode, 0)
+            data_regex = json.loads(res_regex.stdout)
+            self.assertEqual(data_regex.get("decision"), "deny")
+        finally:
+            os.unlink(transcript_agentkit)
+
+        # 6. Verify root session with invoke_subagent tool call in same turn is STILL denied
+        with tempfile.NamedTemporaryFile("w", delete=False) as tf:
+            tf.write(json.dumps({"type": "USER_INPUT", "content": "Implement feature X"}) + "\n")
+            tf.write(json.dumps({"type": "PLANNER_RESPONSE", "tool_calls": [{"name": "invoke_subagent"}]}) + "\n")
+            transcript_delegated = tf.name
+
+        try:
+            payload_post_delegation = {
+                "toolCall": {
+                    "name": "edit_file",
+                    "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+                },
+                "modelName": "gemini-4-argon",
+                "transcriptPath": transcript_delegated,
+            }
+            res_post_del = subprocess.run(
+                [str(self.guard_delegation_script)],
+                input=json.dumps(payload_post_delegation),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_post_del.returncode, 0)
+            data_post_del = json.loads(res_post_del.stdout)
+            self.assertEqual(data_post_del.get("decision"), "deny")
+        finally:
+            os.unlink(transcript_delegated)
+
+        # 7. Verify root session editing file in Obsidian AgentVault is allowed
+        vault_payload = {
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": str(Path.home() / "Documents/AgentVault/Sessions/handoff.md")},
+            },
+            "modelName": "gemini-4-argon",
+        }
+        res_vault = subprocess.run(
+            [str(self.guard_delegation_script)],
+            input=json.dumps(vault_payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_vault.returncode, 0)
+        data_vault = json.loads(res_vault.stdout)
+        self.assertEqual(data_vault.get("decision"), "allow")
+
+    def test_guard_agentkit_compliance_hook(self):
+        # 1. Verify --dry-run exits 0 with operational message
+        res_dry = subprocess.run(
+            [str(self.compliance_script), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_dry.returncode, 0)
+        data_dry = json.loads(res_dry.stdout)
+        self.assertEqual(data_dry.get("status"), "dry-run")
+        self.assertIn("operational", data_dry.get("message", ""))
+
+        # 2. Verify AGENTKIT_SKIP_SESSION_AUDIT=1 bypasses audit and returns {}
+        res_skip = subprocess.run(
+            [str(self.compliance_script), "--test"],
+            env=dict(os.environ, AGENTKIT_SKIP_SESSION_AUDIT="1"),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_skip.returncode, 0)
+        self.assertEqual(json.loads(res_skip.stdout), {})
+
+        # 3. Behavior when audit succeeds (mocked exit 0 returns {})
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_bin = Path(tmpdir) / "agentkit"
+            mock_bin.write_text("#!/bin/sh\nexit 0\n")
+            mock_bin.chmod(0o755)
+
+            res_ok = subprocess.run(
+                [str(self.compliance_script), "--test"],
+                env=dict(
+                    os.environ,
+                    AGENTKIT_BIN=str(mock_bin),
+                    AGENTKIT_SKIP_SESSION_AUDIT="0",
+                ),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_ok.returncode, 0)
+            self.assertEqual(json.loads(res_ok.stdout), {})
+
+        # 4. Behavior when audit fails without auto-apply (returns injectSteps alerting user)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_bin = Path(tmpdir) / "agentkit"
+            mock_bin.write_text("#!/bin/sh\nexit 1\n")
+            mock_bin.chmod(0o755)
+
+            res_fail = subprocess.run(
+                [str(self.compliance_script), "--test"],
+                env=dict(
+                    os.environ,
+                    AGENTKIT_BIN=str(mock_bin),
+                    AGENTKIT_SKIP_SESSION_AUDIT="0",
+                    AGENTKIT_AUTO_APPLY="0",
+                ),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_fail.returncode, 0)
+            data_fail = json.loads(res_fail.stdout)
+            self.assertIn("injectSteps", data_fail)
+            self.assertEqual(len(data_fail["injectSteps"]), 1)
+            msg = data_fail["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn("out of sync", msg)
+            self.assertIn("agentkit apply", msg)
+
+        # 5. Behavior when audit fails with AGENTKIT_AUTO_APPLY=1 (triggers apply and returns auto-heal notice)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_bin = Path(tmpdir) / "agentkit"
+            marker_file = Path(tmpdir) / "applied.marker"
+            mock_bin.write_text(f"""#!/bin/sh
+if [ "$1" = "audit" ]; then
+    exit 1
+elif [ "$1" = "apply" ]; then
+    touch "{marker_file}"
+    exit 0
+fi
+exit 0
+""")
+            mock_bin.chmod(0o755)
+
+            res_auto = subprocess.run(
+                [str(self.compliance_script), "--test"],
+                env=dict(
+                    os.environ,
+                    AGENTKIT_BIN=str(mock_bin),
+                    AGENTKIT_SKIP_SESSION_AUDIT="0",
+                    AGENTKIT_AUTO_APPLY="1",
+                ),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_auto.returncode, 0)
+            self.assertTrue(marker_file.exists(), "agentkit apply should have been called")
+            data_auto = json.loads(res_auto.stdout)
+            self.assertIn("injectSteps", data_auto)
+            self.assertEqual(len(data_auto["injectSteps"]), 1)
+            msg = data_auto["injectSteps"][0]["systemMessage"]["systemMessage"]
+            self.assertIn("auto-heal", msg)
+            self.assertIn("automatically synchronized", msg)
+
+        # 6. Fallback when agentkit binary is not found (returns {} and exits 0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            isolated_script = Path(tmpdir) / "guard.sh"
+            shutil.copy2(self.compliance_script, isolated_script)
+            isolated_script.chmod(0o755)
+            res_nobin = subprocess.run(
+                [str(isolated_script), "--test"],
+                env=dict(
+                    os.environ,
+                    AGENTKIT_BIN="",
+                    PATH="/usr/bin:/bin",
+                    HOME=tmpdir,
+                    AGENTKIT_SKIP_SESSION_AUDIT="0",
+                ),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_nobin.returncode, 0)
+            self.assertEqual(json.loads(res_nobin.stdout), {})
+
 
 
 class TestSkillManagement(unittest.TestCase):
@@ -1358,6 +1615,34 @@ class TestSkillManagement(unittest.TestCase):
             self.assertEqual(res.returncode, 0, f"skill install copy failed: {res.stderr}")
             self.assertTrue((target_dir / "SKILL.md").exists())
             self.assertFalse((target_dir / "SKILL.md").is_symlink())
+
+    def test_apply_creates_global_skills_registry(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mock_gemini_dir = Path(tmpdir) / "gemini"
+            mock_settings = Path(tmpdir) / "settings.json"
+            mock_settings.write_text("{}", encoding="utf-8")
+
+            res = subprocess.run(
+                BIN_CMD + [
+                    "apply",
+                    "--settings-path", str(mock_settings),
+                    "--gemini-dir", str(mock_gemini_dir),
+                    "--no-mcp",
+                    "--no-plugins",
+                    "--no-backup",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0, f"apply failed: {res.stderr}")
+            skills_json_path = mock_gemini_dir / "config" / "skills.json"
+            self.assertTrue(skills_json_path.exists(), f"Expected {skills_json_path} to exist")
+
+            data = json.loads(skills_json_path.read_text(encoding="utf-8"))
+            self.assertIn("entries", data)
+            entry_paths = [e.get("path") for e in data["entries"] if isinstance(e, dict)]
+            expected_path = str((REPO_ROOT / "project" / "skills").resolve())
+            self.assertIn(expected_path, entry_paths)
 
 
 class TestToolManagement(unittest.TestCase):

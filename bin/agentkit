@@ -718,6 +718,64 @@ def resolve_orchestration_config_path(
     return harness.get_default_orchestration_path()
 
 
+def sync_global_skills_registry(gemini_dir: Path, dry_run: bool = False) -> Tuple[bool, str]:
+    """Ensure project/skills is registered in gemini_dir/config/skills.json."""
+    if not PROJECT_SKILLS_DIR.exists():
+        return True, f"Project skills directory not found at {PROJECT_SKILLS_DIR}"
+
+    skills_json_path = gemini_dir / "config" / "skills.json"
+    skills_path_str = str(PROJECT_SKILLS_DIR.resolve())
+
+    data: Dict[str, Any] = {"entries": []}
+    if skills_json_path.exists():
+        try:
+            data = load_json(skills_json_path)
+            if not isinstance(data, dict):
+                data = {"entries": []}
+        except Exception:
+            data = {"entries": []}
+
+    entries = data.get("entries")
+    if not isinstance(entries, list):
+        entries = []
+        data["entries"] = entries
+
+    already_registered = any(
+        isinstance(e, dict) and e.get("path") in (skills_path_str, str(PROJECT_SKILLS_DIR))
+        for e in entries
+    )
+    if not already_registered:
+        entries.append({"path": skills_path_str})
+
+    if not dry_run:
+        skills_json_path.parent.mkdir(parents=True, exist_ok=True)
+        save_json(skills_json_path, data)
+        return True, f"[OK] Synchronized global skills registry ({skills_json_path})"
+    else:
+        return True, f"[DRY-RUN] Would synchronize global skills registry ({skills_json_path})"
+
+
+def check_global_skills_registry(gemini_dir: Path) -> bool:
+    """Check if project/skills is registered in gemini_dir/config/skills.json."""
+    if not PROJECT_SKILLS_DIR.exists():
+        return True
+    skills_json_path = gemini_dir / "config" / "skills.json"
+    if not skills_json_path.exists():
+        return False
+    try:
+        data = load_json(skills_json_path)
+        entries = data.get("entries")
+        if not isinstance(entries, list):
+            return False
+        skills_path_str = str(PROJECT_SKILLS_DIR.resolve())
+        return any(
+            isinstance(e, dict) and e.get("path") in (skills_path_str, str(PROJECT_SKILLS_DIR))
+            for e in entries
+        )
+    except Exception:
+        return False
+
+
 # ==============================================================================
 # Commands
 # ==============================================================================
@@ -1031,6 +1089,17 @@ def cmd_audit(args: argparse.Namespace) -> int:
             f"Orchestration Profile: No profile explicitly recorded (default fallback: {getattr(args, 'model_profile', 'argon-flash')})"
         )
 
+    # 12. Global Skills Registry Audit (Antigravity skills.json)
+    if harness.name == "antigravity" and PROJECT_SKILLS_DIR.exists():
+        skills_path = target_gemini_dir / "config" / "skills.json"
+        if skills_path.exists():
+            total_checks += 1
+            if check_global_skills_registry(target_gemini_dir):
+                print_success(f"Global Skills Registry: configured ({skills_path})")
+                passed_checks += 1
+            else:
+                print_failure(f"Global Skills Registry: project skills missing from {skills_path}")
+
     # Summary
     print("\n" + "─" * 60)
     score_pct = int((passed_checks / total_checks) * 100) if total_checks else 0
@@ -1244,6 +1313,15 @@ def cmd_apply(args: argparse.Namespace) -> int:
                 print_warning("[DRY-RUN] Skipped enabling agentkit wake autostart.")
         else:
             print_success("AgentKit Wake autostart is already configured.")
+
+    # 9. Global Skills Registry Configuration (Antigravity skills.json)
+    if harness.name == "antigravity" and PROJECT_SKILLS_DIR.exists():
+        print_step("Configuring Global Skills Registry: skills.json")
+        ok, msg = sync_global_skills_registry(target_gemini_dir, dry_run=args.dry_run)
+        if args.dry_run:
+            print_warning(msg)
+        else:
+            print_success(msg)
 
     print(f"\n{BOLD}{GREEN}[SUCCESS]{RESET} {harness.display_name} standardization successfully applied!")
     print_info(f"Active orchestration profile: {BOLD}{model_profile}{RESET} ({profile_desc})")

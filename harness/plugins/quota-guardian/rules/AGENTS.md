@@ -1,49 +1,23 @@
-# Quota Guardian Agent Directives
+# Quota Guardian Plugin Directives
 
-These directives govern model tier routing, token quota preservation, and graceful wrap-up behavior for autonomous agent workflows.
-
----
-
-## 1. Complexity Tiering & Subagent Model Routing
-
-All subagent invocations MUST explicitly declare their task complexity in their prompt or tool parameters using the standard tag `[complexity: low|med|high]`:
-
-- **Low Complexity (`flash_lite`)**:
-  - **Use**: Mechanical find-replace, file moves, renames, formatting, markdown/doc typos, simple one-command status checks.
-  - **Safety Guardrail**: Any task tagged `low` that touches test suites, security components, or non-trivial refactoring is automatically upgraded to `flash`.
-- **Medium Complexity (`flash`)**:
-  - **Use**: Standard feature code implementation, test writing, bug fixes, localized refactoring.
-- **High Complexity (`flash` / `pro`)**:
-  - **Use**: Cross-module architectural redesign, complex debugging, adversarial reviews, security audits.
-  - Routes to `pro` (Argon tier) only when Argon quota is healthy; otherwise routes to `flash`.
+Delta directives for `quota-guardian`. Refer to global `AGENTS.md` for universal cognitive tiering, model architecture, and git worktree isolation standards.
 
 ---
 
-## 2. Pre-Delegation Quota Verification
+## 1. Complexity Tagging Requirement
 
-- Before launching parallel subagent teams or multi-worker fan-outs, check current quota health via:
-  ```bash
-  agentkit quota status
-  ```
-- If model quotas are degraded (`<= 15%`), verify that the planned delegation can proceed under fallback models (`inherit` / `flash`).
-- When routing ambiguity occurs, evaluate recommended routing:
-  ```bash
-  agentkit quota route --complexity <low|med|high>
-  ```
+All `invoke_subagent` prompts MUST include the standard tag `[complexity: low|med|high]` at the start of the prompt:
+- `low`: Routes to `flash_lite` (auto-upgraded to `flash` if prompt touches tests, refactoring, debugging, or security).
+- `med`: Routes to `flash`.
+- `high`: Escalates to `pro` (Gemini 4 Argon) when Argon quota is healthy (> 15%); otherwise routes to `flash`.
 
----
+## 2. Quota Guard Bypass & Inspection
+
+- Pre-flight quota check: `agentkit quota status` or `agentkit quota route --complexity <low|med|high>`.
+- Hook bypass: Set `AGENTKIT_QUOTA_GUARD=0` or `AGENTKIT_QUOTA_GUARD=off` in the environment to disable the `PreToolUse` guard.
 
 ## 3. Strict Denial Adherence on Quota Wrap-Up
 
-- When `guard-quota.py` denies `invoke_subagent` with `QUOTA WRAP-UP: All model quotas are critically low`:
-  1. **Halt New Delegations**: Immediately cease invoking new subagents.
-  2. **Do Not Retry Failed Invocations**: Do not attempt to bypass or re-invoke subagents with different model names.
-  3. **Execute Quota Wrap-Up Runbook**: Follow the `quota-wrapup` skill to run automated tests, commit work-in-progress, generate the handoff note in the Obsidian AgentVault (`$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and advise the user.
-
----
-
-## 4. Git Tree Management & Worktree Safety
-
-- **One Branch Per Change**: Quota wrap-up commits and active feature work must remain on their dedicated feature branch (`feat/`, `fix/`, etc.). Never commit wrap-up WIP directly to `main`.
-- **One Commit Per Subagent**: Worker subagents completing units of work prior to wrap-up must stage and commit a single atomic Conventional Commit. If wrap-up interrupts execution mid-task, create a single clean WIP commit (`chore(wip): ...`).
-- **Isolated Worktrees**: When running concurrent workers across threads or subagents in the same repository, always utilize isolated git worktrees (`Workspace: "share"` in Antigravity or `git worktree add`) to avoid `.git/index.lock` collisions, dirty working tree races, and state corruption during quota-triggered wrap-up.
+When `guard-quota.py` denies `invoke_subagent` with `QUOTA WRAP-UP: All model quotas are critically low`:
+1. Immediately cease invoking new subagents (do not retry or attempt model bypass).
+2. Execute the `quota-wrapup` skill: run tests, commit WIP to the active feature branch, author handoff note in Obsidian AgentVault, and advise the user.

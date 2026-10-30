@@ -41,7 +41,7 @@ def enable_autostart(agentkit_bin: str = None, mode: str = "tray") -> Tuple[bool
             # Windows cmd startup wrapper
             python_exe = sys.executable
             content = f"""@echo off
-start "" "{python_exe}" "{agentkit_bin}" wake tray
+start "" "{python_exe}" "{agentkit_bin}" wake tray --embed-engine
 """
             path.write_text(content, encoding="utf-8")
         else:
@@ -53,7 +53,7 @@ start "" "{python_exe}" "{agentkit_bin}" wake tray
 Type=Application
 Name=AgentKit WakeLock
 Comment=Prevents system sleep while AI agent CLI prompts are actively executing
-Exec={agentkit_bin} wake tray
+Exec={agentkit_bin} wake tray --embed-engine
 Icon=utilities-system-monitor
 Terminal=false
 Categories=Utility;

@@ -39,6 +39,7 @@ from project.tools.wake.server import (
     send_notification,
     send_override,
 )
+from project.tools.wake.tray import GuardTrayApp, WakeTrayApp
 
 
 class TestInhibitors(unittest.TestCase):
@@ -583,6 +584,126 @@ class TestWakeCLI(unittest.TestCase):
             self.assertTrue(autostart_entry.exists(), "agentkit-wake.desktop autostart was not created")
             content = autostart_entry.read_text(encoding="utf-8")
             self.assertIn("agentkit wake tray", content)
+
+
+class TestWakeLockPluginAndTray(unittest.TestCase):
+    """Test wake-lock plugin schema, notify-wake hook responses, and WakeTrayApp embedded server lifecycle."""
+
+    def test_wake_lock_hooks_schema(self) -> None:
+        """Verify harness/plugins/wake-lock/hooks.json conforms to the Antigravity hook schema."""
+        hooks_path = REPO_ROOT / "harness" / "plugins" / "wake-lock" / "hooks.json"
+        self.assertTrue(hooks_path.exists(), "wake-lock hooks.json does not exist")
+        data = json.loads(hooks_path.read_text(encoding="utf-8"))
+        self.assertIn("wake-lock-activity", data)
+        self.assertNotIn("UserPrompt", data)
+        activity = data["wake-lock-activity"]
+        self.assertTrue(activity.get("enabled"))
+        self.assertIn("PreInvocation", activity)
+        self.assertIsInstance(activity["PreInvocation"], list)
+        self.assertIn("PreToolUse", activity)
+        self.assertIsInstance(activity["PreToolUse"], list)
+        self.assertIn("Stop", activity)
+        self.assertIsInstance(activity["Stop"], list)
+        self.assertNotIn("UserPrompt", activity)
+
+    def test_notify_wake_dry_run(self) -> None:
+        """Verify notify-wake.py --dry-run outputs valid JSON with status: dry-run."""
+        script_path = REPO_ROOT / "harness" / "plugins" / "wake-lock" / "scripts" / "notify-wake.py"
+        res = subprocess.run(
+            [sys.executable, str(script_path), "--dry-run"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+        data = json.loads(res.stdout)
+        self.assertEqual(data.get("status"), "dry-run")
+        self.assertIn("notify-wake.py is operational", data.get("message", ""))
+
+    def test_notify_wake_pre_tool_use(self) -> None:
+        """Verify notify-wake.py reading PreToolUse payload posts active state and returns allow decision."""
+        script_path = REPO_ROOT / "harness" / "plugins" / "wake-lock" / "scripts" / "notify-wake.py"
+        mock_inh = MockSleepInhibitor()
+        engine = WakeEngine(inhibitor=mock_inh, cooldown_seconds=10.0)
+        server = WakeServer(engine=engine, host="127.0.0.1", port=0)
+        server.start_background()
+        port = server.port
+
+        try:
+            pre_tool_payload = {
+                "conversationId": "conv-abc",
+                "toolCall": {"name": "run_command"},
+            }
+            res_pre = subprocess.run(
+                [sys.executable, str(script_path), "active", "--port", str(port)],
+                input=json.dumps(pre_tool_payload),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_pre.returncode, 0)
+            decision_pre = json.loads(res_pre.stdout)
+            self.assertEqual(decision_pre.get("decision"), "allow")
+
+            status_active = fetch_status(port=port)
+            self.assertIsNotNone(status_active)
+            self.assertEqual(status_active["state"], "active")
+            self.assertTrue(status_active["inhibited"])
+            self.assertEqual(status_active["active_count"], 1)
+            sessions = status_active.get("sessions", [])
+            self.assertTrue(any(s.get("session_id") == "conv-abc" for s in sessions))
+        finally:
+            server.stop()
+
+    def test_notify_wake_stop(self) -> None:
+        """Verify notify-wake.py reading Stop payload posts idle state and returns stop decision."""
+        script_path = REPO_ROOT / "harness" / "plugins" / "wake-lock" / "scripts" / "notify-wake.py"
+        mock_inh = MockSleepInhibitor()
+        engine = WakeEngine(inhibitor=mock_inh, cooldown_seconds=10.0)
+        server = WakeServer(engine=engine, host="127.0.0.1", port=0)
+        server.start_background()
+        port = server.port
+
+        try:
+            # First activate session
+            engine.notify("conv-abc", "active")
+            st_init = fetch_status(port=port)
+            self.assertEqual(st_init["state"], "active")
+
+            stop_payload = {
+                "conversationId": "conv-abc",
+                "terminationReason": "COMPLETE",
+            }
+            res_stop = subprocess.run(
+                [sys.executable, str(script_path), "idle", "--port", str(port)],
+                input=json.dumps(stop_payload),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_stop.returncode, 0)
+            decision_stop = json.loads(res_stop.stdout)
+            self.assertEqual(decision_stop.get("decision"), "stop")
+
+            status_stop = fetch_status(port=port)
+            self.assertIsNotNone(status_stop)
+            self.assertEqual(status_stop["state"], "cooldown")
+            self.assertTrue(status_stop["inhibited"])
+            self.assertEqual(status_stop["active_count"], 0)
+        finally:
+            server.stop()
+
+    def test_wake_tray_app_embedded_server_lifecycle(self) -> None:
+        """Verify WakeTrayApp(embed_engine=True, port=0) starts embedded server and stops cleanly."""
+        app = WakeTrayApp(embed_engine=True, port=0)
+        try:
+            self.assertIsNotNone(app.server)
+            self.assertGreater(app.port, 0)
+            status = fetch_status(port=app.port)
+            self.assertIsNotNone(status)
+            self.assertEqual(status.get("state"), "idle")
+            self.assertFalse(status.get("inhibited"))
+        finally:
+            app.stop()
+            time.sleep(0.1)
+            self.assertIsNone(fetch_status(port=app.port))
 
 
 # Backward compatibility aliases

@@ -139,22 +139,6 @@
     }
   },
   "mcp_tools": {
-    "memory": {
-      "description": "Cross-thread and cross-repository persistent memory knowledge graph.",
-      "permissions": [
-        "mcp(memory)",
-        "mcp(memory/*)",
-        "mcp(memory/create_entities)",
-        "mcp(memory/create_relations)",
-        "mcp(memory/add_observations)",
-        "mcp(memory/delete_entities)",
-        "mcp(memory/delete_observations)",
-        "mcp(memory/delete_relations)",
-        "mcp(memory/read_graph)",
-        "mcp(memory/search_nodes)",
-        "mcp(memory/open_nodes)"
-      ]
-    },
     "repomix": {
       "description": "AST-compressed repository packing and analysis.",
       "permissions": [

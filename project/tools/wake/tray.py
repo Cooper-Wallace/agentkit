@@ -527,8 +527,23 @@ class WakeTrayApp(QtCore.QObject):
         if self.embed_engine and self.engine is None:
             self.engine = WakeEngine()
 
+        if self.embed_engine and self.engine is not None:
+            try:
+                self.server = WakeServer(
+                    engine=self.engine, host="127.0.0.1", port=self.port
+                )
+                self.server.start_background()
+                self.port = self.server.port
+            except OSError as e:
+                logger.warning(
+                    "Could not bind embedded WakeServer on port %s: %s", self.port, e
+                )
+                self.server = None
+
         self.is_tray_available = (
-            HAS_PYQT6 and QtWidgets.QSystemTrayIcon.isSystemTrayAvailable()
+            HAS_PYQT6
+            and QtWidgets.QApplication.instance() is not None
+            and QtWidgets.QSystemTrayIcon.isSystemTrayAvailable()
         )
 
         if not self.is_tray_available:
@@ -775,21 +790,41 @@ class WakeTrayApp(QtCore.QObject):
         self.dashboard.activateWindow()
         self.dashboard.refresh(self.current_status, self.engine)
 
-    def exit_app(self) -> None:
-        """Cleanly terminate the tray application, embedded server, and timers."""
-        if hasattr(self, "timer"):
-            self.timer.stop()
+    def stop(self) -> None:
+        """Safely stop embedded server, engine, timers, and dialogs."""
+        if hasattr(self, "timer") and self.timer is not None:
+            try:
+                self.timer.stop()
+            except Exception:
+                pass
         if self.dashboard is not None:
-            self.dashboard.close()
+            try:
+                self.dashboard.close()
+            except Exception:
+                pass
             self.dashboard = None
-        if hasattr(self, "tray_icon"):
-            self.tray_icon.hide()
+        if hasattr(self, "tray_icon") and self.tray_icon is not None:
+            try:
+                self.tray_icon.hide()
+            except Exception:
+                pass
         if self.server is not None:
-            self.server.stop()
+            try:
+                self.server.stop()
+            except Exception:
+                pass
             self.server = None
         if self.engine is not None:
-            self.engine.stop()
-        QtWidgets.QApplication.quit()
+            try:
+                self.engine.stop()
+            except Exception:
+                pass
+
+    def exit_app(self) -> None:
+        """Cleanly terminate the tray application, embedded server, and timers."""
+        self.stop()
+        if HAS_PYQT6 and QtWidgets.QApplication.instance():
+            QtWidgets.QApplication.quit()
 
 
 # Backward compatibility aliases
