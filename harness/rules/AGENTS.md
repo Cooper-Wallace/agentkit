@@ -14,6 +14,10 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
   - Agent Harness Repositories: Bifurcated into `harness/` (`plugins/`, `hooks/`, `rules/`, `skills/`) for harness-level governance and runtime hooks, and `project/` (`skills/`, `tools/`, `templates/`) for reusable cross-project domain skills, utility tools, and scaffolding templates.
 - **Idempotent Automation**: All shell scripts and automation tools must be safe to execute multiple times without causing side effects, duplicated lines, or state corruption. Include a `--dry-run` flag wherever files are modified or external services are called.
 - **Documentation Integrity**: Maintain existing comments, type hints, and docstrings. When refactoring or updating code, ensure documentation accurately mirrors the new behavior.
+- **Minimally Verbose & Deterministic CLI Design**:
+  - Design CLIs across projects to be clean, self-documenting, and minimally verbose without unnecessary abbreviation or cryptic shortening.
+  - Because developer tools in this ecosystem are predominantly orchestrated agentically (via AI agent workflows, tool calls, scripts, and CI runners), semantic clarity, predictability, and unambiguous command shapes take precedence over rapid human keystroke shortcuts.
+  - Top-level operational shorthands are restricted to explicit, high-frequency state toggles (such as `agentkit wake` and `agentkit sleep` for immediate manual power overrides), while arbitrary contractions (`caff`, `cfg`, `mgr`, `sync-tmp`) are strictly prohibited.
 
 ---
 

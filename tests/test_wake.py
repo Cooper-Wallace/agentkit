@@ -2,13 +2,19 @@
 Unit tests for sleep inhibition engine, state arbiter, and loopback IPC server.
 """
 
+import argparse
+import importlib.machinery
+import importlib.util
 import json
 import os
 from pathlib import Path
+import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
+import types
 import unittest
 from unittest import mock
 
@@ -497,8 +503,8 @@ class TestWakeAutostart(unittest.TestCase):
                 desktop_path = Path(tmp_dir) / "autostart" / "agentkit-wake.desktop"
                 self.assertTrue(desktop_path.exists())
                 content = desktop_path.read_text(encoding="utf-8")
-                self.assertIn("Exec=/usr/bin/agentkit wake tray", content)
-                self.assertIn("Name=AgentKit WakeLock", content)
+                self.assertIn("Exec=/usr/bin/agentkit caffeine tray", content)
+                self.assertIn("Name=AgentKit Caffeine", content)
 
                 # Disable
                 ok, msg = disable_autostart()
@@ -507,39 +513,152 @@ class TestWakeAutostart(unittest.TestCase):
 
 
 class TestWakeCLI(unittest.TestCase):
-    """Test agentkit wake command line invocations."""
+    """Test agentkit caffeine and wake/sleep command line invocations."""
 
-    def test_wake_status_offline(self) -> None:
+    def test_caffeine_status_offline(self) -> None:
         agentkit_bin = REPO_ROOT / "bin" / "agentkit"
-        for subcmd in ("wake", "wakelock"):
+        res = subprocess.run(
+            [sys.executable, str(agentkit_bin), "caffeine", "status", "--json"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 1)
+        data = json.loads(res.stdout)
+        self.assertFalse(data.get("active"))
+        self.assertIn("error", data)
+
+    def test_caffeine_notify_offline_does_not_fail(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        res = subprocess.run(
+            [sys.executable, str(agentkit_bin), "caffeine", "notify", "active", "--quiet"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+
+    def test_caffeine_autostart_status(self) -> None:
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        res = subprocess.run(
+            [sys.executable, str(agentkit_bin), "caffeine", "autostart", "--status"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("AgentKit Caffeine Autostart:", res.stdout)
+
+    def test_wake_and_sleep_override_shorthands(self) -> None:
+        """Verify agentkit wake and agentkit sleep operate as top-level override shorthands."""
+        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
+        # Offline calls return code 1 with clean failure message
+        res_wake = subprocess.run(
+            [sys.executable, str(agentkit_bin), "wake"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_wake.returncode, 1)
+        self.assertIn("Caffeine daemon not reachable", res_wake.stdout)
+
+        res_wake_dur = subprocess.run(
+            [sys.executable, str(agentkit_bin), "wake", "--duration", "30m"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_wake_dur.returncode, 1)
+
+        res_sleep = subprocess.run(
+            [sys.executable, str(agentkit_bin), "sleep"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_sleep.returncode, 1)
+        self.assertIn("Caffeine daemon not reachable", res_sleep.stdout)
+
+        # Online test with active WakeServer on dynamic port
+        from project.tools.wake.engine import WakeEngine
+        from project.tools.wake.inhibitor import MockSleepInhibitor
+        from project.tools.wake.server import WakeServer
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            test_port = s.getsockname()[1]
+
+        inhibitor = MockSleepInhibitor()
+        engine = WakeEngine(inhibitor=inhibitor)
+        server = WakeServer(engine=engine, host="127.0.0.1", port=test_port)
+        t = threading.Thread(target=server.serve_forever, daemon=True)
+        t.start()
+        time.sleep(0.15)
+        try:
+            # 1. agentkit wake (override ON)
             res = subprocess.run(
-                [sys.executable, str(agentkit_bin), subcmd, "status", "--json"],
+                [sys.executable, str(agentkit_bin), "wake", "--port", str(test_port)],
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(res.returncode, 1)
-            data = json.loads(res.stdout)
-            self.assertFalse(data.get("active"))
-            self.assertIn("error", data)
+            self.assertEqual(res.returncode, 0)
+            self.assertIn("Caffeine manual awake override set to: ON", res.stdout)
+            status = engine.get_status()
+            self.assertEqual(status["state"], "override")
+            self.assertTrue(status["inhibited"])
 
-    def test_wake_notify_offline_does_not_fail(self) -> None:
+            # 2. agentkit sleep (override OFF)
+            res = subprocess.run(
+                [sys.executable, str(agentkit_bin), "sleep", "--port", str(test_port)],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0)
+            self.assertIn("Caffeine manual awake override set to: OFF", res.stdout)
+            status = engine.get_status()
+            self.assertEqual(status["state"], "idle")
+            self.assertFalse(status["inhibited"])
+
+            # 3. agentkit wake --duration 1h (override ON with duration)
+            res = subprocess.run(
+                [sys.executable, str(agentkit_bin), "wake", "--port", str(test_port), "--duration", "1h"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res.returncode, 0)
+            self.assertIn("3600s", res.stdout)
+            status = engine.get_status()
+            self.assertEqual(status["state"], "override")
+            self.assertTrue(status["inhibited"])
+        finally:
+            server.stop()
+
+    def test_subparsers_contain_caffeine_wake_sleep_and_no_wakelock(self) -> None:
+        """Verify root subparsers contain caffeine, wake, and sleep, and do NOT contain wakelock."""
+        loader = importlib.machinery.SourceFileLoader("agentkit", str(REPO_ROOT / "bin" / "agentkit"))
+        spec = importlib.util.spec_from_loader("agentkit", loader)
+        agentkit = importlib.util.module_from_spec(spec)
+        loader.exec_module(agentkit)
+        parser = agentkit.build_parser()
+        subparser_actions = [a for a in parser._actions if isinstance(a, argparse._SubParsersAction)]
+        self.assertTrue(subparser_actions)
+        choices = subparser_actions[0].choices
+        self.assertIn("caffeine", choices)
+        self.assertIn("wake", choices)
+        self.assertIn("sleep", choices)
+        self.assertNotIn("wakelock", choices)
+        self.assertNotIn("caff", choices)
+
+        # Verify caffeine subcommands
+        caffeine_parser = choices["caffeine"]
+        c_sub_actions = [a for a in caffeine_parser._actions if isinstance(a, argparse._SubParsersAction)]
+        self.assertTrue(c_sub_actions)
+        c_choices = c_sub_actions[0].choices
+        for expected in ("status", "daemon", "tray", "notify", "watch", "autostart", "override", "log"):
+            self.assertIn(expected, c_choices)
+
+        # Verify invoking wakelock produces invalid choice exit code 2
         agentkit_bin = REPO_ROOT / "bin" / "agentkit"
         res = subprocess.run(
-            [sys.executable, str(agentkit_bin), "wake", "notify", "active", "--quiet"],
+            [sys.executable, str(agentkit_bin), "wakelock"],
             capture_output=True,
             text=True,
         )
-        self.assertEqual(res.returncode, 0)
-
-    def test_wake_autostart_status(self) -> None:
-        agentkit_bin = REPO_ROOT / "bin" / "agentkit"
-        res = subprocess.run(
-            [sys.executable, str(agentkit_bin), "wake", "autostart", "--status"],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(res.returncode, 0)
-        self.assertIn("AgentKit Wake Autostart:", res.stdout)
+        self.assertEqual(res.returncode, 2)
+        self.assertIn("invalid choice: 'wakelock'", res.stderr)
 
     def test_agentkit_apply_deploys_wake_lock_and_autostart(self) -> None:
         agentkit_bin = REPO_ROOT / "bin" / "agentkit"
@@ -583,7 +702,7 @@ class TestWakeCLI(unittest.TestCase):
             autostart_entry = config_home / "autostart" / "agentkit-wake.desktop"
             self.assertTrue(autostart_entry.exists(), "agentkit-wake.desktop autostart was not created")
             content = autostart_entry.read_text(encoding="utf-8")
-            self.assertIn("agentkit wake tray", content)
+            self.assertIn("agentkit caffeine tray", content)
 
 
 class TestWakeLockPluginAndTray(unittest.TestCase):

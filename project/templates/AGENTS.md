@@ -12,6 +12,10 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
   - `src/` or `bin/`: Core application source code
   - `tests/`: Automated unit and integration test suite
   - `docs/`: Architecture documentation and ADRs
+- **Minimally Verbose & Deterministic CLI Design**:
+  - Design CLIs across projects to be clean, self-documenting, and minimally verbose without unnecessary abbreviation or cryptic shortening.
+  - Because developer tools in this ecosystem are predominantly orchestrated agentically (via AI agent workflows, tool calls, scripts, and CI runners), semantic clarity, predictability, and unambiguous command shapes take precedence over rapid human keystroke shortcuts.
+  - Top-level operational shorthands are restricted to explicit, high-frequency state toggles (such as `agentkit wake` and `agentkit sleep` for immediate manual power overrides), while arbitrary contractions (`caff`, `cfg`, `mgr`, `sync-tmp`) are strictly prohibited.
 
 ---
 
