@@ -130,7 +130,7 @@ TEST_FAILURES=0
 FAILED_SUITE=""
 
 # Python verification
-if [[ -f "pytest.ini" || -f "pyproject.toml" || -d "tests" ]]; then
+if [[ -f "pytest.ini" || -f "pyproject.toml" ]] || compgen -G "tests/*.py" >/dev/null 2>&1; then
   if command -v pytest >/dev/null 2>&1; then
     AGY_VERIFY_RUNNING=0 pytest -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="pytest"; }
   elif command -v python3 >/dev/null 2>&1; then
