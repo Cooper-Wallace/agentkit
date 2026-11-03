@@ -96,8 +96,9 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
    - **Disjoint-File Parallel Worker Partitioning**:
      - Partition tasks across concurrent subagents operating on strictly disjoint file sets for race-free parallel execution.
 
-4. **Strict Test Coverage**:
+4. **Strict Test Coverage & Guarded Failure Standards**:
    - Any modifications to the permission catalog, parser, merger, profiles, quota logic, or audit engine must be accompanied by updated unit tests in `tests/`.
+   - **Guarded Failure & Safe Degrade Coverage**: Every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests.
    - Run tests with `python3 -m unittest discover tests -v`.
 
 5. **Conventional Commits**:
@@ -143,6 +144,9 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 - **Local Obsidian AgentVault**:
   - The local Obsidian AgentVault (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`, configurable via `$AGENTKIT_AGENTVAULT_PATH` or `$AGENTKIT_VAULT_PATH`) serves as the long-term, human-in-the-loop memory store across sessions, adhering to the open Obsidian Skills standard and "files over apps" philosophy.
   - **Automatic Workspace Whitelisting**: The AgentVault directory (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) as well as core repositories (`agentkit` and `repokit` at `$HOME/Projects/agentkit` and `$HOME/Projects/repokit`) are automatically whitelisted in Antigravity's `trustedWorkspaces` via `agentkit apply` and `agentkit vault init` to eliminate file read/write prompts during autonomous workflows and cross-repo introspection.
+- **Bifurcated Hybrid Storage Contract**:
+  - **Repo-Specific Specifications**: Architecture Decision Records (ADRs) and static technical specifications live directly inside `<repo>/docs/` (`docs/decisions/`) versioned alongside project code.
+  - **Cross-Repo System State**: High-level cross-repo architecture maps (`workstation-stack.canvas`), living project boards (`Projects/<repo>.md`), offline input queues (`User-Input/`), and immutable session handoffs (`Sessions/`) live in the Git-backed `AgentVault` repository.
 - **Offline Human-Agent Collaboration Protocol**:
   - **Ingest at Session Start (Phase 1)**: Agents must check `User-Input/pending/` at the beginning of each session (or run `agentkit vault ingest`) to process offline user directives, feedback, and backlog notes written between conversations. Processed directives are archived to `User-Input/processed/`.
   - **Project Living Notes**: Agents maintain project knowledge bases in `Projects/<project>.md` (e.g. `agentkit.md`, `repokit.md`), keeping active architecture, current branch/commit, and task checklists synchronized.
@@ -160,6 +164,7 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
     - `docs/<doc-name>`: Documentation updates
     - `refactor/<target>`: Structural code improvements
     - `test/<suite>`: Test additions or refactoring
+  - Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges.
   - Never stack unrelated features or accumulate unrelated changes on the same branch. Keep scope narrow, focused, and atomic.
 - **Commit Hygiene: One Atomic Commit Per Subagent**:
   - Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work.

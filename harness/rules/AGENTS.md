@@ -71,6 +71,9 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
 - **Local Obsidian AgentVault**:
   - The local Obsidian AgentVault (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`, configurable via `$AGENTKIT_AGENTVAULT_PATH` or `$AGENTKIT_VAULT_PATH`) serves as the durable, human-in-the-loop long-term memory layer across agent conversations, adhering to the open Obsidian Skills standard and "files over apps" philosophy.
   - **Automatic Workspace Whitelisting**: The AgentVault directory (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) as well as core repositories (`agentkit` and `repokit` at `$HOME/Projects/agentkit` and `$HOME/Projects/repokit`) are automatically whitelisted in Antigravity's `trustedWorkspaces` via `agentkit apply` and `agentkit vault init` to eliminate file read/write prompts during autonomous workflows and cross-repo introspection.
+- **Bifurcated Hybrid Storage Contract**:
+  - **Repo-Specific Specifications**: Architecture Decision Records (ADRs) and static technical specifications live directly inside `<repo>/docs/` (`docs/decisions/`) versioned alongside project code.
+  - **Cross-Repo System State**: High-level cross-repo architecture maps (`workstation-stack.canvas`), living project boards (`Projects/<repo>.md`), offline input queues (`User-Input/`), and immutable session handoffs (`Sessions/`) live in the Git-backed `AgentVault` repository.
 - **Offline Human-Agent Collaboration Protocol**:
   - **Ingest at Session Start (Phase 1)**: Agents must check `User-Input/pending/` at the beginning of each session (or run `agentkit vault ingest`) to process offline user directives, feedback, and backlog notes written between conversations. Processed directives are archived to `User-Input/processed/`.
   - **Project Living Notes**: Agents maintain project knowledge bases in `Projects/<project>.md` (e.g. `agentkit.md`, `repokit.md`), keeping active architecture, current branch/commit, and task checklists synchronized.
@@ -88,6 +91,7 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
     - `docs/<doc-name>`: Documentation updates
     - `refactor/<target>`: Structural code improvements
     - `test/<suite>`: Test additions or refactoring
+  - Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges.
   - Never stack unrelated features or accumulate unrelated changes on the same branch. Keep scope narrow, focused, and atomic.
 - **Commit Hygiene: One Atomic Commit Per Subagent**:
   - Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work.
@@ -131,6 +135,8 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
     - Go: `go test ./...`
     - Rust: `cargo test`
     - Java: `mvn test`
+- **Guarded Failure & Safe Degrade Coverage**:
+  - Every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests.
 - **Audit & Status Inspection**:
   - Inspect `git status` and `git diff` before committing to ensure no unintended scratch files or debug statements leak into repositories.
 

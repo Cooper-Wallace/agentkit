@@ -129,33 +129,116 @@ fi
 TEST_FAILURES=0
 FAILED_SUITE=""
 
+RAN_PYTHON=0
+RAN_NODE=0
+RAN_CARGO=0
+RAN_GO=0
+RAN_JAVA=0
+
 # Python verification
-if [[ -f "pytest.ini" || -f "pyproject.toml" ]] || compgen -G "tests/*.py" >/dev/null 2>&1; then
-  if command -v pytest >/dev/null 2>&1; then
+if [[ -f "pytest.ini" || -f "pyproject.toml" ]] || compgen -G "tests/*.py" >/dev/null 2>&1 || compgen -G "tests/*/*.py" >/dev/null 2>&1; then
+  RAN_PYTHON=1
+  if [[ -x ".venv/bin/pytest" ]]; then
+    AGY_VERIFY_RUNNING=0 .venv/bin/pytest -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="pytest"; }
+  elif command -v pytest >/dev/null 2>&1; then
     AGY_VERIFY_RUNNING=0 pytest -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="pytest"; }
   elif command -v python3 >/dev/null 2>&1; then
     AGY_VERIFY_RUNNING=0 python3 -m unittest discover tests -v >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="python unittest"; }
   fi
+
+  # Ruff lint and format verification
+  if [[ "$TEST_FAILURES" -eq 0 && ( -f "pyproject.toml" || -f "ruff.toml" ) ]]; then
+    RUFF_BIN=""
+    if [[ -x ".venv/bin/ruff" ]]; then
+      RUFF_BIN=".venv/bin/ruff"
+    elif command -v ruff >/dev/null 2>&1; then
+      RUFF_BIN="ruff"
+    fi
+    if [[ -n "$RUFF_BIN" ]]; then
+      if ! "$RUFF_BIN" check . >/dev/null 2>&1 || ! "$RUFF_BIN" format --check . >/dev/null 2>&1; then
+        TEST_FAILURES=1
+        FAILED_SUITE="ruff lint/format"
+      fi
+    fi
+  fi
 fi
 
 # Node.js verification
-if [[ -f "package.json" ]] && grep -q '"test"' package.json; then
+if [[ "$TEST_FAILURES" -eq 0 && -f "package.json" ]] && grep -q '"test"' package.json; then
+  RAN_NODE=1
   if command -v npm >/dev/null 2>&1; then
     npm test >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="npm test"; }
   fi
 fi
 
 # Cargo / Rust verification
-if [[ -f "Cargo.toml" ]]; then
+if [[ "$TEST_FAILURES" -eq 0 && -f "Cargo.toml" ]]; then
+  RAN_CARGO=1
   if command -v cargo >/dev/null 2>&1; then
     cargo test -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="cargo test"; }
   fi
 fi
 
 # Go verification
-if [[ -f "go.mod" ]]; then
+if [[ "$TEST_FAILURES" -eq 0 && -f "go.mod" ]]; then
+  RAN_GO=1
   if command -v go >/dev/null 2>&1; then
-    go test ./... >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="go test"; }
+    if ! go test ./... >/dev/null 2>&1 || ! go vet ./... >/dev/null 2>&1; then
+      TEST_FAILURES=1
+      FAILED_SUITE="go test/vet"
+    fi
+  fi
+fi
+
+# Java verification
+if [[ "$TEST_FAILURES" -eq 0 && -f "pom.xml" ]]; then
+  RAN_JAVA=1
+  if command -v mvn >/dev/null 2>&1; then
+    mvn test -q >/dev/null 2>&1 || { TEST_FAILURES=1; FAILED_SUITE="mvn test"; }
+  fi
+fi
+
+# Bash verification
+if [[ "$TEST_FAILURES" -eq 0 && "$RAN_PYTHON" -eq 0 && "$RAN_GO" -eq 0 && "$RAN_NODE" -eq 0 && "$RAN_CARGO" -eq 0 && "$RAN_JAVA" -eq 0 ]]; then
+  if compgen -G "tests/*.sh" >/dev/null 2>&1; then
+    # shellcheck verification
+    if command -v shellcheck >/dev/null 2>&1; then
+      SHELL_SCRIPTS=()
+      for f in tests/*.sh; do
+        if [[ -f "$f" ]]; then
+          SHELL_SCRIPTS+=("$f")
+        fi
+      done
+      if [[ -d "bin" ]]; then
+        for f in bin/*; do
+          if [[ -f "$f" ]]; then
+            FIRST_LINE="$(head -n 1 "$f" 2>/dev/null || true)"
+            if [[ "$FIRST_LINE" =~ ^#!.*(bash|sh) ]]; then
+              SHELL_SCRIPTS+=("$f")
+            fi
+          fi
+        done
+      fi
+      if [[ ${#SHELL_SCRIPTS[@]} -gt 0 ]]; then
+        if ! shellcheck "${SHELL_SCRIPTS[@]}" >/dev/null 2>&1; then
+          TEST_FAILURES=1
+          FAILED_SUITE="shellcheck"
+        fi
+      fi
+    fi
+
+    # Run tests/*.sh
+    if [[ "$TEST_FAILURES" -eq 0 ]]; then
+      for test_script in tests/*.sh; do
+        if [[ -f "$test_script" ]]; then
+          if ! bash "$test_script" >/dev/null 2>&1; then
+            TEST_FAILURES=1
+            FAILED_SUITE="bash tests"
+            break
+          fi
+        fi
+      done
+    fi
   fi
 fi
 

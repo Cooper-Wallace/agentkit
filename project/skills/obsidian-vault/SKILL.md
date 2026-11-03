@@ -17,6 +17,9 @@ The **Obsidian AgentVault** replaces opaque memory mechanisms with standard, dur
 - **Files Over Apps**: Plaintext Markdown files in a local directory remain readable, version-controllable, and portable for decades without vendor lock-in.
 - **Asynchronous Offline Collaboration**: During breaks between conversations or overnight, the developer opens Obsidian on their desktop or mobile device, inspects previous session handoffs, updates project tasks, adjusts architectural guidelines, and drops offline directives into `User-Input/pending/`.
 - **Bidirectional Ingestion & Synthesis**: When a new conversation session starts, the agent immediately inspects `User-Input/pending/` and active project notes in `Projects/`, inlining offline directives directly into Phase 1 planning artifacts (`plan.md`). At session completion, the agent writes a structured handoff note to `Sessions/handoff-YYYY-MM-DD-<topic>.md` and updates `Projects/<project>.md`.
+- **Bifurcated Hybrid Storage Contract**:
+  - **Repo-Specific Specifications & ADRs**: Architecture Decision Records (ADRs) and static technical specifications live inside `<repo>/docs/` (`docs/decisions/`) versioned directly with project code.
+  - **Cross-Repo System State**: High-level cross-repo architecture maps (`workstation-stack.canvas`), living project boards (`Projects/<repo>.md`), offline input queues (`User-Input/`), and immutable session handoffs (`Sessions/`) live in the Git-backed `AgentVault` repository (`~/Documents/AgentVault`).
 
 ---
 

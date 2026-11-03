@@ -24,6 +24,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -2229,6 +2230,18 @@ def cmd_vault_init(args: argparse.Namespace) -> int:
         if not gitkeep.exists():
             gitkeep.touch()
 
+    # 2b. Git ignore for Obsidian workspace, caches, and OS artifacts
+    vault_gitignore = vault_path / ".gitignore"
+    if not vault_gitignore.exists():
+        vault_gitignore.write_text(
+            ".obsidian/workspace.json\n"
+            ".obsidian/workspace-mobile.json\n"
+            ".obsidian/cache\n"
+            ".trash/\n"
+            ".DS_Store\n",
+            encoding="utf-8",
+        )
+
     # 3. Root notes
     write_vault_note_if_missing(vault_path / "Dashboard.md", get_dashboard_template())
     write_vault_note_if_missing(vault_path / "User-Input" / "README.md", get_user_input_readme_template())
@@ -2509,6 +2522,8 @@ def cmd_vault_sync(args: argparse.Namespace) -> int:
     """Idempotently sync project state, tasks, and ADR links in Obsidian AgentVault Projects/<project>.md."""
     vault_path = resolve_vault_path(getattr(args, "path", None))
     is_json = getattr(args, "json", False)
+    dry_run = getattr(args, "dry_run", False)
+    no_push = getattr(args, "no_push", False)
 
     if not vault_path.exists():
         if is_json:
@@ -2518,13 +2533,14 @@ def cmd_vault_sync(args: argparse.Namespace) -> int:
         return 1
 
     projects_dir = vault_path / "Projects"
-    projects_dir.mkdir(parents=True, exist_ok=True)
+    if not dry_run:
+        projects_dir.mkdir(parents=True, exist_ok=True)
 
     project_arg = getattr(args, "project", None)
     if project_arg:
         target_projects = [project_arg[:-3] if project_arg.endswith(".md") else project_arg]
     else:
-        found_projs = [p.stem for p in projects_dir.glob("*.md") if not p.name.startswith(".")]
+        found_projs = [p.stem for p in projects_dir.glob("*.md") if not p.name.startswith(".")] if projects_dir.exists() else []
         target_projects = found_projs if found_projs else [
             "agentkit",
             "repokit",
@@ -2568,16 +2584,91 @@ def cmd_vault_sync(args: argparse.Namespace) -> int:
             note_type = meta.pop("type", "project")
             updated_by = meta.pop("updated_by", "agentkit")
             new_fm = format_frontmatter(tags, note_type, updated_by, extra=meta)
-            proj_file.write_text(new_fm + "\n\n" + body.strip() + "\n", encoding="utf-8")
+            new_content = new_fm + "\n\n" + body.strip() + "\n"
+            if not dry_run:
+                proj_file.write_text(new_content, encoding="utf-8")
         else:
-            proj_file.write_text(get_project_template(proj), encoding="utf-8")
+            if not dry_run:
+                proj_file.write_text(get_project_template(proj), encoding="utf-8")
 
         synced_projects.append(proj)
         if not is_json:
-            print_success(f"Synced project note: Projects/{proj}.md")
+            prefix = "[dry-run] Would sync" if dry_run else "Synced"
+            print_success(f"{prefix} project note: Projects/{proj}.md")
+
+    git_sync_info: Dict[str, Any] = {}
+    if (vault_path / ".git").exists():
+        if dry_run:
+            git_sync_info["git_sync"] = "dry-run"
+            if not is_json:
+                print_info("[dry-run] Git repository detected; would stage, commit, and sync")
+        else:
+            subprocess.run(["git", "-C", str(vault_path), "add", "-A"], capture_output=True, text=True)
+            status_res = subprocess.run(
+                ["git", "-C", str(vault_path), "status", "--porcelain"],
+                capture_output=True,
+                text=True,
+            )
+            if status_res.stdout.strip():
+                subprocess.run(
+                    ["git", "-C", str(vault_path), "commit", "-m", "chore(vault): sync project state and session notes"],
+                    capture_output=True,
+                    text=True,
+                )
+
+            remote_res = subprocess.run(
+                ["git", "-C", str(vault_path), "remote", "get-url", "origin"],
+                capture_output=True,
+                text=True,
+            )
+            has_remote = (remote_res.returncode == 0 and bool(remote_res.stdout.strip()))
+
+            if not has_remote:
+                git_sync_info["git_remote_synced"] = False
+                git_sync_info["git_status"] = "local_only"
+                if not is_json:
+                    print_info("Git-backed vault has no remote 'origin' configured; saved local commit (local_only mode).")
+            elif no_push:
+                git_sync_info["git_remote_synced"] = False
+                git_sync_info["git_status"] = "no_push"
+                if not is_json:
+                    print_info("Git-backed vault remote sync skipped (--no-push).")
+            else:
+                try:
+                    subprocess.run(
+                        ["git", "-C", str(vault_path), "pull", "--rebase", "--autostash", "origin", "main"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    push_res = subprocess.run(
+                        ["git", "-C", str(vault_path), "push", "origin", "main"],
+                        capture_output=True,
+                        text=True,
+                        check=False,
+                    )
+                    if push_res.returncode == 0:
+                        git_sync_info["git_remote_synced"] = True
+                        git_sync_info["git_status"] = "synced"
+                        if not is_json:
+                            print_success("Git-backed vault synced with remote origin/main.")
+                    else:
+                        git_sync_info["git_remote_synced"] = False
+                        git_sync_info["git_status"] = "push_failed"
+                        if not is_json:
+                            print_warning(f"Git push failed: {push_res.stderr.strip()}")
+                except Exception as e:
+                    git_sync_info["git_remote_synced"] = False
+                    git_sync_info["git_status"] = f"error: {e}"
+                    if not is_json:
+                        print_failure(f"Git sync encountered error: {e}")
 
     if is_json:
-        print(json.dumps({"synced": synced_projects}, indent=2))
+        result: Dict[str, Any] = {"synced": synced_projects}
+        if dry_run:
+            result["dry_run"] = True
+        result.update(git_sync_info)
+        print(json.dumps(result, indent=2))
 
     return 0
 
@@ -3208,6 +3299,8 @@ def build_parser() -> argparse.ArgumentParser:
         help="Idempotently sync project state, tasks, and ADR links",
     )
     p_v_sync.add_argument("--project", help="Specific project to sync (defaults to all projects)")
+    p_v_sync.add_argument("--dry-run", action="store_true", help="Preview sync actions without mutating files or running git commands")
+    p_v_sync.add_argument("--no-push", action="store_true", help="Do not push changes to remote git repository")
     p_v_sync.add_argument("--json", action="store_true", help="Output sync summary in JSON format")
     p_v_sync.set_defaults(func=cmd_vault_sync)
 

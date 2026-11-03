@@ -16,7 +16,7 @@ jobs:
     uses: Cooper-Wallace/repokit/.github/workflows/semantic-pr.yml@main
 
   ci:
-    name: "Test & Coverage"
+    name: "ci / Test & Coverage"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
