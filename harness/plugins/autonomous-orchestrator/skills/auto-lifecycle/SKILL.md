@@ -30,9 +30,9 @@ flowchart LR
    - Run `agentkit quota status` before freezing large DAG fan-outs to ensure target quota groups (Gemini, Claude, Argon) have sufficient headroom (>15%).
 3. **Draft Plan Artifact**: Create an executable markdown plan in the artifact directory (`brain/<conversation-id>/plan.md`).
    - Define exact files to modify.
-   - Define test contracts and acceptance criteria.
+   - Define test contracts and acceptance criteria (requiring **Guarded Failure & Safe Degrade Coverage**: every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests).
    - Outline subtask DAG with explicit complexity tiers (`[complexity: low|med|high]`) for parallel worker execution.
-4. **Branch Isolation (One Branch Per Change)**: Ensure the active branch is a dedicated short-lived feature branch (`feat/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`, `test/<name>`) branched directly from `main`. Never stack unrelated changes or accumulate multiple features on the same branch.
+4. **Branch Isolation (One Branch Per Change)**: Ensure the active branch is a dedicated short-lived feature branch (`feat/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`, `test/<name>`) branched directly from `origin/main`. Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges. Never stack unrelated changes or accumulate multiple features on the same branch.
 
 ### Phase 2: Autonomous Implementation (Worker Subagents)
 1. **Strict Subagent Execution**: ALL code, test, and UI edits (including initial implementation as well as iterative tuning after user review feedback) must be executed by subagents (`Workspace: "inherit"` or `"share"`), never directly by the Root Orchestrator (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7) in the root session.
@@ -68,7 +68,7 @@ flowchart LR
 3. **Self-Healing & User Review Feedback Loop**: When either the adversarial review OR the user reports a regression, tuning issue, or requested adjustment: the Root Orchestrator diagnoses the logs/diff and updates `plan.md`, but **MUST dispatch a subagent (`Model: "flash"`)** to implement the fix and update unit tests — never editing project files directly in the root session.
 
 ### Phase 4: Verification, Vault Memory Persistence & PR Promotion Gate
-1. **Deterministic Quality Gate**: Verify that the test suite passes locally. The `Stop` hook will reject session termination if tests fail or if the worktree is dirty.
+1. **Deterministic Quality Gate & Guarded Failure Standards**: Verify that the test suite passes locally. The `Stop` hook will reject session termination if tests fail or if the worktree is dirty. Ensure tests include guarded failure and safe degrade coverage.
 2. **Obsidian AgentVault Persistence**:
    - Author a structured session handoff note to `$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-<topic>.md` (or run `agentkit vault handoff --topic <topic>`), detailing completed deliverables, active branch, test verification status, and next steps for offline review.
    - Update the target project knowledge base in `$HOME/Documents/AgentVault/Projects/<project>.md`: check off completed tasks (`- [x]`), record newly discovered backlog items (`- [ ]`), and update the "Current State" summary.
@@ -78,12 +78,25 @@ flowchart LR
    ```bash
    git push -u origin feat/<feature-name>
    ```
-5. **Create Pull Request & Post Review Audit**:
-   Use the GitHub CLI (`gh pr create`) or GitHub MCP to open a PR and verify check suites:
+5. **Create Pull Request & Embed PR_BODY Audit Trail**:
+   Use the GitHub CLI (`gh pr create`) or GitHub MCP to open a PR and verify check suites.
+   > [!IMPORTANT]
+   > **PR_BODY Audit Trail Requirement**:
+   > The **Subagent Decomposition & Incremental Commit Trail** (`git log main..HEAD --oneline`) AND the **Phase 3 Adversarial Review Summary** MUST be embedded directly into the PR description (`PR_BODY`) when creating or updating the PR. Because repositories follow the Squash and Merge model (`PR_BODY` becomes the squash commit body on `main`), this guarantees that the full engineering audit trail is permanently preserved in git history.
    ```bash
    gh pr create --title "feat(scope): concise description" \
-                --body "### Summary... ### Verification..."
+                --body "### Summary
+<high-level summary>
+
+### Subagent Incremental Commit Trail
+$(git log main..HEAD --oneline)
+
+### Phase 3 Adversarial Review Audit
+<adversarial review summary and edge case verification>
+
+### Verification
+<automated test verification details>"
    gh pr checks
    ```
-   Post the Phase 3 adversarial review report to the PR using `gh pr comment` or directly in the PR description.
+   Post any subsequent adversarial review adjustments to the PR using `gh pr comment` or by updating the PR description.
 6. **Human-Only Trunk Promotion Gate**: Autonomous agents MUST NEVER execute `gh pr merge`, enable GitHub auto-merge, or automate trunk merging. Phase 4 concludes by presenting the PR URL and verification report to the user for human review and manual squash merge via the GitHub web UI once all quality gates pass.

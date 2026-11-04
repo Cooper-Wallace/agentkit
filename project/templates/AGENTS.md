@@ -83,6 +83,7 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
     - `docs/<doc-name>`: Documentation updates
     - `refactor/<target>`: Structural code improvements
     - `test/<suite>`: Test additions or refactoring
+  - Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges.
   - Never stack unrelated features or accumulate unrelated changes on the same branch. Keep scope narrow, focused, and atomic.
 - **Commit Hygiene: One Atomic Commit Per Subagent**:
   - Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work.
@@ -108,6 +109,7 @@ Before submitting changes or marking tasks complete, run the project test suite:
 ```bash
 {{TEST_COMMAND}}
 ```
+- **Guarded Failure & Safe Degrade Coverage**: Every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests.
 
 ---
 
