@@ -7,6 +7,7 @@ on:
       - edited
       - synchronize
       - reopened
+  workflow_call:
 
 permissions:
   pull-requests: read
@@ -14,6 +15,7 @@ permissions:
 jobs:
   main:
     name: Validate Conventional Commit PR Title
+    if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v5
@@ -32,4 +34,5 @@ jobs:
             ci
             chore
             revert
+            release
           requireScope: false
