@@ -52,6 +52,16 @@ Commands:
       Export or display unmanaged local permissions and MCP servers.
       Options: --output <dir>, --json, --settings-path <path>
 
+  caffeine <command> [options]
+      Manage ambient sleep inhibition, multi-agent lease arbitration, and HUD telemetry.
+      Commands: status, daemon, notify, override, cancel, autostart, log, watch
+
+  wake [duration]
+      Shorthand to force sleep inhibition lock ON (e.g. agentkit wake 1h).
+
+  sleep
+      Shorthand to release manual sleep inhibition lock.
+
   version, -v, --version
       Print agentkit version.
 
@@ -102,6 +112,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	case "snapshot":
 		return runSnapshot(cmdArgs, stdout, stderr)
+
+	case "caffeine":
+		return RunCaffeine("caffeine", cmdArgs, stdout, stderr)
+
+	case "wake":
+		return RunCaffeine("wake", cmdArgs, stdout, stderr)
+
+	case "sleep":
+		return RunCaffeine("sleep", cmdArgs, stdout, stderr)
 
 	default:
 		fmt.Fprintf(stderr, "Unknown command: %s\n", command)
