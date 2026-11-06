@@ -62,7 +62,9 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 │       ├── 0008-harness-project-bifurcation-and-aptitude-consolidation.md
 │       ├── 0009-quota-aware-model-routing.md
 │       ├── 0010-obsidian-perpetual-knowledge-vault.md
-│       └── 0011-git-tree-management-and-worktree-isolation.md
+│       ├── 0011-git-tree-management-and-worktree-isolation.md
+│       ├── 0012-wake-lock-and-visual-state.md
+│       └── 0013-dock-based-caffeine-hud-and-visual-design.md
 │
 └── tests/
     ├── test_cli.py           # Automated unit test suite

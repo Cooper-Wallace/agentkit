@@ -1,5 +1,7 @@
 """Unit tests for agentkit Enterprise Verification and Git-Backed AgentVault Sync."""
 
+import importlib.machinery
+import importlib.util
 import json
 import os
 import shutil
@@ -11,6 +13,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CLI_PATH = REPO_ROOT / "bin" / "agentkit"
+
+# Dynamically import agentkit CLI module for template verification
+_loader = importlib.machinery.SourceFileLoader("agentkit", str(CLI_PATH))
+_spec = importlib.util.spec_from_loader("agentkit", _loader)
+_agentkit_mod = importlib.util.module_from_spec(_spec)
+_loader.exec_module(_agentkit_mod)
+get_project_template = _agentkit_mod.get_project_template
 
 
 def run_cli(*args: str, env: dict = None) -> subprocess.CompletedProcess:
@@ -125,6 +134,135 @@ class TestAgentVaultEnterpriseSync(unittest.TestCase):
             check=True,
         )
         self.assertIn("chore(vault): sync project state and session notes", log_res.stdout)
+
+    def test_vault_sync_no_push_flag(self):
+        """Verify vault sync commits locally but skips remote push when --no-push is set."""
+        remote_dir = Path(self.temp_dir) / "remote_repo.git"
+        subprocess.run(["git", "init", "--bare", "-b", "main", str(remote_dir)], check=True, capture_output=True)
+
+        res_init = run_cli("vault", "init", "--path", str(self.vault_path))
+        self.assertEqual(res_init.returncode, 0, res_init.stderr)
+
+        subprocess.run(["git", "init", "-b", "main"], cwd=self.vault_path, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "agent@test.com"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "config", "user.name", "Agent"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "remote", "add", "origin", str(remote_dir)], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "commit", "-m", "chore: initial commit"], cwd=self.vault_path, check=True, capture_output=True)
+        subprocess.run(["git", "push", "-u", "origin", "main"], cwd=self.vault_path, check=True, capture_output=True)
+
+        session_note = self.vault_path / "Sessions" / "handoff-test-no-push.md"
+        session_note.write_text("# Session Note\nTest note for --no-push flag.\n", encoding="utf-8")
+
+        res = run_cli("vault", "sync", "--path", str(self.vault_path), "--no-push", "--json")
+        self.assertEqual(res.returncode, 0, res.stderr)
+
+        data = json.loads(res.stdout)
+        self.assertFalse(data.get("git_remote_synced"))
+        self.assertEqual(data.get("git_status"), "no_push")
+
+        log_res = subprocess.run(
+            ["git", "log", "-n", "1", "--oneline"],
+            cwd=self.vault_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertIn("chore(vault): sync project state and session notes", log_res.stdout)
+
+        remote_log = subprocess.run(
+            ["git", "log", "-n", "1", "--oneline"],
+            cwd=remote_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertNotIn("chore(vault): sync project state and session notes", remote_log.stdout)
+
+    def test_vault_sync_remote_origin_push_success(self):
+        """Verify vault sync commits locally and pushes successfully to remote origin on main."""
+        remote_dir = Path(self.temp_dir) / "remote_repo.git"
+        subprocess.run(["git", "init", "--bare", "-b", "main", str(remote_dir)], check=True, capture_output=True)
+
+        res_init = run_cli("vault", "init", "--path", str(self.vault_path))
+        self.assertEqual(res_init.returncode, 0, res_init.stderr)
+
+        subprocess.run(["git", "init", "-b", "main"], cwd=self.vault_path, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "agent@test.com"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "config", "user.name", "Agent"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "remote", "add", "origin", str(remote_dir)], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "commit", "-m", "chore: initial commit"], cwd=self.vault_path, check=True, capture_output=True)
+        subprocess.run(["git", "push", "-u", "origin", "main"], cwd=self.vault_path, check=True, capture_output=True)
+
+        session_note = self.vault_path / "Sessions" / "handoff-test.md"
+        session_note.write_text("# Session Handoff\nTest sync push note.\n", encoding="utf-8")
+
+        res = run_cli("vault", "sync", "--path", str(self.vault_path), "--json")
+        self.assertEqual(res.returncode, 0, res.stderr)
+
+        data = json.loads(res.stdout)
+        self.assertTrue(data.get("git_remote_synced"))
+        self.assertEqual(data.get("git_status"), "synced")
+
+        remote_log = subprocess.run(
+            ["git", "log", "-n", "1", "--oneline"],
+            cwd=remote_dir,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertIn("chore(vault): sync project state and session notes", remote_log.stdout)
+
+    def test_vault_sync_remote_push_failure_graceful_degrade(self):
+        """Verify vault sync commits locally and gracefully degrades when remote push fails."""
+        res_init = run_cli("vault", "init", "--path", str(self.vault_path))
+        self.assertEqual(res_init.returncode, 0, res_init.stderr)
+
+        subprocess.run(["git", "init", "-b", "main"], cwd=self.vault_path, check=True, capture_output=True)
+        subprocess.run(["git", "config", "user.email", "agent@test.com"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "config", "user.name", "Agent"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "add", "-A"], cwd=self.vault_path, check=True)
+        subprocess.run(["git", "commit", "-m", "chore: initial commit"], cwd=self.vault_path, check=True, capture_output=True)
+
+        invalid_remote = "file:///non/existent/path/repo.git"
+        subprocess.run(["git", "remote", "add", "origin", invalid_remote], cwd=self.vault_path, check=True)
+
+        session_note = self.vault_path / "Sessions" / "handoff-fail.md"
+        session_note.write_text("# Push Fail Test\nContent.\n", encoding="utf-8")
+
+        res = run_cli("vault", "sync", "--path", str(self.vault_path), "--json")
+        self.assertEqual(res.returncode, 0, res.stderr)
+
+        data = json.loads(res.stdout)
+        self.assertFalse(data.get("git_remote_synced"))
+        self.assertEqual(data.get("git_status"), "push_failed")
+
+        log_res = subprocess.run(
+            ["git", "log", "-n", "1", "--oneline"],
+            cwd=self.vault_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        self.assertIn("chore(vault): sync project state and session notes", log_res.stdout)
+
+    def test_vault_sync_creates_missing_project_template(self):
+        """Verify vault sync creates missing project template and note in Projects/."""
+        res_init = run_cli("vault", "init", "--path", str(self.vault_path))
+        self.assertEqual(res_init.returncode, 0, res_init.stderr)
+
+        res = run_cli("vault", "sync", "--path", str(self.vault_path), "--project", "custom-service", "--json")
+        self.assertEqual(res.returncode, 0, res.stderr)
+
+        data = json.loads(res.stdout)
+        self.assertIn("custom-service", data.get("synced", []))
+
+        proj_file = self.vault_path / "Projects" / "custom-service.md"
+        self.assertTrue(proj_file.is_file(), f"Project file not created at {proj_file}")
+
+        expected_template = get_project_template("custom-service")
+        self.assertEqual(proj_file.read_text(encoding="utf-8"), expected_template)
 
 
 if __name__ == "__main__":
