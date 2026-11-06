@@ -182,10 +182,16 @@ fi
 # Go verification
 if [[ "$TEST_FAILURES" -eq 0 && -f "go.mod" ]]; then
   RAN_GO=1
-  if command -v go >/dev/null 2>&1; then
-    if ! go test ./... >/dev/null 2>&1 || ! go vet ./... >/dev/null 2>&1; then
+  GO_BIN=""
+  if [[ -x "/tmp/go/bin/go" ]]; then
+    GO_BIN="/tmp/go/bin/go"
+  elif command -v go >/dev/null 2>&1; then
+    GO_BIN="go"
+  fi
+  if [[ -n "$GO_BIN" ]]; then
+    if ! "$GO_BIN" test ./... >/tmp/verify-go-error.log 2>&1 || ! "$GO_BIN" vet ./... >>/tmp/verify-go-error.log 2>&1; then
       TEST_FAILURES=1
-      FAILED_SUITE="go test/vet"
+      FAILED_SUITE="go test/vet: $(head -n 2 /tmp/verify-go-error.log 2>/dev/null | tr '\n' ' ')"
     fi
   fi
 fi

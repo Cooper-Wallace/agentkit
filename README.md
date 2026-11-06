@@ -2,6 +2,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
+[![Go: 1.23+](https://img.shields.io/badge/Go-1.23%2B-00ADD8.svg?logo=go&logoColor=white)](https://golang.org)
 [![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
 
 The harness-agnostic AI agent configuration, permissions catalog, directives, and orchestration toolkit across Cooper Wallace's workstations.
@@ -17,7 +18,7 @@ When utilizing autonomous AI agents and pair-programming harnesses across multip
 
 `agentkit` eliminates both issues:
 - It maintains a **declarative, tiered catalog of pre-approved commands** in `config/permissions.json`, granting immediate access to safe inspection, testing, and git operations while strictly withholding destructive operations (`rm -rf`, `sudo`, disk formatters).
-- It provides an **idempotent, harness-agnostic CLI (`agentkit`)** that audits local settings, merges standard permissions without overwriting custom workspaces or models, creates automated backups, manages switchable model profiles, distributes reusable domain skills and tools, and links universal developer directives (`AGENTS.md` / `GEMINI.md`).
+- It provides a high-performance **compiled Go 1.23+ static binary CLI (`cmd/agentkit`)** with embedded standard catalogs (`embed.FS`), native DBus sleep inhibitors (`caffeine`), loopback daemon lease arbitration, SQLite DAG execution engine, Obsidian AgentVault integration, and universal developer directives (`AGENTS.md` / `GEMINI.md`).
 
 ---
 
@@ -36,10 +37,15 @@ By separating Layer 2 from Layer 1, `agentkit` maintains strict focus on AI agen
 
 ---
 
-## Harness-Agnostic Architecture
+## Core Architecture & Engine
 
-`agentkit` provides an extensible architecture designed to manage multiple AI developer harnesses:
+`agentkit` is built on a high-performance Go 1.23+ static binary architecture paired with declarative configuration standards:
 
+- **Compiled Go 1.23+ Static Binary (`cmd/agentkit`)**: Fast, zero-dependency native executable compiled with `-ldflags="-s -w"`, delivering sub-millisecond execution times and deterministic behavior across developer environments.
+- **Embedded Catalogs (`embed.FS`)**: Baseline permissions catalog (`permissions.json`), MCP server manifests (`mcp.json`), cognitive model tiering profiles (`profiles.json`), quota thresholds (`quota.json`), and default settings (`settings.default.json`) are compiled directly into the binary via `embed.FS`, ensuring zero external file lookup failures during execution.
+- **Native Sleep Inhibitors & Caffeine Daemon (`internal/caffeine`, `internal/server`)**: Integrated HTTP loopback daemon and native DBus `org.freedesktop.ScreenSaver` inhibitor supporting multi-session lease arbitration, automatic activity cooldowns, and instant CLI overrides (`agentkit wake`, `agentkit sleep`).
+- **SQLite DAG Execution Engine (`internal/dag`)**: Multi-agent task execution planner and runner featuring topological sorting, cycle detection, parallel dispatch layer calculation, and transactional state persistence in SQLite.
+- **Obsidian AgentVault Integration (`internal/vault`)**: Native Markdown and YAML frontmatter engine adhering to the open Obsidian Skills specification for durable long-term memory, offline user input ingestion, and automated project living note synchronization.
 - **Harness Flag (`--harness`)**: Commands accept `--harness <name>` (default: `antigravity`). Modular adapters handle harness-specific configuration formats, permission schemas, and settings files.
 - **Canonical `AGENTS.md` Directives**: All repository and global directives are centered on `AGENTS.md` as the canonical standard. Harness-specific directive files (such as `GEMINI.md` or `CLAUDE.md`) are maintained as symlinks to `AGENTS.md`.
 - **Modular Lifecycle Hooks**: Standardized hook manifests allow running cognitive tiering guards, Headroom CCR token compression, and git safety gates across supported harnesses.
@@ -75,6 +81,15 @@ agentkit profile set opus-flash
 
 ## Features
 
+- **Go 1.23+ Static Binary & Zero-Dependency Execution**: Fast compiled binary (`cmd/agentkit`) with embedded standard configurations (`embed.FS`), eliminating external runtime interpreter dependencies for core governance operations.
+- **Ambient Sleep Inhibition & Caffeine Daemon**: Integrated HTTP loopback daemon (`agentkit caffeine daemon`) and DBus `org.freedesktop.ScreenSaver` inhibitor with multi-session lease arbitration, automatic activity cooldowns, KDE HUD telemetry, and instant CLI overrides (`agentkit wake`, `agentkit sleep`).
+- **Multi-Agent SQLite DAG Engine**: Author, validate, and execute complex multi-agent task execution DAGs (`agentkit dag plan`, `agentkit dag status`, `agentkit dag run`) with cycle detection, topological layering, ready-node discovery, and transactional SQLite persistence.
+- **Obsidian AgentVault & Offline Collaboration**:
+  - Replaces opaque MCP memory stores with a durable, human-readable local Obsidian Markdown vault (`~/Documents/AgentVault` or `~/AgentVault`) adhering to the open **Obsidian Skills** specification by Steph Ango (kepano).
+  - Automatically whitelisted in Antigravity's `trustedWorkspaces` (alongside core repositories `~/Projects/agentkit` and `~/Projects/repokit`) via `agentkit apply` and `agentkit vault init` to eliminate read/write confirmation prompts during autonomous workflows and cross-repo introspection.
+  - Enables asynchronous offline collaboration: developers review session handoffs, refine project living notes, and drop offline directives into `User-Input/pending/` during conversation breaks.
+  - Generates visual architecture maps and multi-agent workflows using the open **JSON Canvas** (`.canvas`) specification (`jsoncanvas.org`).
+  - Integrated CLI commands (`agentkit vault init`, `agentkit vault ingest`, `agentkit vault sync`, `agentkit vault note`, `agentkit vault status`).
 - **Harness-Agnostic Governance**: Support for Google Antigravity CLI and extensible harness targets via `--harness`.
 - **Switchable Cognitive Profiles**: Switch between `argon-flash`, `flash-high`, `opus-flash`, and `sonnet-flash` profiles to navigate token quotas and workload complexity.
 - **Quota Telemetry & Fallback Routing**: Query real-time token quotas with `agentkit quota status` and calculate optimal model assignments with `agentkit quota route`.
@@ -89,12 +104,6 @@ agentkit profile set opus-flash
   - Distributes consolidated engineering and machine learning skills (`project/skills/`) from `AugursAptitude` (`timeseries-ml`, `feature-engineering`, `model-evaluation`, `duckdb-pipeline`, `llm-structured-output`, `prompt-engineering`).
   - Provides frictionless project integration via `agentkit skill install <name> [--copy]` and inspection via `agentkit skill info <name>`.
   - Discovers reusable project scripts and analytical utilities via `agentkit tool list`.
-- **Obsidian AgentVault & Offline Collaboration**:
-  - Replaces opaque MCP memory stores with a durable, human-readable local Obsidian Markdown vault (`~/Documents/AgentVault` or `~/AgentVault`) adhering to the open **Obsidian Skills** specification by Steph Ango (kepano).
-  - Automatically whitelisted in Antigravity's `trustedWorkspaces` (alongside core repositories `~/Projects/agentkit` and `~/Projects/repokit`) via `agentkit apply` and `agentkit vault init` to eliminate read/write confirmation prompts during autonomous workflows and cross-repo introspection.
-  - Enables asynchronous offline collaboration: developers review session handoffs, refine project living notes, and drop offline directives into `User-Input/pending/` during conversation breaks.
-  - Generates visual architecture maps and multi-agent workflows using the open **JSON Canvas** (`.canvas`) specification (`jsoncanvas.org`).
-  - Integrated CLI commands (`agentkit vault init`, `agentkit vault ingest`, `agentkit vault handoff`, `agentkit vault status`).
 - **Non-Destructive Set-Union Merging**:
   - `apply` merges missing baseline permissions into `~/.gemini/antigravity-cli/settings.json`.
   - Never clobbers machine-specific `trustedWorkspaces`, model preferences, or custom tool permissions.
@@ -129,14 +138,16 @@ agentkit profile set opus-flash
 
 ---
 
-## Installation
+## Installation & Quickstart
 
-### Quick Install (Symlink to `~/.local/bin`)
+### Quick Install (Build from Source into `~/.local/bin`)
 ```bash
 git clone https://github.com/Cooper-Wallace/agentkit.git ~/Projects/agentkit
 cd ~/Projects/agentkit
 bash install.sh
 ```
+
+The installer verifies a Go 1.23+ compiler (checking `go` or `/tmp/go/bin/go`), compiles `./cmd/agentkit` with stripped symbols (`-ldflags="-s -w"`), installs the static binary to `${HOME}/.local/bin/agentkit`, and ensures executable permissions.
 
 Ensure `~/.local/bin` is in your `$PATH`:
 ```bash
@@ -144,8 +155,8 @@ export PATH="$HOME/.local/bin:$PATH"
 ```
 
 ### CLI Executable
-`agentkit` is the exclusive CLI tool. The installer links the executable into `~/.local/bin`:
-- `agentkit` (primary executable)
+`agentkit` is the exclusive CLI tool:
+- `agentkit` (compiled Go 1.23+ static binary)
 
 ---
 
@@ -313,17 +324,61 @@ Initialize, audit, and orchestrate long-term agent memory and offline human-agen
 # Initialize standard vault directory layout and baseline project notes:
 agentkit vault init
 
-# Inspect vault status, location, pending directive count, and recent sessions:
+# Inspect vault status, location, pending directive count, and project notes:
 agentkit vault status
 
 # Ingest and display pending offline directives from User-Input/pending/:
 agentkit vault ingest
 
-# Ingest and archive pending directives to User-Input/processed/:
-agentkit vault ingest --process
+# Idempotently sync project state, tasks, and ADR links in AgentVault:
+agentkit vault sync --project agentkit
 
-# Generate a structured session handoff note in Sessions/:
-agentkit vault handoff --topic "auth-migration"
+# Create a structured note or append content to a project note:
+agentkit vault note "phase-5-wrapup" --project agentkit --section "Implementation" --content "Completed Go migration."
+```
+
+---
+
+### 12. Ambient Sleep Inhibition & Caffeine Daemon
+Manage ambient sleep inhibition locks, multi-agent lease arbitration, and KDE HUD telemetry:
+
+```bash
+# Force sleep inhibition lock ON (immediate manual override, optional duration: 1h, 30m):
+agentkit wake
+agentkit wake 1h
+
+# Release manual sleep inhibition lock:
+agentkit sleep
+
+# Inspect caffeine status, active leases, inhibitor backend, and HUD state:
+agentkit caffeine status
+agentkit caffeine status --json
+
+# Start the background loopback daemon:
+agentkit caffeine daemon
+
+# Configure desktop autostart service:
+agentkit caffeine autostart status
+agentkit caffeine autostart enable
+```
+
+---
+
+### 13. Multi-Agent Task Execution DAG Engine
+Plan, inspect, and execute multi-agent task execution DAGs with cycle detection, topological layering, and SQLite persistence:
+
+```bash
+# Inspect current multi-agent DAG execution progress and ready worker nodes:
+agentkit dag status
+agentkit dag status --file task-dag.json
+
+# Validate and generate execution DAG with parallel dispatch layers:
+agentkit dag plan --name "auth-migration"
+agentkit dag plan --name "auth-migration" --output task-dag.json
+
+# Execute next ready worker node or specific step:
+agentkit dag run
+agentkit dag run --step "backend"
 ```
 
 ---
@@ -367,15 +422,38 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 ├── GEMINI.md                     # Symlink to AGENTS.md
 ├── README.md                     # Human-oriented documentation
 ├── LICENSE                       # MIT License
-├── install.sh                    # Symlinks CLI to ~/.local/bin (agentkit)
+├── go.mod                        # Go module definition (Go 1.23+)
+├── go.sum                        # Go module dependencies and checksums
+├── .goreleaser.yaml              # Release configuration for cross-platform binaries
+├── install.sh                    # Builds and installs static binary into ~/.local/bin/agentkit
+│
+├── cmd/
+│   └── agentkit/                 # Go 1.23+ static CLI entrypoint
+│       ├── main.go               # Top-level CLI router and flag dispatch
+│       ├── caffeine_cmd.go       # Sleep inhibitor and caffeine subcommands
+│       ├── dag_cmd.go            # SQLite task DAG planner and runner
+│       └── vault_cmd.go          # Obsidian AgentVault integration subcommands
+│
+├── internal/                     # Core internal Go packages
+│   ├── apply/                    # Settings merger and profile applicator
+│   ├── audit/                    # Standards compliance audit engine
+│   ├── autostart/                # Desktop autostart service manager
+│   ├── caffeine/                 # Sleep inhibitor engine, leases & DBus integration
+│   ├── dag/                      # Multi-agent SQLite DAG planner and execution runner
+│   ├── diff/                     # Configuration diff engine
+│   ├── quota/                    # Quota telemetry parser and fallback routing
+│   ├── server/                   # HTTP loopback daemon for wake-lock arbitration
+│   ├── template/                 # Project directives and hook scaffolder
+│   └── vault/                    # Obsidian AgentVault parser, ingest, and sync
 │
 ├── bin/
-│   └── agentkit                  # Primary Python 3 CLI executable (audit, apply, diff, snapshot, template, profile, skill, tool)
+│   └── agentkit                  # Python CLI implementation (dual-stack compatibility harness)
 │
-├── config/
+├── config/                       # Embedded standard catalogs (embed.FS)
 │   ├── permissions.json          # Categorized catalog of pre-approved commands
 │   ├── mcp.json                  # Declarative catalog of standard MCP servers & requirements
 │   ├── profiles.json             # Cognitive model tiering profiles (argon-flash, opus-flash, etc.)
+│   ├── quota.json                # Quota thresholds, provider groups, and routing fallbacks
 │   └── settings.default.json     # Standard baseline preferences
 │
 ├── harness/                      # Harness-level governance, lifecycle hooks, and plugins
@@ -413,8 +491,12 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │       ├── 0012-wake-lock-and-visual-state.md
 │       └── 0013-dock-based-caffeine-hud-and-visual-design.md
 │
-└── tests/
-    └── test_cli.py               # Automated unit tests
+└── tests/                        # Automated unit and integration test suites
+    ├── test_cli.py               # Python CLI tests
+    ├── test_quota_cli.py         # Quota profiles & routing tests
+    ├── test_agentkit.py          # Enterprise sync and AgentVault tests
+    ├── test_plugins.py           # Verification and clean completion tests
+    └── test_wake.py              # Wake engine, server, and HUD tests
 ```
 
 ---
@@ -436,7 +518,13 @@ See [docs/replication-guide.md](docs/replication-guide.md) for full details.
 
 ## Testing
 
-Run the automated test suite:
+Run the automated Go test suite with race detection and coverage:
+```bash
+go test -v -race -cover ./...
+go vet ./...
+```
+
+Run the automated Python test suite:
 ```bash
 python3 -m unittest discover tests -v
 ```
