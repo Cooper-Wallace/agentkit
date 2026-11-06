@@ -62,6 +62,14 @@ Commands:
   sleep
       Shorthand to release manual sleep inhibition lock.
 
+  vault [status|init|ingest|sync|note] [options]
+      Manage Obsidian AgentVault notes, ingest offline inputs, and sync project state.
+      Options: --path <dir>, --project <name>, --dry-run, --no-push, --json, --section <name>, --content <text>, --tag <tag>
+
+  dag [status|plan|run] [options]
+      Plan, inspect, and execute multi-agent task execution DAGs.
+      Options: --file <path>, --step <id>, --name <name>, --output <path>, --json
+
   version, -v, --version
       Print agentkit version.
 
@@ -121,6 +129,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	case "sleep":
 		return RunCaffeine("sleep", cmdArgs, stdout, stderr)
+
+	case "vault":
+		return runVault(cmdArgs, stdout, stderr)
+
+	case "dag":
+		return runDag(cmdArgs, stdout, stderr)
 
 	default:
 		fmt.Fprintf(stderr, "Unknown command: %s\n", command)
