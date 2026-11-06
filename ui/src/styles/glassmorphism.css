@@ -1,0 +1,199 @@
+:root {
+  --bg-desktop: #0f141c;
+  --panel-bg: rgba(22, 28, 38, 0.75);
+  --panel-border: rgba(255, 255, 255, 0.12);
+  --accent-cyan: #00e5ff;
+  --accent-amber: #ffb300;
+  --accent-blue: #2979ff;
+  --text-main: #f0f4f8;
+  --text-muted: #8b9bb4;
+  --glass-blur: blur(16px);
+  --shadow-subtle: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+  --shadow-glow-cyan: 0 0 16px rgba(0, 229, 255, 0.4);
+  --shadow-glow-amber: 0 0 16px rgba(255, 179, 0, 0.4);
+  --shadow-glow-blue: 0 0 16px rgba(41, 121, 255, 0.4);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background-color: var(--bg-desktop);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-desktop-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+/* HUD Dock Pill */
+.hud-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  background: var(--panel-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--panel-border);
+  border-radius: 9999px;
+  box-shadow: var(--shadow-subtle);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.hud-pill:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+/* Pulsing Status Rings */
+.pulse-ring {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  position: relative;
+  background-color: currentColor;
+}
+
+.pulse-ring::before {
+  content: "";
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  right: -4px;
+  bottom: -4px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  opacity: 0.75;
+  animation: pulse-ring-anim 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+}
+
+@keyframes pulse-ring-anim {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(2.2);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* State Modifiers */
+.state-active {
+  color: var(--accent-cyan);
+  border-color: rgba(0, 229, 255, 0.3);
+  box-shadow: var(--shadow-glow-cyan);
+}
+
+.state-cooldown {
+  color: var(--accent-amber);
+  border-color: rgba(255, 179, 0, 0.3);
+  box-shadow: var(--shadow-glow-amber);
+}
+
+.state-override {
+  color: var(--accent-blue);
+  border-color: rgba(41, 121, 255, 0.3);
+  box-shadow: var(--shadow-glow-blue);
+}
+
+.state-idle {
+  color: var(--text-muted);
+  border-color: var(--panel-border);
+}
+
+.state-approval {
+  color: #ff9100;
+  border-color: rgba(255, 145, 0, 0.35);
+}
+
+/* Agent Tag Chip */
+.agent-tag {
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-main);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Cooldown Progress Bar */
+.cooldown-bar {
+  width: 100%;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.cooldown-bar-fill {
+  height: 100%;
+  background: var(--accent-amber);
+  transition: width 0.3s ease;
+}
+
+/* Expanded Card Popover */
+.expanded-card {
+  width: 380px;
+  padding: 20px;
+  background: var(--panel-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--panel-border);
+  border-radius: 16px;
+  box-shadow: var(--shadow-subtle);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.expanded-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.expanded-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.expanded-card-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.expanded-card-section-title {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
