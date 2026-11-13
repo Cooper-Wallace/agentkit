@@ -44,3 +44,8 @@ htmlcov/
 *.db
 ${SQLITE_DEV_DB}
 
+# Node / Frontend UI
+node_modules/
+ui/dist/
+
+

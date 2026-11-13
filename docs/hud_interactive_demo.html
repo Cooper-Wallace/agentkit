@@ -6,17 +6,22 @@
   <title>AgentKit Sleep Guard - HUD & Tray Interactive Preview</title>
   <style>
     :root {
-      --bg-desktop: #0f141c;
-      --panel-bg: rgba(22, 28, 38, 0.75);
-      --panel-border: rgba(255, 255, 255, 0.12);
-      --accent-cyan: #00e5ff;
-      --accent-amber: #ffb300;
-      --accent-green: #00e676;
-      --accent-blue: #2979ff;
-      --accent-orange: #ff9100;
-      --text-main: #f0f4f8;
-      --text-muted: #8b9bb4;
-      --glass-blur: blur(16px);
+      --bg-desktop: #16110e;
+      --panel-bg: rgba(32, 24, 19, 0.86);
+      --panel-border: rgba(215, 190, 165, 0.12);
+      --accent-active: #c98a4c;
+      --accent-cooldown: #ad6a3b;
+      --accent-override: #b57642;
+      --accent-approval: #bd6238;
+      --accent-idle: #6e594d;
+      --accent-cyan: #c98a4c;
+      --accent-amber: #ad6a3b;
+      --accent-green: #6aa877;
+      --accent-blue: #b57642;
+      --accent-orange: #bd6238;
+      --text-main: #f4eee6;
+      --text-muted: #9e8b7d;
+      --glass-blur: blur(18px);
       --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, sans-serif;
       --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", "Fira Code", monospace;
     }
@@ -25,7 +30,7 @@
 
     body {
       font-family: var(--font-family);
-      background: radial-gradient(circle at 50% 20%, #1e2638 0%, var(--bg-desktop) 100%);
+      background: radial-gradient(circle at 50% 20%, #221812 0%, var(--bg-desktop) 100%);
       color: var(--text-main);
       min-height: 100vh;
       display: flex;
@@ -37,7 +42,7 @@
     /* Top Desktop Panel Mockup */
     .top-panel {
       height: 40px;
-      background: rgba(12, 16, 23, 0.85);
+      background: rgba(22, 17, 14, 0.9);
       border-bottom: 1px solid var(--panel-border);
       backdrop-filter: var(--glass-blur);
       display: flex;
@@ -76,8 +81,8 @@
       gap: 8px;
       padding: 4px 8px;
       border-radius: 6px;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      background: rgba(215, 190, 165, 0.05);
+      border: 1px solid rgba(215, 190, 165, 0.08);
       position: relative;
     }
 
@@ -95,7 +100,7 @@
       transition: all 0.2s ease;
     }
     .tray-icon-btn:hover {
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(215, 190, 165, 0.1);
     }
 
     /* Tray Flyout Menu (Pop-up) */
@@ -104,7 +109,7 @@
       top: 44px;
       right: 0;
       width: 320px;
-      background: rgba(20, 26, 36, 0.95);
+      background: rgba(26, 20, 16, 0.95);
       border: 1px solid var(--panel-border);
       border-radius: 10px;
       box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
@@ -178,7 +183,7 @@
       display: flex;
       align-items: center;
       gap: 10px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
       backdrop-filter: var(--glass-blur);
       cursor: pointer;
       transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
@@ -186,9 +191,9 @@
     }
 
     .hud-pill:hover {
-      background: rgba(28, 36, 48, 0.9);
-      border-color: rgba(255, 255, 255, 0.25);
-      box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5), 0 0 16px rgba(0, 229, 255, 0.15);
+      background: rgba(40, 30, 24, 0.92);
+      border-color: rgba(215, 190, 165, 0.25);
+      box-shadow: 0 10px 32px rgba(0, 0, 0, 0.45);
     }
 
     /* Glowing Pulse Indicator */
@@ -209,44 +214,58 @@
       width: 100%;
       height: 100%;
       border-radius: 50%;
-      animation: pulse-ring-anim 1.8s infinite cubic-bezier(0.25, 1, 0.5, 1);
+      border: 2px solid currentColor;
+      opacity: 0.45;
+      animation: pulse-ring-anim 2.6s ease-out infinite;
     }
 
     @keyframes pulse-ring-anim {
-      0% { transform: scale(0.8); opacity: 0.8; }
-      100% { transform: scale(2.2); opacity: 0; }
+      0% { transform: scale(0.9); opacity: 0.45; }
+      50% { transform: scale(1.4); opacity: 0.18; }
+      100% { transform: scale(1.7); opacity: 0; }
     }
 
     /* State Coloring */
+    .state-active .hud-pill {
+      border-color: rgba(201, 138, 76, 0.35);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(201, 138, 76, 0.25);
+    }
     .state-active .pulse-ring {
-      background: var(--accent-cyan);
-      box-shadow: 0 0 10px var(--accent-cyan);
-    }
-    .state-active .pulse-ring::before {
-      background: var(--accent-cyan);
+      background: var(--accent-active, #c98a4c);
+      color: var(--accent-active, #c98a4c);
     }
 
+    .state-cooldown .hud-pill {
+      border-color: rgba(173, 106, 59, 0.35);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(173, 106, 59, 0.25);
+    }
     .state-cooldown .pulse-ring {
-      background: var(--accent-amber);
-      box-shadow: 0 0 10px var(--accent-amber);
-    }
-    .state-cooldown .pulse-ring::before {
-      background: var(--accent-amber);
+      background: var(--accent-cooldown, #ad6a3b);
+      color: var(--accent-cooldown, #ad6a3b);
     }
 
-    .state-override .pulse-ring {
-      background: var(--accent-blue);
-      box-shadow: 0 0 10px var(--accent-blue);
+    .state-override .hud-pill {
+      border-color: rgba(181, 118, 66, 0.35);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(181, 118, 66, 0.25);
     }
-    .state-override .pulse-ring::before {
-      background: var(--accent-blue);
+    .state-override .pulse-ring {
+      background: var(--accent-override, #b57642);
+      color: var(--accent-override, #b57642);
+    }
+
+    .state-idle .hud-pill {
+      border-color: var(--panel-border);
+    }
+    .state-idle .pulse-ring {
+      background: var(--accent-idle, #6e594d);
+      color: var(--accent-idle, #6e594d);
     }
 
     /* Agent Badge */
     .agent-tag {
-      background: rgba(147, 51, 234, 0.25);
-      border: 1px solid rgba(168, 85, 247, 0.4);
-      color: #c084fc;
+      background: rgba(215, 190, 165, 0.08);
+      border: 1px solid rgba(215, 190, 165, 0.12);
+      color: var(--text-main);
       font-size: 11px;
       font-weight: 700;
       padding: 2px 7px;
@@ -294,16 +313,22 @@
       letter-spacing: 0.5px;
       padding: 3px 8px;
       border-radius: 999px;
-      background: rgba(0, 229, 255, 0.12);
-      border: 1px solid rgba(0, 229, 255, 0.3);
-      color: var(--accent-cyan);
+      background: rgba(201, 138, 76, 0.15);
+      border: 1px solid rgba(201, 138, 76, 0.35);
+      color: var(--accent-active, #c98a4c);
       flex-shrink: 0;
     }
 
     .state-cooldown .lock-badge {
-      background: rgba(255, 179, 0, 0.12);
-      border-color: rgba(255, 179, 0, 0.3);
-      color: var(--accent-amber);
+      background: rgba(173, 106, 59, 0.15);
+      border-color: rgba(173, 106, 59, 0.35);
+      color: var(--accent-cooldown, #ad6a3b);
+    }
+
+    .state-override .lock-badge {
+      background: rgba(181, 118, 66, 0.15);
+      border-color: rgba(181, 118, 66, 0.35);
+      color: var(--accent-override, #b57642);
     }
 
     /* Expanded Card (Revealed on Click/Hover) */
@@ -353,7 +378,7 @@
       padding: 6px 10px;
       border-radius: 6px;
       border: 1px solid var(--panel-border);
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(215, 190, 165, 0.06);
       color: var(--text-main);
       font-size: 11px;
       cursor: pointer;
@@ -364,12 +389,13 @@
       transition: background 0.15s;
     }
     .action-btn:hover {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(215, 190, 165, 0.14);
+      border-color: rgba(215, 190, 165, 0.28);
     }
 
     /* CONTROLS DOCK AT BOTTOM */
     .demo-controls-dock {
-      background: rgba(16, 22, 32, 0.95);
+      background: rgba(26, 20, 16, 0.94);
       border: 1px solid var(--panel-border);
       border-radius: 14px;
       padding: 16px 20px;
@@ -388,7 +414,7 @@
       font-weight: 700;
       letter-spacing: 0.5px;
       text-transform: uppercase;
-      color: var(--accent-cyan);
+      color: var(--accent-active, #c98a4c);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -403,8 +429,8 @@
     .dock-btn {
       padding: 8px 14px;
       border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(215, 190, 165, 0.12);
+      background: rgba(215, 190, 165, 0.05);
       color: var(--text-main);
       font-size: 12px;
       font-weight: 500;
@@ -416,20 +442,20 @@
     }
 
     .dock-btn:hover {
-      background: rgba(255, 255, 255, 0.12);
-      border-color: rgba(255, 255, 255, 0.25);
+      background: rgba(215, 190, 165, 0.12);
+      border-color: rgba(215, 190, 165, 0.25);
     }
 
     .dock-btn.active {
-      background: rgba(0, 229, 255, 0.2);
-      border-color: var(--accent-cyan);
-      color: var(--accent-cyan);
+      background: rgba(201, 138, 76, 0.18);
+      border-color: var(--accent-active, #c98a4c);
+      color: var(--accent-active, #c98a4c);
     }
 
     .cooldown-bar {
       height: 3px;
       width: 100%;
-      background: rgba(255, 255, 255, 0.1);
+      background: rgba(215, 190, 165, 0.1);
       border-radius: 2px;
       overflow: hidden;
       margin-top: 4px;
@@ -441,7 +467,7 @@
     .cooldown-fill {
       height: 100%;
       width: 100%;
-      background: var(--accent-amber);
+      background: linear-gradient(90deg, #ad6a3b, #8a4f27);
       animation: cooldown-drain 45s linear forwards;
     }
     @keyframes cooldown-drain {
@@ -468,16 +494,16 @@
       <div class="tray-area" id="trayArea">
         <button class="tray-icon-btn" id="trayBtn" title="AgentKit Sleep Guard (Click to open flyout)">
           <span id="trayIcon">⚡</span>
-          <span id="trayBadge" style="color: var(--accent-cyan); font-weight:700;">1 Active</span>
+          <span id="trayBadge" style="color: var(--accent-active, #c98a4c); font-weight:700;">1 Active</span>
         </button>
 
         <!-- Tray Flyout Menu -->
         <div class="tray-flyout" id="trayFlyout">
-          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(215,190,165,0.08); padding-bottom:8px;">
             <span style="font-weight:700; font-size:13px; display:flex; align-items:center; gap:6px;">
               🛡️ AgentKit Sleep Guard
             </span>
-            <span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(0,229,255,0.15); color:var(--accent-cyan);">ACTIVE INHIBIT</span>
+            <span style="font-size:10px; padding:2px 6px; border-radius:4px; background:rgba(201,138,76,0.15); color:var(--accent-active, #c98a4c);">ACTIVE INHIBIT</span>
           </div>
 
           <div style="font-size:11px; color:var(--text-muted); display:flex; flex-direction:column; gap:4px;">
@@ -487,7 +513,7 @@
             <div><strong>Sleep Prevented:</strong> 03m 42s</div>
           </div>
 
-          <div style="display:flex; gap:6px; border-top:1px solid rgba(255,255,255,0.08); padding-top:8px;">
+          <div style="display:flex; gap:6px; border-top:1px solid rgba(215,190,165,0.08); padding-top:8px;">
             <button class="action-btn" onclick="toggleScreenAwake()">Display: Auto-Blank</button>
             <button class="action-btn" onclick="simulateState('override')">Force Awake</button>
           </div>
@@ -532,7 +558,7 @@
         </div>
         <div class="card-row">
           <span>Inhibition Lock:</span>
-          <span style="color:var(--accent-cyan)">D-Bus login1 (FD #18)</span>
+          <span style="color:var(--accent-active, #c98a4c)">D-Bus login1 (FD #18)</span>
         </div>
         <div class="card-row">
           <span>Display Policy:</span>
@@ -571,7 +597,7 @@
         </button>
       </div>
 
-      <div style="display:flex; gap:10px; border-top:1px solid rgba(255,255,255,0.08); padding-top:10px; align-items:center;">
+      <div style="display:flex; gap:10px; border-top:1px solid rgba(235,215,195,0.08); padding-top:10px; align-items:center;">
         <span style="font-size:11px; color:var(--text-muted);">Pill Screen Position:</span>
         <button class="dock-btn" onclick="changePosition('pos-top-center')">Top Center</button>
         <button class="dock-btn" onclick="changePosition('pos-top-right')">Top Right</button>
@@ -622,7 +648,7 @@
         lockLabel.textContent = 'SLEEP LOCKED';
         trayIcon.textContent = '⚡';
         trayBadge.textContent = '1 Active';
-        trayBadge.style.color = 'var(--accent-cyan)';
+        trayBadge.style.color = 'var(--accent-active, #c98a4c)';
       } else if (state === 'cooldown') {
         document.getElementById('btnCooldown').classList.add('active');
         container.classList.add('state-cooldown');
@@ -632,14 +658,14 @@
         cooldownBar.classList.add('visible');
         trayIcon.textContent = '⏳';
         trayBadge.textContent = 'Cooldown';
-        trayBadge.style.color = 'var(--accent-amber)';
+        trayBadge.style.color = 'var(--accent-cooldown, #ad6a3b)';
       } else if (state === 'idle') {
         document.getElementById('btnIdle').classList.add('active');
         container.classList.add('state-idle');
         hudCard.classList.remove('visible');
         trayIcon.textContent = '💤';
         trayBadge.textContent = 'Idle';
-        trayBadge.style.color = 'var(--text-muted)';
+        trayBadge.style.color = 'var(--accent-idle, #6e594d)';
       } else if (state === 'override') {
         document.getElementById('btnOverride').classList.add('active');
         container.classList.add('state-override');
@@ -648,7 +674,7 @@
         lockLabel.textContent = 'MANUAL LOCK';
         trayIcon.textContent = '🔒';
         trayBadge.textContent = 'Locked';
-        trayBadge.style.color = 'var(--accent-blue)';
+        trayBadge.style.color = 'var(--accent-override, #b57642)';
       }
     }
 
