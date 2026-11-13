@@ -33,8 +33,8 @@ export class Controls {
     this.forceAwakeBtn = document.createElement('button') as HTMLButtonElement;
     this.forceAwakeBtn.className = 'action-btn btn-force-awake';
     this.forceAwakeBtn.textContent = 'Force Awake';
-    this.forceAwakeBtn.style.color = 'var(--accent-override, #ca8a04)';
-    this.forceAwakeBtn.style.borderColor = 'rgba(202, 138, 4, 0.4)';
+    this.forceAwakeBtn.style.color = 'var(--accent-override, #b57642)';
+    this.forceAwakeBtn.style.borderColor = 'rgba(181, 118, 66, 0.35)';
     this.forceAwakeBtn.addEventListener('click', (e) => {
       e?.stopPropagation?.();
       this.onForceAwake?.();

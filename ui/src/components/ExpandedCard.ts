@@ -101,7 +101,7 @@ export class ExpandedCard {
     } else {
       const empty = document.createElement('span');
       empty.className = 'empty-leases card-row';
-      empty.style.color = 'var(--text-muted, #8b9bb4)';
+      empty.style.color = 'var(--text-muted, #9e8b7d)';
       empty.textContent = 'No active leases (idle)';
       leasesSection.appendChild(empty);
     }

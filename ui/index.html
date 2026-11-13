@@ -7,22 +7,22 @@
     <link rel="stylesheet" href="/src/styles/glassmorphism.css" />
     <style>
       :root {
-        --bg-desktop: #140e0b;
-        --panel-bg: rgba(38, 28, 23, 0.82);
-        --panel-border: rgba(235, 215, 195, 0.15);
-        --accent-active: #f59e0b;
-        --accent-cooldown: #d97706;
-        --accent-override: #ca8a04;
-        --accent-approval: #ea580c;
-        --accent-idle: #786558;
-        --accent-cyan: #f59e0b;
-        --accent-amber: #d97706;
-        --accent-green: #4ade80;
-        --accent-blue: #ca8a04;
-        --accent-orange: #ea580c;
-        --text-main: #faf5ef;
-        --text-muted: #b39c8c;
-        --glass-blur: blur(16px);
+        --bg-desktop: #16110e;
+        --panel-bg: rgba(32, 24, 19, 0.86);
+        --panel-border: rgba(215, 190, 165, 0.12);
+        --accent-active: #c98a4c;
+        --accent-cooldown: #ad6a3b;
+        --accent-override: #b57642;
+        --accent-approval: #bd6238;
+        --accent-idle: #6e594d;
+        --accent-cyan: #c98a4c;
+        --accent-amber: #ad6a3b;
+        --accent-green: #6aa877;
+        --accent-blue: #b57642;
+        --accent-orange: #bd6238;
+        --text-main: #f4eee6;
+        --text-muted: #9e8b7d;
+        --glass-blur: blur(18px);
         --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans", Ubuntu, Cantarell, sans-serif;
         --font-mono: ui-monospace, SFMono-Regular, "Cascadia Code", "Fira Code", monospace;
       }
@@ -35,7 +35,7 @@
 
       body {
         font-family: var(--font-family);
-        background: radial-gradient(circle at 50% 20%, #261913 0%, var(--bg-desktop) 100%);
+        background: radial-gradient(circle at 50% 20%, #221812 0%, var(--bg-desktop) 100%);
         color: var(--text-main);
         min-height: 100vh;
         display: flex;
@@ -47,7 +47,7 @@
       /* Mock Desktop Top Bar (Plasma 6 style) */
       .desktop-top-bar {
         height: 38px;
-        background: rgba(20, 14, 11, 0.85);
+        background: rgba(22, 17, 14, 0.9);
         border-bottom: 1px solid var(--panel-border);
         backdrop-filter: var(--glass-blur);
         -webkit-backdrop-filter: var(--glass-blur);
@@ -166,27 +166,27 @@
         letter-spacing: 0.5px;
         padding: 3px 8px;
         border-radius: 999px;
-        background: rgba(245, 158, 11, 0.15);
-        border: 1px solid rgba(245, 158, 11, 0.4);
+        background: rgba(201, 138, 76, 0.15);
+        border: 1px solid rgba(201, 138, 76, 0.35);
         color: var(--accent-active);
         flex-shrink: 0;
       }
 
       .state-cooldown .lock-badge {
-        background: rgba(217, 119, 6, 0.15);
-        border-color: rgba(217, 119, 6, 0.4);
+        background: rgba(173, 106, 59, 0.15);
+        border-color: rgba(173, 106, 59, 0.35);
         color: var(--accent-cooldown);
       }
 
       .state-override .lock-badge {
-        background: rgba(202, 138, 4, 0.15);
-        border-color: rgba(202, 138, 4, 0.4);
+        background: rgba(181, 118, 66, 0.15);
+        border-color: rgba(181, 118, 66, 0.35);
         color: var(--accent-override);
       }
 
       .state-idle .lock-badge {
-        background: rgba(235, 215, 195, 0.05);
-        border-color: rgba(235, 215, 195, 0.12);
+        background: rgba(215, 190, 165, 0.05);
+        border-color: rgba(215, 190, 165, 0.12);
         color: var(--accent-idle);
       }
 
@@ -213,15 +213,15 @@
       }
 
       .lease-item {
-        background: rgba(235, 215, 195, 0.05);
+        background: rgba(215, 190, 165, 0.05);
         padding: 6px 10px;
         border-radius: 8px;
-        border: 1px solid rgba(235, 215, 195, 0.08);
+        border: 1px solid rgba(215, 190, 165, 0.08);
       }
 
       .lease-badge {
-        background: rgba(217, 119, 6, 0.2);
-        border: 1px solid rgba(245, 158, 11, 0.35);
+        background: rgba(173, 106, 59, 0.2);
+        border: 1px solid rgba(201, 138, 76, 0.35);
         color: var(--accent-active);
         font-size: 11px;
         font-weight: 700;
@@ -241,7 +241,7 @@
         padding: 7px 10px;
         border-radius: 8px;
         border: 1px solid var(--panel-border);
-        background: rgba(235, 215, 195, 0.06);
+        background: rgba(215, 190, 165, 0.06);
         color: var(--text-main);
         font-size: 11px;
         font-weight: 600;
@@ -253,8 +253,8 @@
       }
 
       .action-btn:hover {
-        background: rgba(235, 215, 195, 0.14);
-        border-color: rgba(235, 215, 195, 0.28);
+        background: rgba(215, 190, 165, 0.14);
+        border-color: rgba(215, 190, 165, 0.28);
       }
 
       .action-btn[disabled] {
@@ -268,9 +268,9 @@
         border-radius: 6px;
         font-size: 11px;
         font-weight: 600;
-        background: rgba(239, 68, 68, 0.15);
-        border: 1px solid rgba(239, 68, 68, 0.35);
-        color: #ef4444;
+        background: rgba(196, 85, 77, 0.15);
+        border: 1px solid rgba(196, 85, 77, 0.35);
+        color: #c4554d;
       }
 
       /* Bottom Developer Preview Toolbar */
@@ -279,7 +279,7 @@
         bottom: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(28, 20, 16, 0.92);
+        background: rgba(26, 20, 16, 0.94);
         border: 1px solid var(--panel-border);
         border-radius: 14px;
         padding: 14px 20px;
@@ -298,7 +298,7 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        border-bottom: 1px solid rgba(235, 215, 195, 0.08);
+        border-bottom: 1px solid rgba(215, 190, 165, 0.08);
         padding-bottom: 8px;
       }
 
@@ -344,8 +344,8 @@
       .dock-btn {
         padding: 6px 12px;
         border-radius: 8px;
-        border: 1px solid rgba(235, 215, 195, 0.12);
-        background: rgba(235, 215, 195, 0.05);
+        border: 1px solid rgba(215, 190, 165, 0.12);
+        background: rgba(215, 190, 165, 0.05);
         color: var(--text-main);
         font-size: 12px;
         font-weight: 500;
@@ -357,12 +357,12 @@
       }
 
       .dock-btn:hover {
-        background: rgba(235, 215, 195, 0.12);
-        border-color: rgba(235, 215, 195, 0.25);
+        background: rgba(215, 190, 165, 0.12);
+        border-color: rgba(215, 190, 165, 0.25);
       }
 
       .dock-btn.active {
-        background: rgba(245, 158, 11, 0.18);
+        background: rgba(201, 138, 76, 0.18);
         border-color: var(--accent-active);
         color: var(--accent-active);
         font-weight: 600;

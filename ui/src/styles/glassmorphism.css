@@ -1,19 +1,19 @@
 :root {
-  --bg-desktop: #140e0b;
-  --panel-bg: rgba(38, 28, 23, 0.82);
-  --panel-border: rgba(235, 215, 195, 0.15);
-  --glass-blur: blur(16px);
-  --text-main: #faf5ef;
-  --text-muted: #b39c8c;
+  --bg-desktop: #16110e;
+  --panel-bg: rgba(32, 24, 19, 0.86);
+  --panel-border: rgba(215, 190, 165, 0.12);
+  --glass-blur: blur(18px);
+  --text-main: #f4eee6;
+  --text-muted: #9e8b7d;
 
   /* Semantic State Accents */
-  --accent-active: #f59e0b;
-  --accent-cooldown: #d97706;
-  --accent-override: #ca8a04;
-  --accent-approval: #ea580c;
-  --accent-idle: #786558;
-  --accent-success: #4ade80;
-  --accent-danger: #ef4444;
+  --accent-active: #c98a4c;
+  --accent-cooldown: #ad6a3b;
+  --accent-override: #b57642;
+  --accent-approval: #bd6238;
+  --accent-idle: #6e594d;
+  --accent-success: #6aa877;
+  --accent-danger: #c4554d;
 
   /* Backward Compatibility Aliases */
   --accent-cyan: var(--accent-active);
@@ -21,10 +21,10 @@
   --accent-blue: var(--accent-override);
 
   /* Elevation & Glow Shadows */
-  --shadow-subtle: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
-  --shadow-glow-active: 0 0 18px rgba(245, 158, 11, 0.45);
-  --shadow-glow-cooldown: 0 0 16px rgba(217, 119, 6, 0.45);
-  --shadow-glow-override: 0 0 16px rgba(202, 138, 4, 0.45);
+  --shadow-subtle: 0 8px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-glow-active: 0 2px 12px rgba(201, 138, 76, 0.15);
+  --shadow-glow-cooldown: 0 2px 12px rgba(173, 106, 59, 0.15);
+  --shadow-glow-override: 0 2px 12px rgba(181, 118, 66, 0.15);
   --shadow-glow-cyan: var(--shadow-glow-active);
   --shadow-glow-amber: var(--shadow-glow-cooldown);
   --shadow-glow-blue: var(--shadow-glow-override);
@@ -39,7 +39,7 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background-color: var(--bg-desktop);
-  background-image: radial-gradient(circle at 50% 20%, #261913 0%, var(--bg-desktop) 100%);
+  background-image: radial-gradient(circle at 50% 20%, #221812 0%, var(--bg-desktop) 100%);
   color: var(--text-main);
   min-height: 100vh;
   display: flex;
@@ -73,7 +73,7 @@ body {
 }
 
 .hud-pill:hover {
-  border-color: rgba(235, 215, 195, 0.3);
+  border-color: rgba(215, 190, 165, 0.25);
   transform: translateY(-1px);
 }
 
@@ -95,53 +95,53 @@ body {
   bottom: -4px;
   border-radius: 50%;
   border: 2px solid currentColor;
-  opacity: 0.75;
-  animation: pulse-ring-anim 2s cubic-bezier(0.24, 0, 0.38, 1) infinite;
+  opacity: 0.45;
+  animation: pulse-ring-anim 2.6s ease-out infinite;
 }
 
 @keyframes pulse-ring-anim {
   0% {
-    transform: scale(0.8);
-    opacity: 0.9;
+    transform: scale(0.9);
+    opacity: 0.45;
   }
-  70% {
-    transform: scale(2.2);
-    opacity: 0;
+  50% {
+    transform: scale(1.4);
+    opacity: 0.18;
   }
   100% {
-    transform: scale(2.4);
+    transform: scale(1.7);
     opacity: 0;
   }
 }
 
 /* State Modifiers */
 .state-active {
-  color: var(--accent-active, #f59e0b);
-  border-color: rgba(245, 158, 11, 0.4);
-  box-shadow: 0 0 18px rgba(245, 158, 11, 0.45);
+  color: var(--accent-active, #c98a4c);
+  border-color: rgba(201, 138, 76, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(201, 138, 76, 0.25);
 }
 
 .state-cooldown {
-  color: var(--accent-cooldown, #d97706);
-  border-color: rgba(217, 119, 6, 0.4);
-  box-shadow: 0 0 16px rgba(217, 119, 6, 0.45);
+  color: var(--accent-cooldown, #ad6a3b);
+  border-color: rgba(173, 106, 59, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(173, 106, 59, 0.25);
 }
 
 .state-override {
-  color: var(--accent-override, #ca8a04);
-  border-color: rgba(202, 138, 4, 0.4);
-  box-shadow: 0 0 16px rgba(202, 138, 4, 0.45);
+  color: var(--accent-override, #b57642);
+  border-color: rgba(181, 118, 66, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(181, 118, 66, 0.25);
 }
 
 .state-idle {
-  color: var(--accent-idle, #786558);
+  color: var(--accent-idle, #6e594d);
   border-color: var(--panel-border);
 }
 
 .state-approval {
-  color: var(--accent-approval, #ea580c);
-  border-color: rgba(234, 88, 12, 0.4);
-  box-shadow: 0 0 16px rgba(234, 88, 12, 0.4);
+  color: var(--accent-approval, #bd6238);
+  border-color: rgba(189, 98, 56, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(189, 98, 56, 0.25);
 }
 
 /* Agent Tag Chip */
@@ -154,16 +154,16 @@ body {
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 6px;
-  background: rgba(235, 215, 195, 0.1);
+  background: rgba(215, 190, 165, 0.08);
   color: var(--text-main);
-  border: 1px solid rgba(235, 215, 195, 0.12);
+  border: 1px solid rgba(215, 190, 165, 0.12);
 }
 
 /* Cooldown Progress Bar */
 .cooldown-bar {
   width: 100%;
   height: 4px;
-  background: rgba(235, 215, 195, 0.08);
+  background: rgba(215, 190, 165, 0.08);
   border-radius: 2px;
   overflow: hidden;
   position: relative;
@@ -171,7 +171,7 @@ body {
 
 .cooldown-bar-fill {
   height: 100%;
-  background: linear-gradient(90deg, #d97706, #b45309);
+  background: linear-gradient(90deg, #ad6a3b, #8a4f27);
   transition: width 0.3s ease;
 }
 
