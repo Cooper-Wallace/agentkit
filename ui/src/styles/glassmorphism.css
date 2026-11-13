@@ -1,17 +1,33 @@
 :root {
-  --bg-desktop: #0f141c;
-  --panel-bg: rgba(22, 28, 38, 0.75);
-  --panel-border: rgba(255, 255, 255, 0.12);
-  --accent-cyan: #00e5ff;
-  --accent-amber: #ffb300;
-  --accent-blue: #2979ff;
-  --text-main: #f0f4f8;
-  --text-muted: #8b9bb4;
+  --bg-desktop: #140e0b;
+  --panel-bg: rgba(38, 28, 23, 0.82);
+  --panel-border: rgba(235, 215, 195, 0.15);
   --glass-blur: blur(16px);
-  --shadow-subtle: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-  --shadow-glow-cyan: 0 0 16px rgba(0, 229, 255, 0.4);
-  --shadow-glow-amber: 0 0 16px rgba(255, 179, 0, 0.4);
-  --shadow-glow-blue: 0 0 16px rgba(41, 121, 255, 0.4);
+  --text-main: #faf5ef;
+  --text-muted: #b39c8c;
+
+  /* Semantic State Accents */
+  --accent-active: #f59e0b;
+  --accent-cooldown: #d97706;
+  --accent-override: #ca8a04;
+  --accent-approval: #ea580c;
+  --accent-idle: #786558;
+  --accent-success: #4ade80;
+  --accent-danger: #ef4444;
+
+  /* Backward Compatibility Aliases */
+  --accent-cyan: var(--accent-active);
+  --accent-amber: var(--accent-cooldown);
+  --accent-blue: var(--accent-override);
+
+  /* Elevation & Glow Shadows */
+  --shadow-subtle: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+  --shadow-glow-active: 0 0 18px rgba(245, 158, 11, 0.45);
+  --shadow-glow-cooldown: 0 0 16px rgba(217, 119, 6, 0.45);
+  --shadow-glow-override: 0 0 16px rgba(202, 138, 4, 0.45);
+  --shadow-glow-cyan: var(--shadow-glow-active);
+  --shadow-glow-amber: var(--shadow-glow-cooldown);
+  --shadow-glow-blue: var(--shadow-glow-override);
 }
 
 *, *::before, *::after {
@@ -23,6 +39,7 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   background-color: var(--bg-desktop);
+  background-image: radial-gradient(circle at 50% 20%, #261913 0%, var(--bg-desktop) 100%);
   color: var(--text-main);
   min-height: 100vh;
   display: flex;
@@ -56,7 +73,7 @@ body {
 }
 
 .hud-pill:hover {
-  border-color: rgba(255, 255, 255, 0.25);
+  border-color: rgba(235, 215, 195, 0.3);
   transform: translateY(-1px);
 }
 
@@ -99,31 +116,32 @@ body {
 
 /* State Modifiers */
 .state-active {
-  color: var(--accent-cyan);
-  border-color: rgba(0, 229, 255, 0.3);
-  box-shadow: var(--shadow-glow-cyan);
+  color: var(--accent-active, #f59e0b);
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 18px rgba(245, 158, 11, 0.45);
 }
 
 .state-cooldown {
-  color: var(--accent-amber);
-  border-color: rgba(255, 179, 0, 0.3);
-  box-shadow: var(--shadow-glow-amber);
+  color: var(--accent-cooldown, #d97706);
+  border-color: rgba(217, 119, 6, 0.4);
+  box-shadow: 0 0 16px rgba(217, 119, 6, 0.45);
 }
 
 .state-override {
-  color: var(--accent-blue);
-  border-color: rgba(41, 121, 255, 0.3);
-  box-shadow: var(--shadow-glow-blue);
+  color: var(--accent-override, #ca8a04);
+  border-color: rgba(202, 138, 4, 0.4);
+  box-shadow: 0 0 16px rgba(202, 138, 4, 0.45);
 }
 
 .state-idle {
-  color: var(--text-muted);
+  color: var(--accent-idle, #786558);
   border-color: var(--panel-border);
 }
 
 .state-approval {
-  color: #ff9100;
-  border-color: rgba(255, 145, 0, 0.35);
+  color: var(--accent-approval, #ea580c);
+  border-color: rgba(234, 88, 12, 0.4);
+  box-shadow: 0 0 16px rgba(234, 88, 12, 0.4);
 }
 
 /* Agent Tag Chip */
@@ -136,16 +154,16 @@ body {
   text-transform: uppercase;
   padding: 2px 8px;
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(235, 215, 195, 0.1);
   color: var(--text-main);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(235, 215, 195, 0.12);
 }
 
 /* Cooldown Progress Bar */
 .cooldown-bar {
   width: 100%;
   height: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(235, 215, 195, 0.08);
   border-radius: 2px;
   overflow: hidden;
   position: relative;
@@ -153,7 +171,7 @@ body {
 
 .cooldown-bar-fill {
   height: 100%;
-  background: var(--accent-amber);
+  background: linear-gradient(90deg, #d97706, #b45309);
   transition: width 0.3s ease;
 }
 

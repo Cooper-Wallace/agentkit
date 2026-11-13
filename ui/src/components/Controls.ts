@@ -29,12 +29,12 @@ export class Controls {
     this.element = document.createElement('div');
     this.element.className = 'card-actions hud-controls';
 
-    // Force Awake Button (accent-blue)
+    // Force Awake Button (accent-override)
     this.forceAwakeBtn = document.createElement('button') as HTMLButtonElement;
     this.forceAwakeBtn.className = 'action-btn btn-force-awake';
     this.forceAwakeBtn.textContent = 'Force Awake';
-    this.forceAwakeBtn.style.color = 'var(--accent-blue, #2979ff)';
-    this.forceAwakeBtn.style.borderColor = 'rgba(41, 121, 255, 0.4)';
+    this.forceAwakeBtn.style.color = 'var(--accent-override, #ca8a04)';
+    this.forceAwakeBtn.style.borderColor = 'rgba(202, 138, 4, 0.4)';
     this.forceAwakeBtn.addEventListener('click', (e) => {
       e?.stopPropagation?.();
       this.onForceAwake?.();

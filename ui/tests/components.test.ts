@@ -309,7 +309,7 @@ describe('Controls', () => {
     const forceBtn = el.querySelector<HTMLButtonElement>('.btn-force-awake');
     expect(forceBtn).toBeDefined();
     expect(forceBtn?.textContent).toBe('Force Awake');
-    expect(forceBtn?.style.color).toBe('var(--accent-blue, #2979ff)');
+    expect(forceBtn?.style.color).toBe('var(--accent-override, #ca8a04)');
 
     const dismissBtn = el.querySelector('.btn-dismiss');
     expect(dismissBtn).toBeDefined();
