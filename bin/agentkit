@@ -599,10 +599,19 @@ def get_orchestration_catalog() -> Dict[str, Any]:
         "deprecated_aliases": dict(DEPRECATED_PROFILE_ALIASES),
         "profiles": {
             "argon-flash": {
-                "description": "Gemini 4 Argon Root Orchestrator (complex tasks) -> Gemini 3.8 Flash Worker Subagents (Default tier)",
-                "root_model": "Gemini 4 Argon",
+                "description": "Gemini 4 Argon / Orchestrator (Argon) Root Orchestrator (complex architecture & two-phase plan-execute) -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (Default tier)",
+                "root_model": "Gemini 4 Argon / Orchestrator (Argon)",
                 "worker_model": "flash",
                 "root_slug": "argon",
+                "complexity_tiers": tl,
+                "quota_fallback": ["hydrogen-high", "flash-high", "opus-flash", "sonnet-flash"],
+            },
+            "hydrogen-high": {
+                "description": "Gemini 4 Hydrogen (High/XHigh) Root Orchestrator -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (Standard Gemini 4 tier)",
+                "root_model": "Gemini 4 Hydrogen (High)",
+                "worker_model": "flash",
+                "root_slug": "hydrogen-high",
+                "root_reasoning": "high",
                 "complexity_tiers": tl,
                 "quota_fallback": ["flash-high", "opus-flash", "sonnet-flash"],
             },
@@ -615,7 +624,7 @@ def get_orchestration_catalog() -> Dict[str, Any]:
                 "quota_fallback": ["opus-flash", "sonnet-flash"],
             },
             "opus-flash": {
-                "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
+                "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
                 "root_model": "Claude Opus 5.5",
                 "worker_model": "flash",
                 "root_slug": "opus",
@@ -623,8 +632,8 @@ def get_orchestration_catalog() -> Dict[str, Any]:
                 "quota_fallback": ["sonnet-flash"],
             },
             "sonnet-flash": {
-                "description": "Claude Sonnet 3.7 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (High-throughput engineering tier)",
-                "root_model": "Claude Sonnet 3.7",
+                "description": "Claude Sonnet 5.5 Root Orchestrator -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (High-throughput engineering tier)",
+                "root_model": "Claude Sonnet 5.5",
                 "worker_model": "flash",
                 "root_slug": "sonnet",
                 "complexity_tiers": tl,
@@ -638,7 +647,7 @@ def list_model_profiles() -> List[str]:
     """Return available orchestration model profile slugs."""
     cat = get_orchestration_catalog()
     profiles = list(cat.get("profiles", {}).keys())
-    return profiles or ["argon-flash", "flash-high", "opus-flash", "sonnet-flash"]
+    return profiles or ["argon-flash", "hydrogen-high", "flash-high", "opus-flash", "sonnet-flash"]
 
 
 def profile_arg(value: str) -> str:
@@ -2026,9 +2035,9 @@ updated_by: agentkit
 > Directives governing cognitive tiering, zero-prompt command discipline, and quota wrap-up.
 
 ## 1. Cognitive Architecture & Model Tiering
-- **Root Orchestrator**: Gemini 4 Argon (`pro`) / Flash High (`flash`) / Claude Opus 5.5 (`opus`).
+- **Root Orchestrator**: Orchestrator (Argon) / Gemini 4 Argon (`pro`) / Gemini 4 Hydrogen High (`hydrogen-high`) / Flash High (`flash`) / Claude Opus 5.5 / Sonnet 5.5 (`opus`/`sonnet`).
 - **Subagent Workers**: Partitioned by complexity (`low`: `flash_lite`, `med`: `flash`, `high`: `flash`/`pro`).
-- Zero project editing by Root Orchestrator: All code implementation delegated to worker subagents.
+- Zero direct source editing by standalone Root Orchestrator: Delegate implementation to worker subagents (or use `Orchestrator (Argon)` two-phase `exit_plan_mode` execution).
 
 ## 2. Quota Awareness & Graceful Wrap-Up
 - Automated fallback routing when provider quota falls below 15%.

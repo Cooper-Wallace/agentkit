@@ -9,7 +9,7 @@ Autonomous multi-model workflows under `agentkit` coordinate high-tier root orch
    - When a quota family (such as Google Gemini daily/weekly allocations) exhausted mid-execution, subagent invocations stalled or failed abruptly. Parent orchestrators hung waiting for responses that would never arrive, leaving uncommitted changes and unmerged worktrees.
 2. **Retirement of Gemini 3.1 Pro / 3.0 Pro from Antigravity CLI**:
    - Google Antigravity CLI retired Gemini 3.1 Pro and 3.0 Pro endpoints. Previous model profiles (e.g. `pro-flash`) and references to `Gemini 3.0 Pro` as a root orchestrator or subagent tier became obsolete.
-   - Workflows required an updated model tiering strategy reconciling Gemini 4 Argon, Gemini 3.8 Flash (with High reasoning), Claude Opus 5.5, and Claude Sonnet 3.7.
+   - Workflows required an updated model tiering strategy reconciling Orchestrator (Argon), Gemini 4 Argon, Gemini 4 Hydrogen (Low/Medium/High/XHigh), Gemini 3.8 Flash (with High reasoning), Claude Opus 5.5, and Claude Sonnet 5.5.
 3. **Uniform Subagent Over-Provisioning**:
    - Subagents were uniformly dispatched as `flash` or `inherit` regardless of whether the task was a 3-line doc typo fix or a deep cross-module security refactoring.
    - Simple mechanical tasks (file renames, formatting, regex find-and-replace, single-command checks) unnecessarily consumed standard Flash quota, while complex architectural subtasks lacked an escalation path to deep reasoning models.
@@ -23,9 +23,9 @@ Autonomous multi-model workflows under `agentkit` coordinate high-tier root orch
 1. **Updated Cognitive Architecture & Model Tiering**:
    - **Retire Gemini 3.1 Pro / 3.0 Pro**: Deprecate `pro-flash` in favor of `flash-high`. Pro endpoints are removed from root default configurations.
    - **Root Orchestrator Hierarchy**:
-     - **Primary Tier (`argon-flash`)**: Gemini 4 Argon (`Model: "pro"` / `"inherit"`) when Argon quota is available AND the task involves complex architecture, multi-repo task DAG generation, or adversarial diff auditing.
-     - **Standard Tier (`flash-high`)**: Gemini 3.8 Flash with High reasoning (`Model: "flash"` / `"inherit"`) for standard feature and lifecycle workflows, delivering rapid execution with zero Argon quota consumption.
-     - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: Claude Opus 5.5 or Claude Sonnet 3.7 (`Model: "opus"` / `"claude-opus-5.5"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
+     - **Primary Tier (`argon-flash`)**: Orchestrator (Argon) (`gemini-pro-orchestrator-g1-pro`) and Gemini 4 Argon (`High`/`Medium`/`Low`; `Model: "pro"` / `"inherit"`) when Argon quota is available AND the task involves complex architecture, multi-repo task DAG generation, two-phase Plan & Execute (`exit_plan_mode`), or adversarial diff auditing.
+     - **Standard Tier (`hydrogen-high` / `flash-high`)**: Gemini 4 Hydrogen (`High` / `XHigh`; profile `hydrogen-high`) and Gemini 3.8 Flash with High reasoning (`flash-high`; `Model: "flash"` / `"inherit"`) for standard feature and lifecycle workflows, delivering rapid execution with zero Argon quota consumption.
+     - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: Claude Opus 5.5 or Claude Sonnet 5.5 (`Model: "opus"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
    - **Subagent Complexity Tiers**:
      - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
      - `med`: `flash` (feature code, tests, localized refactors).
@@ -35,9 +35,9 @@ Autonomous multi-model workflows under `agentkit` coordinate high-tier root orch
 2. **Language Server Quota Summary Polling**:
    - Interface deterministically with the Antigravity Language Server RPC endpoint `RetrieveUserQuotaSummary` (`http://$ANTIGRAVITY_LS_ADDRESS/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary` using header `x-codeium-csrf-token: $ANTIGRAVITY_CSRF_TOKEN`).
    - Group quotas into 3 distinct operational families:
-     - **Gemini Family**: Gemini 3.8 Flash and Flash Lite.
-     - **Claude + GPT Family**: Claude Opus 5.5 and Claude Sonnet 3.7.
-     - **Gemini 4 Argon Family**: Dedicated deep reasoning quota.
+     - **Gemini Family**: Gemini 4 Hydrogen (`Low`/`Medium`/`High`/`XHigh`), Gemini 3.8 Flash, and Flash Lite.
+     - **Claude + GPT Family**: Claude Opus 5.5, Claude Sonnet 5.5, and GPT-OSS 120B.
+     - **Gemini 4 Argon Family**: Orchestrator (Argon) and Gemini 4 Argon (`Low`/`Medium`/`High`) dedicated deep reasoning quota.
    - Cache responses locally (`~/.cache/antigravity-quota/summary.json` or configurable via `AGENTKIT_QUOTA_CACHE`) with a 60-second TTL (`cache_ttl_seconds: 60`) to avoid RPC overhead during parallel subagent fan-outs.
    - Provide testing fixtures and emergency overrides via `AGENTKIT_QUOTA_FIXTURE` and `AGENTKIT_QUOTA_GUARD=0`.
 

@@ -21,7 +21,7 @@ The following lifecycle hooks represent core automation and safety components im
 ### A. PreToolUse Subagent Delegation Guard
 - **Lifecycle Event**: `PreToolUse` matching `edit_file|write_file`
 - **Script**: `scripts/guard-subagent-delegation.sh`
-- **Purpose**: Enforces cognitive tiering by blocking the Root Orchestrator (Gemini 4 Argon, Claude Opus 5.5, Claude Sonnet 3.7, or Gemini 3.8 Flash High) from directly editing project code, tests, or UI files, ensuring implementation work is delegated to Flash worker subagents.
+- **Purpose**: Enforces cognitive tiering by blocking standalone Root Orchestrators (`Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`) from directly editing project code, tests, or UI files outside a post-`exit_plan_mode` execution phase (`Orchestrator (Argon)` / `Gemini 4 Hydrogen` / `Gemini 3.8 Flash`), ensuring standalone implementation work is delegated to worker subagents.
 
 ### B. PreToolUse Git & Filesystem Safety Gate
 - **Lifecycle Event**: `PreToolUse` matching `run_command`
@@ -112,10 +112,10 @@ When a candidate command is intercepted, `filter-and-wrap.py` returns an `overwr
 The following production plugins are bundled with `agentkit` to govern autonomous multi-model orchestration, token economy, and quota safety:
 
 ### 1. `autonomous-orchestrator` (Cognitive Tiering & Headroom CCR)
-- **Purpose**: Enforces cognitive tiering, context window preservation, Headroom CCR token compression, and git safety gates across Gemini 4 Argon, Claude Opus 5.5, Claude Sonnet 3.7, and Gemini 3.8 Flash.
+- **Purpose**: Enforces cognitive tiering, context window preservation, Headroom CCR token compression, and git safety gates across `Orchestrator (Argon)`, `Gemini 4 Argon`, `Gemini 4 Hydrogen`, `Gemini 3.8 Flash`, `Claude Opus 5.5`, and `Claude Sonnet 5.5`.
 - **Components & Architecture**:
   - **Hooks**:
-    - `PreToolUse` matching `edit_file|write_file` -> `scripts/guard-subagent-delegation.sh`: Blocks the Root Orchestrator from directly modifying project source code, tests, or UI files, mandating delegation to Flash subagents.
+    - `PreToolUse` matching `edit_file|write_file` -> `scripts/guard-subagent-delegation.sh`: Blocks standalone Root Orchestrators from directly modifying project source code, tests, or UI files outside a post-`exit_plan_mode` execution phase, mandating delegation to worker subagents.
     - `PreToolUse` matching `run_command` -> `scripts/guard-git-operations.sh`: Hard-blocks direct pushes or merges to `main`/`master`, and gates destructive operations (`rm -rf`, `mkfs`, `dd`).
     - `PreToolUse` matching `run_command` -> `scripts/filter-and-wrap.py`: Intercepts verbose test, inspection, and diff commands, rewriting them to execute under `scripts/headroom-wrap.py` for 60%–90% token compression with Reversible CCR caching in `~/.cache/antigravity-headroom/<hash>.txt`.
     - `Stop` -> `scripts/verify-clean-completion.sh`: Rejects agent completion if automated tests fail or if uncommitted changes linger in the git working tree.
@@ -133,9 +133,9 @@ The following production plugins are bundled with `agentkit` to govern autonomou
   - **Configuration (`config/quota.json`)**:
     - `thresholds`: `{"switch_threshold": 0.15, "wrapup_threshold": 0.05, "cache_ttl_seconds": 60}`
     - `groups`: Maps model identifiers to 3 quota groups:
-      - `gemini`: Gemini 3.8 Flash, Flash Lite
-      - `claude`: Claude Opus 5.5, Claude Sonnet 3.7
-      - `argon`: Gemini 4 Argon
+      - `gemini`: Gemini 4 Hydrogen (`Low`/`Medium`/`High`/`XHigh`), Gemini 3.8 Flash, Flash Lite
+      - `claude`: Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B
+      - `argon`: Orchestrator (Argon), Gemini 4 Argon (`Low`/`Medium`/`High`)
     - `complexity_to_model`:
       - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
       - `med`: `flash` (feature code, tests, localized refactors).

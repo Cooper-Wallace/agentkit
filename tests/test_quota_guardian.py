@@ -605,6 +605,49 @@ class TestQuotaGuardian(unittest.TestCase):
                 f"{script.name} must be executable",
             )
 
+    def test_gemini4_model_group_resolution_and_nested_response(self):
+        """Test Gemini 4 / Sonnet 5.5 group mapping and nested RetrieveUserQuotaSummary response unwrapping."""
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location("guard_quota", str(GUARD_QUOTA_SCRIPT))
+        guard_quota = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guard_quota)
+
+        self.assertEqual(guard_quota._resolve_model_group("gemini-4-hydrogen-high", self.config), "gemini")
+        self.assertEqual(guard_quota._resolve_model_group("gemini-pro-orchestrator-g1-pro", self.config), "argon")
+        self.assertEqual(guard_quota._resolve_model_group("claude-sonnet-5-5-high", self.config), "claude")
+        self.assertEqual(guard_quota._resolve_model_group("gpt-oss-120b-medium", self.config), "claude")
+
+        nested_raw = {
+            "response": {
+                "groups": [
+                    {
+                        "displayName": "Gemini 4 Hydrogen (High)",
+                        "buckets": [{"remainingFraction": 0.65, "disabled": False}],
+                    },
+                    {
+                        "displayName": "gemini-pro-orchestrator-g1-pro",
+                        "buckets": [{"remainingFraction": 0.10, "disabled": False}],
+                    },
+                    {
+                        "displayName": "Claude Sonnet 5.5",
+                        "buckets": [{"remainingFraction": 0.90, "disabled": False}],
+                    },
+                ]
+            }
+        }
+        summary = quota_status.summarize(nested_raw, self.config)
+        self.assertAlmostEqual(summary["groups"]["gemini"]["remainingFraction"], 0.65)
+        self.assertAlmostEqual(summary["groups"]["argon"]["remainingFraction"], 0.10)
+        self.assertTrue(summary["groups"]["argon"]["low"])
+        self.assertAlmostEqual(summary["groups"]["claude"]["remainingFraction"], 0.90)
+
+        # Guarded degrade check: empty response wrapper safely yields healthy 1.0 defaults
+        empty_summary = quota_status.summarize({"response": {}}, self.config)
+        for gid in ("gemini", "claude", "argon"):
+            self.assertAlmostEqual(empty_summary["groups"][gid]["remainingFraction"], 1.0)
+            self.assertEqual(empty_summary["groups"][gid]["status"], "healthy")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -176,8 +176,15 @@ def fetch_raw() -> Dict[str, Any]:
 def _resolve_group_id(name: str, config: Dict[str, Any]) -> Optional[str]:
     """Match a group display name or keyword to a canonical group ID."""
     name_lower = name.lower()
-    groups_cfg = config.get("groups", {})
 
+    if "argon" in name_lower or "orchestrator" in name_lower:
+        return "argon"
+    if "claude" in name_lower or "opus" in name_lower or "sonnet" in name_lower or "gpt" in name_lower:
+        return "claude"
+    if "gemini" in name_lower or "hydrogen" in name_lower or "flash" in name_lower:
+        return "gemini"
+
+    groups_cfg = config.get("groups", {})
     for key, val in groups_cfg.items():
         if isinstance(val, str):
             if val.lower() in name_lower or key.lower() in name_lower:
@@ -187,12 +194,6 @@ def _resolve_group_id(name: str, config: Dict[str, Any]) -> Optional[str]:
                 if str(pattern).lower() in name_lower:
                     return key.lower()
 
-    if "argon" in name_lower:
-        return "argon"
-    if "claude" in name_lower:
-        return "claude"
-    if "gemini" in name_lower or "flash" in name_lower:
-        return "gemini"
     return None
 
 
@@ -202,9 +203,10 @@ def summarize(raw_data: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any
     switch_thresh = thresholds.get("switch_threshold", 0.15)
     wrapup_thresh = thresholds.get("wrapup_threshold", 0.05)
 
-    groups_data = raw_data.get("groups", [])
-    if not groups_data and "buckets" in raw_data:
-        groups_data = [{"displayName": "default", "buckets": raw_data.get("buckets", [])}]
+    inner = raw_data.get("response") if isinstance(raw_data.get("response"), dict) else raw_data
+    groups_data = inner.get("groups", [])
+    if not groups_data and "buckets" in inner:
+        groups_data = [{"displayName": "default", "buckets": inner.get("buckets", [])}]
 
     # Canonical buckets grouped by target ID
     grouped_buckets: Dict[str, List[Dict[str, Any]]] = {

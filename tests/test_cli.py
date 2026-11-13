@@ -242,7 +242,7 @@ class TestOrchestrationProfiles(unittest.TestCase):
         self.assertEqual(data["default_profile"], "argon-flash")
         self.assertIn("profiles", data)
 
-        required_profiles = ["argon-flash", "opus-flash", "sonnet-flash", "flash-high"]
+        required_profiles = ["argon-flash", "hydrogen-high", "opus-flash", "sonnet-flash", "flash-high"]
         for prof in required_profiles:
             self.assertIn(prof, data["profiles"], f"Missing profile {prof}")
             prof_data = data["profiles"][prof]
@@ -1484,6 +1484,79 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
         self.assertEqual(res_vault.returncode, 0)
         data_vault = json.loads(res_vault.stdout)
         self.assertEqual(data_vault.get("decision"), "allow")
+
+        # 8. Verify Gemini 4 Hydrogen execution model is allowed
+        hydrogen_payload = {
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+            },
+            "modelName": "gemini-4-hydrogen-high",
+        }
+        res_hydrogen = subprocess.run(
+            [str(self.guard_delegation_script)],
+            input=json.dumps(hydrogen_payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_hydrogen.returncode, 0)
+        data_hydrogen = json.loads(res_hydrogen.stdout)
+        self.assertEqual(data_hydrogen.get("decision"), "allow")
+
+        # 9. Verify Orchestrator (Argon) post-exit_plan_mode execution turn is allowed
+        with tempfile.NamedTemporaryFile("w", delete=False) as tf:
+            tf.write(json.dumps({"type": "USER_INPUT", "content": "Implement feature X"}) + "\n")
+            tf.write(json.dumps({"type": "PLANNER_RESPONSE", "tool_calls": [{"name": "exit_plan_mode"}]}) + "\n")
+            transcript_exec = tf.name
+
+        try:
+            payload_exec = {
+                "toolCall": {
+                    "name": "edit_file",
+                    "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+                },
+                "modelName": "gemini-pro-orchestrator-g1-pro",
+                "transcriptPath": transcript_exec,
+            }
+            res_exec = subprocess.run(
+                [str(self.guard_delegation_script)],
+                input=json.dumps(payload_exec),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_exec.returncode, 0)
+            data_exec = json.loads(res_exec.stdout)
+            self.assertEqual(data_exec.get("decision"), "allow")
+        finally:
+            os.unlink(transcript_exec)
+
+        # 10. Guarded failure: subsequent USER_INPUT after exit_plan_mode resets back to planning phase and denies direct edits
+        with tempfile.NamedTemporaryFile("w", delete=False) as tf:
+            tf.write(json.dumps({"type": "USER_INPUT", "content": "Implement feature X"}) + "\n")
+            tf.write(json.dumps({"type": "PLANNER_RESPONSE", "tool_calls": [{"name": "exit_plan_mode"}]}) + "\n")
+            tf.write(json.dumps({"type": "USER_INPUT", "content": "New follow-up request"}) + "\n")
+            transcript_reset = tf.name
+
+        try:
+            payload_reset = {
+                "toolCall": {
+                    "name": "edit_file",
+                    "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+                },
+                "modelName": "gemini-pro-orchestrator-g1-pro",
+                "transcriptPath": transcript_reset,
+            }
+            res_reset = subprocess.run(
+                [str(self.guard_delegation_script)],
+                input=json.dumps(payload_reset),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_reset.returncode, 0)
+            data_reset = json.loads(res_reset.stdout)
+            self.assertEqual(data_reset.get("decision"), "deny")
+        finally:
+            os.unlink(transcript_reset)
 
     def test_guard_agentkit_compliance_hook(self):
         # 1. Verify --dry-run exits 0 with operational message

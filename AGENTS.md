@@ -20,7 +20,7 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 ├── config/
 │   ├── permissions.json      # Declarative catalog of pre-approved commands by category
 │   ├── mcp.json              # Standard MCP server configurations and environment requirements
-│   ├── profiles.json         # Cognitive model tiering profiles (argon-flash, flash-high, opus-flash, sonnet-flash)
+│   ├── profiles.json         # Cognitive model tiering profiles (argon-flash, hydrogen-high, flash-high, opus-flash, sonnet-flash)
 │   ├── quota.json            # Quota thresholds, provider groups, complexity mappings, and fallback chains
 │   └── settings.default.json # Baseline configuration defaults (theme, non-workspace access)
 │
@@ -86,10 +86,10 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 
 3. **Cognitive Architecture & Model Tiering**:
    - **Root Orchestrator**:
-     - **Primary Tier (`argon-flash`)**: Gemini 4 Argon (`Model: "pro"` / `"inherit"`) when Argon quota is available AND task involves complex architecture, multi-repo planning, or adversarial diff review.
-     - **Standard Tier (`flash-high`)**: Gemini 3.8 Flash with High reasoning (`Model: "flash"` / `"inherit"`) for standard feature and lifecycle workflows (replaces retired Gemini 3.0/3.1 Pro).
-     - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: Claude Opus 5.5 / Claude Sonnet 3.7 (`Model: "opus"` / `"claude-opus-5.5"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
-     - Root Orchestrator MUST NEVER directly edit project source code, tests, or UI files (via `edit_file` or `write_file`) — only artifact files in the session brain directory (`plan.md`). All code implementation and test updates MUST be delegated to worker subagents.
+     - **Primary Tier (`argon-flash`)**: **Orchestrator (Argon)** (`gemini-pro-orchestrator-g1-pro`) and **Gemini 4 Argon** (`High` / `Medium` / `Low`; `Model: "pro"` / `"inherit"`) when Argon quota is available AND task involves complex architecture, multi-repo planning, or adversarial diff review. In `Orchestrator (Argon)` two-phase mode, Phase 1 runs in read-only `plan_mode` and hands off via `exit_plan_mode` to Phase 2 (executed in-place on `Gemini 4 Hydrogen` or `Gemini 3.8 Flash`, or via parallel subagents).
+     - **Standard Tier (`hydrogen-high` / `flash-high`)**: **Gemini 4 Hydrogen** (`High` / `XHigh` / `Medium` / `Low`; profile `hydrogen-high`) and **Gemini 3.8 Flash (High)** (profile `flash-high`) in the Gemini quota group for standard feature and lifecycle workflows with zero Argon quota consumption.
+     - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: **Claude Opus 5.5** / **Claude Sonnet 5.5** (`Low` / `Medium` / `High`; `Model: "opus"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
+     - When not in a post-`exit_plan_mode` execution phase, the Root Orchestrator MUST NEVER directly edit project source code, tests, or UI files (via `edit_file` or `write_file`) — only artifact files in the session brain directory (`plan.md`). All standalone code implementation and test updates MUST be delegated to worker subagents.
    - **Subagent Complexity Tiers**:
      - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
      - `med`: `flash` (feature code, tests, localized refactors).
@@ -121,9 +121,9 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 - **Pre-Flight Quota Inspection**:
   - Check remaining quota with `agentkit quota status` before launching large subagent fan-outs.
 - **The 3 Quota Groups**:
-  - **Gemini Group**: Gemini 3.8 Flash, Gemini 3.8 Flash Lite (standard and high-throughput subagent execution).
-  - **Claude + GPT Group**: Claude Opus 5.5, Claude Sonnet 3.7 (fallback root orchestrator and cross-family execution).
-  - **Gemini 4 Argon Group**: Dedicated deep reasoning quota (architectural planning, complex system design, adversarial critique).
+  - **Gemini Group**: `Gemini 4 Hydrogen` (`Low` / `Medium` / `High` / `XHigh`), `Gemini 3.8 Flash` (`Low` / `Medium` / `High`), `Gemini 3.8 Flash Lite` (standard root execution and high-throughput subagent execution).
+  - **Claude + GPT Group**: `Claude Opus 5.5`, `Claude Sonnet 5.5`, `GPT-OSS 120B` (fallback root orchestrator and cross-family execution).
+  - **Gemini 4 Argon Group**: `Orchestrator (Argon)`, `Gemini 4 Argon` (`Low` / `Medium` / `High`) — dedicated deep reasoning, two-phase planning, and adversarial critique quota.
 - **Automated Fallback Routing**:
   - The `quota-guardian` plugin automatically intercepts subagent delegation via `PreToolUse`.
   - When the target model's quota group drops below **15% remaining capacity**, `quota-guardian` dynamically reroutes subagents to a healthy fallback group without interrupting execution.

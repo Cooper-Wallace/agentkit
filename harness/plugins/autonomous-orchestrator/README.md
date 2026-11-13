@@ -1,12 +1,12 @@
 # Autonomous Orchestrator Plugin
 
-An opinionated Antigravity plugin enabling state-of-the-art autonomous agent workflows with **Gemini 4 Argon**, **Gemini 3.8 Flash (High reasoning)**, **Claude Opus 5.5**, and **Claude Sonnet 3.7** root orchestrators delegating to **Gemini 3.8 Flash / Flash Lite** subagents.
+An opinionated Antigravity plugin enabling state-of-the-art autonomous agent workflows with **Orchestrator (Argon)**, **Gemini 4 Argon**, **Gemini 4 Hydrogen (High/XHigh)**, **Gemini 3.8 Flash (High)**, **Claude Opus 5.5**, and **Claude Sonnet 5.5** root orchestrators delegating to **Gemini 4 Hydrogen / 3.8 Flash / Flash Lite** workers.
 
 ---
 
 ## Capabilities
 
-- **Cognitive Tiering**: Routes high-level architecture, task DAG generation, and adversarial reviews to **Gemini 4 Argon** (primary) or **Gemini 3.8 Flash High** (standard), and discrete implementation tasks to **Gemini 3.8 Flash** or **Flash Lite** subagents.
+- **Cognitive Tiering**: Routes high-level architecture, task DAG generation, and adversarial reviews to **Orchestrator (Argon)** / **Gemini 4 Argon** (primary), **Gemini 4 Hydrogen High** (standard Gemini 4 tier), or **Gemini 3.8 Flash High**, and discrete implementation tasks to **Gemini 3.8 Flash** or **Flash Lite** subagents (or in-place post-`exit_plan_mode` execution turns in `Orchestrator (Argon)`).
 - **Complexity-Aware Subagent Routing**: Partition tasks by complexity tag (`[complexity: low|med|high]`):
   - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
   - `med`: `flash` (feature code, tests, localized refactors).
@@ -17,7 +17,7 @@ An opinionated Antigravity plugin enabling state-of-the-art autonomous agent wor
 - **Git Worktree Isolation**: Supports concurrent workers in independent git worktrees via `Workspace: "share"`.
 - **Deterministic Hook Guards**:
   - `SessionStart` (`scripts/guard-agentkit-compliance.sh`): Verifies Antigravity harness configuration against agentkit standards at session startup. Injects actionable alerts if settings are out of sync, or automatically synchronizes them when `AGENTKIT_AUTO_APPLY=1` is set. Bypassable via `AGENTKIT_SKIP_SESSION_AUDIT=1`.
-  - `PreToolUse` (`scripts/guard-subagent-delegation.sh`): Blocks the Root Orchestrator from directly modifying project source code, tests, or UI files, enforcing delegation to worker subagents.
+  - `PreToolUse` (`scripts/guard-subagent-delegation.sh`): Blocks standalone Root Orchestrators from directly modifying project source code, tests, or UI files outside a post-`exit_plan_mode` execution phase, enforcing delegation to worker subagents.
   - `PreToolUse` (`scripts/guard-git-operations.sh`): Hard blocks direct pushes, force-pushes, or merges to `main`/`master`, and gates destructive deletions.
   - `PreToolUse` (`scripts/filter-and-wrap.py` & `scripts/headroom-wrap.py`): Transparently wraps verbose test, diff, and inspection commands to compress output tokens by 60–90% with Reversible CCR (Contextual Compression with Retrieval) caching (`~/.cache/antigravity-headroom/<hash>.txt`).
   - `Stop` (`scripts/verify-clean-completion.sh`): Prevents task termination if automated tests fail or if uncommitted changes exist in the worktree.

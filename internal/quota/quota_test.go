@@ -8,6 +8,7 @@ import (
 )
 
 func TestQuotaStatusSyntheticFallback(t *testing.T) {
+	t.Setenv("AGENTKIT_QUOTA_CACHE", filepath.Join(t.TempDir(), "nonexistent.json"))
 	status, err := Status("")
 	if err != nil {
 		t.Fatalf("Status with empty file failed: %v", err)
@@ -195,5 +196,83 @@ func TestQuotaErrors(t *testing.T) {
 	_ = os.WriteFile(badJSON, []byte("{invalid"), 0644)
 	if _, err := Status(badJSON); err == nil {
 		t.Errorf("expected error for malformed json")
+	}
+}
+
+func TestQuotaNestedResponseAndGemini4Models(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Happy path: nested response.groups with Gemini 4 Hydrogen, Orchestrator (Argon), Claude Sonnet 5.5
+	nestedPath := filepath.Join(tempDir, "nested.json")
+	nestedContent := `{
+		"response": {
+			"groups": [
+				{
+					"displayName": "Gemini 4 Hydrogen (High)",
+					"buckets": [
+						{
+							"bucketId": "gemini-4-hydrogen",
+							"window": "5h",
+							"remainingFraction": 0.72,
+							"resetTime": "2026-11-14T05:00:00Z"
+						}
+					]
+				},
+				{
+					"displayName": "gemini-pro-orchestrator-g1-pro",
+					"buckets": [
+						{
+							"bucketId": "argon-orchestrator",
+							"window": "weekly",
+							"remainingFraction": 0.12,
+							"resetTime": "2026-11-19T04:18:06Z"
+						}
+					]
+				},
+				{
+					"displayName": "Claude Sonnet 5.5",
+					"buckets": [
+						{
+							"bucketId": "claude-sonnet-5-5",
+							"window": "weekly",
+							"remainingFraction": 0.95,
+							"resetTime": "2026-11-19T23:55:20Z"
+						}
+					]
+				}
+			]
+		}
+	}`
+	if err := os.WriteFile(nestedPath, []byte(nestedContent), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	status, err := Status(nestedPath)
+	if err != nil {
+		t.Fatalf("Status nested failed: %v", err)
+	}
+	if status.Groups["gemini"].RemainingPercent != 72.0 {
+		t.Errorf("expected gemini 72.0%%, got %.1f%%", status.Groups["gemini"].RemainingPercent)
+	}
+	if status.Groups["argon"].Status != "low" || !status.Groups["argon"].Low {
+		t.Errorf("expected argon low status for 0.12, got %+v", status.Groups["argon"])
+	}
+	if status.Groups["claude"].RemainingPercent != 95.0 {
+		t.Errorf("expected claude 95.0%%, got %.1f%%", status.Groups["claude"].RemainingPercent)
+	}
+
+	// Guarded failure / safe degrade path: empty nested response degrades cleanly to healthy 1.0
+	emptyNestedPath := filepath.Join(tempDir, "empty_nested.json")
+	if err := os.WriteFile(emptyNestedPath, []byte(`{"response": {}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	emptyStatus, err := Status(emptyNestedPath)
+	if err != nil {
+		t.Fatalf("Status empty nested failed: %v", err)
+	}
+	for _, gid := range []string{"gemini", "claude", "argon"} {
+		if emptyStatus.Groups[gid].RemainingFraction != 1.0 || emptyStatus.Groups[gid].Status != "healthy" {
+			t.Errorf("expected safe degrade 1.0/healthy for %s, got %+v", gid, emptyStatus.Groups[gid])
+		}
 	}
 }

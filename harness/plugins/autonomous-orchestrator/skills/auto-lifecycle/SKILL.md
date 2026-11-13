@@ -1,11 +1,11 @@
 ---
 name: auto-lifecycle
-description: "Use whenever executing feature tasks, bug fixes, post-run log reviews, or iterative user feedback adjustments across Argon 4 / Flash High / Opus 5.5 root orchestrators and Flash subagents with automated test verification, and adversarial diff review."
+description: "Use whenever executing feature tasks, bug fixes, post-run log reviews, or iterative user feedback adjustments across Orchestrator (Argon) / Argon 4 / Hydrogen High / Flash High / Opus 5.5 / Sonnet 5.5 root orchestrators and Flash subagents with automated test verification, and adversarial diff review."
 ---
 
 # Autonomous Multi-Model Lifecycle Runbook
 
-This skill teaches the Root Orchestrator (Gemini 4 Argon, Gemini 3.8 Flash High, Claude Opus 5.5, or Claude Sonnet 3.7) how to execute features autonomously under Auto mode without human micro-management, while guaranteeing zero trunk contamination, quota headroom awareness, and rigorous adversarial verification.
+This skill teaches the Root Orchestrator (Orchestrator (Argon), Gemini 4 Argon, Gemini 4 Hydrogen High/XHigh, Gemini 3.8 Flash High, Claude Opus 5.5, or Claude Sonnet 5.5) how to execute features autonomously under Auto mode without human micro-management, while guaranteeing zero trunk contamination, quota headroom awareness, and rigorous adversarial verification.
 
 ---
 
@@ -13,9 +13,9 @@ This skill teaches the Root Orchestrator (Gemini 4 Argon, Gemini 3.8 Flash High,
 
 ```mermaid
 flowchart LR
-    P1["Phase 1: Ingest & Task DAG<br/>(Argon 4 / Flash High / Opus 5.5)"] --> P2A["Phase 2: Worker A [complexity: med]<br/>(Backend & Tests)"]
+    P1["Phase 1: Ingest & Task DAG<br/>(Orchestrator (Argon) / Hydrogen High / Opus 5.5)"] --> P2A["Phase 2: Worker A [complexity: med]<br/>(Backend & Tests)"]
     P1 --> P2B["Phase 2: Worker B [complexity: low]<br/>(Pure-Edit UI/Docs)"]
-    P2A --> P3["Phase 3: Adversarial Review<br/>(Argon 4 / Flash High / Opus 5.5)"]
+    P2A --> P3["Phase 3: Adversarial Review<br/>(Orchestrator (Argon) / Hydrogen High / Opus 5.5)"]
     P2B --> P3
     P3 --> P4["Phase 4: Promotion & Vault Handoff<br/>(PR + Vault + kill_all)"]
 ```
@@ -34,8 +34,10 @@ flowchart LR
    - Outline subtask DAG with explicit complexity tiers (`[complexity: low|med|high]`) for parallel worker execution.
 4. **Branch Isolation (One Branch Per Change)**: Ensure the active branch is a dedicated short-lived feature branch (`feat/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`, `test/<name>`) branched directly from `origin/main`. Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges. Never stack unrelated changes or accumulate multiple features on the same branch.
 
-### Phase 2: Autonomous Implementation (Worker Subagents)
-1. **Strict Subagent Execution**: ALL code, test, and UI edits (including initial implementation as well as iterative tuning after user review feedback) must be executed by subagents (`Workspace: "inherit"` or `"share"`), never directly by the Root Orchestrator (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7) in the root session.
+### Phase 2: Autonomous Implementation (Worker Subagents & Two-Phase Execution)
+1. **Delegation & Two-Phase Execution Discipline**:
+   - In **`Orchestrator (Argon)`** two-phase Plan & Execute mode (`exit_plan_mode`), the fast post-plan execution turn (`Gemini 4 Hydrogen` or `Gemini 3.8 Flash`) may apply the approved plan directly or dispatch parallel subagents across disjoint file sets.
+   - In **standalone Root Orchestrator** sessions (`Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`), ALL code, test, and UI edits (including initial implementation as well as iterative tuning after user review feedback) MUST be executed by subagents (`Workspace: "inherit"` or `"share"`), never directly in the root session.
 2. **Complexity-Aware Model Tiering**:
    - **`low`**: Launch with `Model: "flash_lite"` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
    - **`med`**: Launch with `Model: "flash"` (feature code, tests, localized refactors).
@@ -58,7 +60,7 @@ flowchart LR
    - Instruct workers: *"Return only a concise 10-line summary of files modified, commit hash/message, and test verification results."*
 8. **Reactive Wakeup**: When the subagents complete, the agent harness reactively resumes the Root Orchestrator.
 
-### Phase 3: Adversarial Critique & Self-Healing (Argon 4 / Flash High / Opus 5.5)
+### Phase 3: Adversarial Critique & Self-Healing (Orchestrator (Argon) / Argon 4 / Hydrogen High / Opus 5.5)
 1. **Inspect Git Diff & Subagent Commits**:
    - Run `git status`, `git diff`, and `git log -n 1 --stat` to inspect changes and verify that each worker subagent produced a single atomic Conventional Commit representing its completed deliverable without uncommitted working tree residue.
 2. **Audit Checkpoints**:

@@ -51,37 +51,49 @@ if [[ "$TARGET_PATH" == *"/.gemini/"* ]] || \
   exit 0
 fi
 
-# 3. Allow if running inside a Flash / Lite / Haiku subagent
+# 3. Allow if running inside a Flash / Lite / Hydrogen / Haiku subagent or execution model
 MODEL_LOWER="$(echo "$MODEL_NAME" | tr '[:upper:]' '[:lower:]')"
-if [[ "$MODEL_LOWER" == *"flash"* ]] || [[ "$MODEL_LOWER" == *"lite"* ]] || [[ "$MODEL_LOWER" == *"haiku"* ]]; then
+if [[ "$MODEL_LOWER" == *"flash"* ]] || [[ "$MODEL_LOWER" == *"lite"* ]] || [[ "$MODEL_LOWER" == *"hydrogen"* ]] || [[ "$MODEL_LOWER" == *"haiku"* ]]; then
   echo '{"decision": "allow"}'
   exit 0
 fi
 
-# 4. Check if conversation is a subagent via env vars or transcript inspection
+# 4. Check if conversation is a subagent or an active post-exit_plan_mode execution phase via env vars or transcript inspection
 IS_SUBAGENT="${IS_SUBAGENT:-${AGY_IS_SUBAGENT:-0}}"
 
 if [[ "$IS_SUBAGENT" != "1" && "$IS_SUBAGENT" != "true" && -n "$TRANSCRIPT_PATH" && -f "$TRANSCRIPT_PATH" ]]; then
-  FIRST_INPUT=""
-  if command -v jq >/dev/null 2>&1; then
-    FIRST_INPUT="$(jq -r 'select(.type=="USER_INPUT") | .content // ""' "$TRANSCRIPT_PATH" 2>/dev/null | head -n 1 || true)"
-  else
-    FIRST_INPUT="$(python3 -c '
+  TRANSCRIPT_CHECK="$(python3 -c '
 import sys, json
+first_input = ""
+in_execution_phase = False
 try:
-    with open(sys.argv[1]) as f:
+    with open(sys.argv[1], encoding="utf-8") as f:
         for line in f:
+            line = line.strip()
+            if not line:
+                continue
             d = json.loads(line)
-            if d.get("type") == "USER_INPUT":
-                print(d.get("content", ""))
-                break
+            stype = d.get("type", "")
+            content = str(d.get("content", "") or "")
+            if stype == "USER_INPUT":
+                if not first_input:
+                    first_input = content
+                in_execution_phase = False
+            elif "[plan review]" in content.lower():
+                in_execution_phase = False
+            elif stype == "PLANNER_RESPONSE":
+                for tc in d.get("tool_calls") or []:
+                    if isinstance(tc, dict) and tc.get("name") == "exit_plan_mode":
+                        in_execution_phase = True
+                        break
 except Exception:
     pass
+print("EXECUTION_PHASE" if in_execution_phase else first_input)
 ' "$TRANSCRIPT_PATH" 2>/dev/null || true)"
-  fi
 
-  # Helper regex: detect subagent role indicators, worker identities, or subagent markers
-  if echo "$FIRST_INPUT" | grep -Eiq '(\[complexity:[[:space:]]*(low|med|high)\]|You are (Worker|a .* subagent)|<SUBAGENT)'; then
+  if [[ "$TRANSCRIPT_CHECK" == "EXECUTION_PHASE" ]]; then
+    IS_SUBAGENT=1
+  elif echo "$TRANSCRIPT_CHECK" | grep -Eiq '(\[complexity:[[:space:]]*(low|med|high)\]|You are (Worker|a .* subagent)|<SUBAGENT)'; then
     IS_SUBAGENT=1
   fi
 fi
@@ -91,7 +103,7 @@ if [[ "$IS_SUBAGENT" == "1" || "$IS_SUBAGENT" == "true" ]]; then
   exit 0
 fi
 
-# 5. Root Orchestrator Gatekeeping (switchable root orchestrators: Argon 4, Opus 5.5, Sonnet 3.7, Pro)
-# Root orchestrator must never directly edit project source code, tests, or UI files.
-echo '{"decision": "deny", "reason": "ORCHESTRATOR VIOLATION: Root session (Argon 4 / Opus 5.5 / Sonnet 3.7) must not call edit_file/write_file on project files directly. Delegate implementation to a Flash subagent via invoke_subagent(Model=\"flash\")."}'
+# 5. Root Orchestrator Gatekeeping (switchable root orchestrators: Orchestrator (Argon), Argon 4, Opus 5.5, Sonnet 5.5)
+# Standalone root orchestrators must never directly edit project source code, tests, or UI files.
+echo '{"decision": "deny", "reason": "ORCHESTRATOR VIOLATION: Root session (Argon 4 / Opus 5.5 / Sonnet 5.5) must not call edit_file/write_file on project files directly outside a post-exit_plan_mode execution phase. Delegate implementation to a worker subagent via invoke_subagent(Model=\"flash\") or finalize the plan with exit_plan_mode."}'
 exit 0

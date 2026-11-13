@@ -58,10 +58,11 @@ By separating Layer 2 from Layer 1, `agentkit` maintains strict focus on AI agen
 
 | Profile | Root Orchestrator | Worker Subagents | Primary Use Case |
 |---|---|---|---|
-| **`argon-flash`** | Gemini 4 Argon | Gemini 3.8 Flash | **Primary / Default**: Deepest reasoning and architectural precision (when Argon quota is available) with fast Flash subagents. |
-| **`flash-high`** | Gemini 3.8 Flash (High reasoning) | Gemini 3.8 Flash | **Standard**: Fast lifecycle and feature development with high reasoning depth (replaces retired Pro). |
-| **`opus-flash`** | Claude Opus 5.5 | Gemini 3.8 Flash | **Quota / Token Limit Fallback**: High-capability root planner when Gemini quota groups are exhausted or rate-limited. |
-| **`sonnet-flash`** | Claude Sonnet 3.7 | Gemini 3.8 Flash | **High-Throughput**: High-speed reasoning, refactoring, and code synthesis with Flash execution. |
+| **`argon-flash`** | Orchestrator (Argon) / Gemini 4 Argon | Gemini 4 Hydrogen / 3.8 Flash | **Primary / Default**: Deepest reasoning, two-phase Plan & Execute (`exit_plan_mode`), and architectural precision (when Argon quota is available) with fast Hydrogen/Flash execution. |
+| **`hydrogen-high`** | Gemini 4 Hydrogen (High/XHigh) | Gemini 4 Hydrogen / 3.8 Flash | **Standard (Gemini 4)**: High-speed lifecycle, coding, and feature development with deep Gemini 4 Hydrogen reasoning and zero Argon quota consumption. |
+| **`flash-high`** | Gemini 3.8 Flash (High reasoning) | Gemini 3.8 Flash | **Standard (Gemini 3.8)**: Fast lifecycle and feature development with high reasoning depth. |
+| **`opus-flash`** | Claude Opus 5.5 | Gemini 4 Hydrogen / 3.8 Flash | **Quota / Token Limit Fallback**: High-capability root planner when Gemini quota groups are exhausted or rate-limited. |
+| **`sonnet-flash`** | Claude Sonnet 5.5 | Gemini 4 Hydrogen / 3.8 Flash | **High-Throughput**: High-speed reasoning, refactoring, and code synthesis with Flash execution. |
 
 ### Subagent Complexity Tiers
 
@@ -91,7 +92,7 @@ agentkit profile set opus-flash
   - Generates visual architecture maps and multi-agent workflows using the open **JSON Canvas** (`.canvas`) specification (`jsoncanvas.org`).
   - Integrated CLI commands (`agentkit vault init`, `agentkit vault ingest`, `agentkit vault sync`, `agentkit vault note`, `agentkit vault status`).
 - **Harness-Agnostic Governance**: Support for Google Antigravity CLI and extensible harness targets via `--harness`.
-- **Switchable Cognitive Profiles**: Switch between `argon-flash`, `flash-high`, `opus-flash`, and `sonnet-flash` profiles to navigate token quotas and workload complexity.
+- **Switchable Cognitive Profiles**: Switch between `argon-flash`, `hydrogen-high`, `flash-high`, `opus-flash`, and `sonnet-flash` profiles to navigate token quotas and workload complexity.
 - **Quota Telemetry & Fallback Routing**: Query real-time token quotas with `agentkit quota status` and calculate optimal model assignments with `agentkit quota route`.
 - **Tiered Command Permissions**:
   - Pre-approves safe core inspection tools (`cat`, `grep`, `which`, `ls`, `find`, `file`, `diff`, `fastfetch`).
@@ -218,14 +219,17 @@ Inspect and switch cognitive tiering profiles:
 # List available model profiles:
 agentkit profile list
 
-# Switch to standard Flash High profile:
-agentkit profile set flash-high
+# Switch to standard Gemini 4 Hydrogen High profile:
+agentkit profile switch hydrogen-high
+
+# Switch to standard Gemini 3.8 Flash High profile:
+agentkit profile switch flash-high
 
 # Switch to Claude Opus 5.5 fallback profile:
-agentkit profile set opus-flash
+agentkit profile switch opus-flash
 
 # Switch back to primary Argon profile:
-agentkit profile set argon-flash
+agentkit profile switch argon-flash
 ```
 
 ---

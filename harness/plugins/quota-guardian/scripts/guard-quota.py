@@ -36,11 +36,11 @@ def _resolve_model_group(model_name: str, config: Dict[str, Any]) -> Optional[st
     if m_lower in model_group_map:
         return model_group_map[m_lower]
 
-    if "argon" in m_lower:
+    if "argon" in m_lower or "orchestrator" in m_lower:
         return "argon"
-    if "claude" in m_lower or "opus" in m_lower or "sonnet" in m_lower:
+    if "claude" in m_lower or "opus" in m_lower or "sonnet" in m_lower or "gpt" in m_lower:
         return "claude"
-    if "gemini" in m_lower or "flash" in m_lower:
+    if "gemini" in m_lower or "hydrogen" in m_lower or "flash" in m_lower:
         return "gemini"
 
     return _resolve_group_id(m_lower, config)
