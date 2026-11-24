@@ -22,14 +22,14 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
 ## 2. Cognitive Architecture & Model Tiering
 
 - **Root Orchestrator**:
-  - **Primary Tier (`argon-flash`)**: **Orchestrator (Argon)** (`gemini-pro-orchestrator-g1-pro`) and **Gemini 4 Argon** (`High` / `Medium` / `Low`; `Model: "pro"` / `"inherit"`) when Argon quota is available AND task is complex (architecture, multi-repo planning, adversarial review). In `Orchestrator (Argon)` two-phase mode, Phase 1 plans in read-only `plan_mode` and hands off via `exit_plan_mode` to Phase 2 (`Gemini 4 Hydrogen` or `Gemini 3.8 Flash`).
-  - **Standard Tier (`hydrogen-high` / `flash-high`)**: **Gemini 4 Hydrogen** (`High` / `XHigh` / `Medium` / `Low`; profile `hydrogen-high`) and **Gemini 3.8 Flash (High)** (profile `flash-high`) in the Gemini quota group for standard feature and lifecycle workflows.
+  - **Primary Tier (`carbon-flash` [default] / `argon-flash`)**: **Orchestrator (Carbon)** (`gemini-pro-orchestrator`) and **Gemini 4 Carbon** (`High` / `Medium` / `Low`), alongside **Orchestrator (Argon)** (`gemini-pro-orchestrator-argon`) and **Gemini 4 Argon** (`High` / `Medium` / `Low`; `Model: "pro"` / `"inherit"`) when Carbon/Argon quota is available AND task is complex (architecture, multi-repo planning, adversarial review). In `Orchestrator (Carbon)` / `Orchestrator (Argon)` two-phase mode, Phase 1 plans in read-only `plan_mode` and hands off via `exit_plan_mode` to Phase 2 (`Gemini 4 Neon`, `Gemini 4 Hydrogen`, or `Gemini 3.8 Flash`).
+  - **Standard Tier (`neon-high` / `hydrogen-high` / `flash-high`)**: **Orchestrator (Neon)** (`gemini-pro-orchestrator-neon`) and **Gemini 4 Neon** (`High` / `XHigh` / `Medium` / `Low`; profile `neon-high`; default `settings.default.json` model `Gemini 4 Neon (High)`), alongside **Gemini 4 Hydrogen** (`High` / `XHigh` / `Medium` / `Low`; profile `hydrogen-high`) and **Gemini 3.8 Flash (High)** (profile `flash-high`) in the Gemini quota group for standard feature and lifecycle workflows with zero Argon/Carbon quota consumption.
   - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: **Claude Opus 5.5** / **Claude Sonnet 5.5** (`Low` / `Medium` / `High`; `Model: "opus"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
-  - When not in a post-`exit_plan_mode` execution phase, the Root Orchestrator MUST NEVER directly edit project source code, tests, or UI files — only artifact files in the session brain directory (e.g., `plan.md`). All standalone code implementation, post-review bugfixes, and test updates MUST be delegated to worker subagents.
+  - When not in a post-`exit_plan_mode` execution phase, the standalone Root Orchestrator (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`) MUST NEVER directly edit project source code, tests, or UI files — only artifact files in the session brain directory (e.g., `plan.md`). All standalone code implementation, post-review bugfixes, and test updates MUST be delegated to worker subagents.
 - **Subagent Complexity Tiers**:
   - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
   - `med`: `flash` (feature code, tests, localized refactors).
-  - `high`: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy.
+  - `high`: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Carbon / Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Carbon/Argon quota is healthy.
   - Tag convention: place `[complexity: low|med|high]` at the start of subagent prompts.
 - **Disjoint-File Parallel Worker Partitioning**:
   - Multi-component tasks MUST be partitioned across concurrent subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
@@ -41,9 +41,9 @@ Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-s
 - **Pre-Flight Quota Inspection**:
   - Check remaining quota with `agentkit quota status` before launching large subagent fan-outs.
 - **The 3 Quota Groups**:
-  - **Gemini Group**: `Gemini 4 Hydrogen` (`Low` / `Medium` / `High` / `XHigh`), `Gemini 3.8 Flash` (`Low` / `Medium` / `High`), `Gemini 3.8 Flash Lite` (standard root execution and high-throughput subagent execution).
-  - **Claude + GPT Group**: `Claude Opus 5.5`, `Claude Sonnet 5.5`, `GPT-OSS 120B` (fallback root orchestrator and cross-family execution).
-  - **Gemini 4 Argon Group**: `Orchestrator (Argon)`, `Gemini 4 Argon` (`Low` / `Medium` / `High`) — dedicated deep reasoning, two-phase planning, and adversarial critique quota.
+  - **Gemini Group** (`gemini`): `Orchestrator (Neon)`, `Gemini 4 Neon` (`Low` / `Medium` / `High` / `XHigh`), `Gemini 4 Hydrogen` (`Low` / `Medium` / `High` / `XHigh`), `Gemini 3.8 Flash` (`Low` / `Medium` / `High`), `Gemini 3.8 Flash Lite` (`flash_lite`) (standard root execution and high-throughput subagent execution).
+  - **Claude + GPT Group** (`claude`): `Claude Opus 5.5`, `Claude Sonnet 5.5`, `GPT-OSS 120B` (fallback root orchestrator and cross-family execution).
+  - **Gemini 4 Carbon / Argon Group** (`argon` canonical group ID): `Orchestrator (Carbon)`, `Gemini 4 Carbon` (`Low` / `Medium` / `High`), `Orchestrator (Argon)`, `Gemini 4 Argon` (`Low` / `Medium` / `High`) — dedicated deep reasoning, two-phase planning, and adversarial critique quota.
 - **Automated Routing**:
   - The `quota-guardian` plugin automatically intercepts subagent delegation via `PreToolUse`.
   - When the target model's quota group drops below **15% remaining capacity**, `quota-guardian` automatically reroutes subagents to a healthy fallback group without interrupting execution.

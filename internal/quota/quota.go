@@ -111,7 +111,10 @@ func parseBucketString(val interface{}) string {
 
 func resolveGroupID(name string) string {
 	lower := strings.ToLower(name)
-	if strings.Contains(lower, "argon") || strings.Contains(lower, "orchestrator") {
+	if strings.Contains(lower, "neon") {
+		return "gemini"
+	}
+	if strings.Contains(lower, "carbon") || strings.Contains(lower, "argon") || strings.Contains(lower, "orchestrator") {
 		return "argon"
 	}
 	if strings.Contains(lower, "claude") || strings.Contains(lower, "opus") || strings.Contains(lower, "sonnet") || strings.Contains(lower, "gpt") {

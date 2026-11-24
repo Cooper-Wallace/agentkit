@@ -1,23 +1,23 @@
 # Autonomous Orchestrator Plugin
 
-An opinionated Antigravity plugin enabling state-of-the-art autonomous agent workflows with **Orchestrator (Argon)**, **Gemini 4 Argon**, **Gemini 4 Hydrogen (High/XHigh)**, **Gemini 3.8 Flash (High)**, **Claude Opus 5.5**, and **Claude Sonnet 5.5** root orchestrators delegating to **Gemini 4 Hydrogen / 3.8 Flash / Flash Lite** workers.
+An opinionated Antigravity plugin enabling state-of-the-art autonomous agent workflows with **Orchestrator (Carbon)**, **Gemini 4 Carbon**, **Orchestrator (Argon)**, **Gemini 4 Argon**, **Orchestrator (Neon)**, **Gemini 4 Neon (High/XHigh)**, **Gemini 4 Hydrogen (High/XHigh)**, **Gemini 3.8 Flash (High)**, **Claude Opus 5.5**, and **Claude Sonnet 5.5** root orchestrators delegating to **Gemini 4 Neon / Hydrogen / 3.8 Flash / Flash Lite** workers.
 
 ---
 
 ## Capabilities
 
-- **Cognitive Tiering**: Routes high-level architecture, task DAG generation, and adversarial reviews to **Orchestrator (Argon)** / **Gemini 4 Argon** (primary), **Gemini 4 Hydrogen High** (standard Gemini 4 tier), or **Gemini 3.8 Flash High**, and discrete implementation tasks to **Gemini 3.8 Flash** or **Flash Lite** subagents (or in-place post-`exit_plan_mode` execution turns in `Orchestrator (Argon)`).
+- **Cognitive Tiering**: Routes high-level architecture, task DAG generation, and adversarial reviews to **Orchestrator (Carbon)** / **Gemini 4 Carbon** or **Orchestrator (Argon)** / **Gemini 4 Argon** (primary), **Orchestrator (Neon)** / **Gemini 4 Neon High** / **Gemini 4 Hydrogen High** (standard Gemini 4 tier), or **Gemini 3.8 Flash High**, and discrete implementation tasks to **Gemini 3.8 Flash** or **Flash Lite** subagents (or in-place post-`exit_plan_mode` execution turns in `Orchestrator (Carbon)` / `Orchestrator (Argon)`).
 - **Complexity-Aware Subagent Routing**: Partition tasks by complexity tag (`[complexity: low|med|high]`):
   - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
   - `med`: `flash` (feature code, tests, localized refactors).
-  - `high`: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy.
+  - `high`: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Carbon / Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Carbon/Argon quota is healthy.
 - **Context Preservation**: Subagents execute in isolated scopes, preventing test log bloat from degrading the orchestrator context window.
 - **Disjoint-File Parallel Worker Partitioning**: Partitions multi-component features across concurrent subagents operating on strictly disjoint file sets for race-free parallel execution.
 - **Zero-Prompt Command Shape Discipline**: Pure-edit workers use native file editing tools without terminal calls; test/build workers prioritize workspace-relative generic commands when in the project root (e.g. `.venv/bin/pytest tests -v`, `git status`) and avoid shell chaining or complex `-c` one-liners that trigger manual approval prompts.
 - **Git Worktree Isolation**: Supports concurrent workers in independent git worktrees via `Workspace: "share"`.
 - **Deterministic Hook Guards**:
   - `SessionStart` (`scripts/guard-agentkit-compliance.sh`): Verifies Antigravity harness configuration against agentkit standards at session startup. Injects actionable alerts if settings are out of sync, or automatically synchronizes them when `AGENTKIT_AUTO_APPLY=1` is set. Bypassable via `AGENTKIT_SKIP_SESSION_AUDIT=1`.
-  - `PreToolUse` (`scripts/guard-subagent-delegation.sh`): Blocks standalone Root Orchestrators from directly modifying project source code, tests, or UI files outside a post-`exit_plan_mode` execution phase, enforcing delegation to worker subagents.
+  - `PreToolUse` (`scripts/guard-subagent-delegation.sh`): Blocks standalone Root Orchestrators (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`) from directly modifying project source code, tests, or UI files outside a post-`exit_plan_mode` execution phase (where `Gemini 4 Neon`, `Gemini 4 Hydrogen`, `Gemini 3.8 Flash`, `Flash Lite`, and `Haiku` are permitted as direct execution models), enforcing delegation to worker subagents.
   - `PreToolUse` (`scripts/guard-git-operations.sh`): Hard blocks direct pushes, force-pushes, or merges to `main`/`master`, and gates destructive deletions.
   - `PreToolUse` (`scripts/filter-and-wrap.py` & `scripts/headroom-wrap.py`): Transparently wraps verbose test, diff, and inspection commands to compress output tokens by 60–90% with Reversible CCR (Contextual Compression with Retrieval) caching (`~/.cache/antigravity-headroom/<hash>.txt`).
   - `Stop` (`scripts/verify-clean-completion.sh`): Prevents task termination if automated tests fail or if uncommitted changes exist in the worktree.

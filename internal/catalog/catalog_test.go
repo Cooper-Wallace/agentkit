@@ -34,11 +34,13 @@ func TestLoadEmbeddedCatalogs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadEmbeddedProfiles failed: %v", err)
 	}
-	if profCat.DefaultProfile == "" {
-		t.Errorf("expected default_profile in profiles catalog")
+	if profCat.DefaultProfile != "carbon-flash" {
+		t.Errorf("expected default_profile 'carbon-flash' in profiles catalog, got %q", profCat.DefaultProfile)
 	}
-	if _, ok := profCat.Profiles["argon-flash"]; !ok {
-		t.Errorf("expected 'argon-flash' in profiles catalog")
+	for _, p := range []string{"carbon-flash", "neon-high", "argon-flash"} {
+		if _, ok := profCat.Profiles[p]; !ok {
+			t.Errorf("expected %q in profiles catalog", p)
+		}
 	}
 
 	// Quota

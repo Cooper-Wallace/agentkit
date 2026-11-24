@@ -64,7 +64,7 @@ func setupStandardEnvironment(t *testing.T) (string, AuditOptions) {
 		PluginsSrcDir:       pluginsSrc,
 		GlobalDirectivesSrc: directivesSrc,
 		ProjectSkillsDir:    skillsSrc,
-		ModelProfile:        "argon-flash",
+		ModelProfile:        "carbon-flash",
 		HomeDir:             homeDir,
 	})
 	if err != nil {

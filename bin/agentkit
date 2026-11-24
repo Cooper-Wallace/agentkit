@@ -9,7 +9,7 @@ Features:
 - Snapshot / export locally approved commands and MCP servers back to repository manifests.
 - Diff local machine state against standardized declarative catalog.
 - Scaffold project-level AGENTS.md / GEMINI.md rulesets into repositories.
-- Configure multi-model orchestration tiers (Argon-Flash, Opus-Flash, Sonnet-Flash, Flash-High).
+- Configure multi-model orchestration tiers (Carbon-Flash, Argon-Flash, Neon-High, Hydrogen-High, Opus-Flash, Sonnet-Flash, Flash-High).
 - Modular Harness abstraction supporting Google Antigravity, Claude Code, Cursor, and OpenCode.
 - Install local Conventional Commits git hooks.
 - Manage reusable project skills (list, inspect info, and install via symlink or copy).
@@ -580,7 +580,7 @@ DEFAULT_COMPLEXITY_TIERS = {
     "high": {
         "model": "flash",
         "escalate_to": "pro",
-        "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy",
+        "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy",
     },
 }
 QUOTA_SCRIPT = HARNESS_DIR / "plugins" / "quota-guardian" / "scripts" / "quota_status.py"
@@ -595,19 +595,36 @@ def get_orchestration_catalog() -> Dict[str, Any]:
             pass
     tl = json.loads(json.dumps(DEFAULT_COMPLEXITY_TIERS))
     return {
-        "default_profile": "argon-flash",
+        "default_profile": "carbon-flash",
         "deprecated_aliases": dict(DEPRECATED_PROFILE_ALIASES),
         "profiles": {
+            "carbon-flash": {
+                "description": "Gemini 4 Carbon / Orchestrator (Carbon) Root Orchestrator (complex architecture & two-phase plan-execute) -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Default tier)",
+                "root_model": "Gemini 4 Carbon / Orchestrator (Carbon)",
+                "worker_model": "flash",
+                "root_slug": "carbon",
+                "complexity_tiers": tl,
+                "quota_fallback": ["argon-flash", "neon-high", "hydrogen-high", "flash-high", "opus-flash", "sonnet-flash"],
+            },
             "argon-flash": {
-                "description": "Gemini 4 Argon / Orchestrator (Argon) Root Orchestrator (complex architecture & two-phase plan-execute) -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (Default tier)",
+                "description": "Gemini 4 Argon / Orchestrator (Argon) Root Orchestrator (complex architecture & two-phase plan-execute) -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Primary tier)",
                 "root_model": "Gemini 4 Argon / Orchestrator (Argon)",
                 "worker_model": "flash",
                 "root_slug": "argon",
                 "complexity_tiers": tl,
+                "quota_fallback": ["neon-high", "hydrogen-high", "flash-high", "opus-flash", "sonnet-flash"],
+            },
+            "neon-high": {
+                "description": "Gemini 4 Neon (High/XHigh) / Orchestrator (Neon) Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Standard Gemini 4 tier)",
+                "root_model": "Gemini 4 Neon (High) / Orchestrator (Neon)",
+                "worker_model": "flash",
+                "root_slug": "neon-high",
+                "root_reasoning": "high",
+                "complexity_tiers": tl,
                 "quota_fallback": ["hydrogen-high", "flash-high", "opus-flash", "sonnet-flash"],
             },
             "hydrogen-high": {
-                "description": "Gemini 4 Hydrogen (High/XHigh) Root Orchestrator -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (Standard Gemini 4 tier)",
+                "description": "Gemini 4 Hydrogen (High/XHigh) Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Standard Gemini 4 tier)",
                 "root_model": "Gemini 4 Hydrogen (High)",
                 "worker_model": "flash",
                 "root_slug": "hydrogen-high",
@@ -624,7 +641,7 @@ def get_orchestration_catalog() -> Dict[str, Any]:
                 "quota_fallback": ["opus-flash", "sonnet-flash"],
             },
             "opus-flash": {
-                "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
+                "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
                 "root_model": "Claude Opus 5.5",
                 "worker_model": "flash",
                 "root_slug": "opus",
@@ -632,7 +649,7 @@ def get_orchestration_catalog() -> Dict[str, Any]:
                 "quota_fallback": ["sonnet-flash"],
             },
             "sonnet-flash": {
-                "description": "Claude Sonnet 5.5 Root Orchestrator -> Gemini 4 Hydrogen / 3.8 Flash Worker Subagents (High-throughput engineering tier)",
+                "description": "Claude Sonnet 5.5 Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (High-throughput engineering tier)",
                 "root_model": "Claude Sonnet 5.5",
                 "worker_model": "flash",
                 "root_slug": "sonnet",
@@ -647,7 +664,7 @@ def list_model_profiles() -> List[str]:
     """Return available orchestration model profile slugs."""
     cat = get_orchestration_catalog()
     profiles = list(cat.get("profiles", {}).keys())
-    return profiles or ["argon-flash", "hydrogen-high", "flash-high", "opus-flash", "sonnet-flash"]
+    return profiles or ["carbon-flash", "argon-flash", "neon-high", "hydrogen-high", "flash-high", "opus-flash", "sonnet-flash"]
 
 
 def profile_arg(value: str) -> str:
@@ -681,7 +698,7 @@ def _profile_lines(name: str, info: Dict[str, Any], default: str) -> List[str]:
 
 def cmd_profile_list(args: argparse.Namespace) -> int:
     cat = get_orchestration_catalog()
-    default = cat.get("default_profile", "argon-flash")
+    default = cat.get("default_profile", "carbon-flash")
     for name, info in cat.get("profiles", {}).items():
         print("\n".join(_profile_lines(name, info, default)))
     return 0
@@ -694,7 +711,7 @@ def cmd_profile_show(args: argparse.Namespace) -> int:
     if info is None:
         print_failure(f"Unknown profile: {name}")
         return 1
-    print("\n".join(_profile_lines(name, info, cat.get("default_profile", "argon-flash"))))
+    print("\n".join(_profile_lines(name, info, cat.get("default_profile", "carbon-flash"))))
     return 0
 
 
@@ -1096,7 +1113,7 @@ def cmd_audit(args: argparse.Namespace) -> int:
         passed_checks += 1
     else:
         print_warning(
-            f"Orchestration Profile: No profile explicitly recorded (default fallback: {getattr(args, 'model_profile', 'argon-flash')})"
+            f"Orchestration Profile: No profile explicitly recorded (default fallback: {getattr(args, 'model_profile', 'carbon-flash')})"
         )
 
     # 12. Global Skills Registry Audit (Antigravity skills.json)
@@ -1154,7 +1171,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         print_success("All standard permissions are already present.")
 
     # 2. Multi-Model Orchestration Profile
-    model_profile = getattr(args, "model_profile", "argon-flash")
+    model_profile = getattr(args, "model_profile", "carbon-flash")
     orch_catalog = get_orchestration_catalog()
     profile_info = orch_catalog.get("profiles", {}).get(model_profile, {})
     profile_desc = profile_info.get("description", model_profile)
@@ -2035,9 +2052,9 @@ updated_by: agentkit
 > Directives governing cognitive tiering, zero-prompt command discipline, and quota wrap-up.
 
 ## 1. Cognitive Architecture & Model Tiering
-- **Root Orchestrator**: Orchestrator (Argon) / Gemini 4 Argon (`pro`) / Gemini 4 Hydrogen High (`hydrogen-high`) / Flash High (`flash`) / Claude Opus 5.5 / Sonnet 5.5 (`opus`/`sonnet`).
+- **Root Orchestrator**: Orchestrator (Carbon) / Gemini 4 Carbon / Orchestrator (Argon) / Gemini 4 Argon (`pro`) / Orchestrator (Neon) / Gemini 4 Neon (High/XHigh) (`neon-high`) / Gemini 4 Hydrogen High (`hydrogen-high`) / Flash High (`flash`) / Claude Opus 5.5 / Sonnet 5.5 (`opus`/`sonnet`).
 - **Subagent Workers**: Partitioned by complexity (`low`: `flash_lite`, `med`: `flash`, `high`: `flash`/`pro`).
-- Zero direct source editing by standalone Root Orchestrator: Delegate implementation to worker subagents (or use `Orchestrator (Argon)` two-phase `exit_plan_mode` execution).
+- Zero direct source editing by standalone Root Orchestrator: Delegate implementation to worker subagents (or use `Orchestrator (Carbon)` / `Orchestrator (Argon)` two-phase `exit_plan_mode` execution).
 
 ## 2. Quota Awareness & Graceful Wrap-Up
 - Automated fallback routing when provider quota falls below 15%.
@@ -3081,8 +3098,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--model-profile",
         type=profile_arg,
         choices=list_model_profiles(),
-        default="argon-flash",
-        help="Expected orchestration model profile to verify against (default: argon-flash)",
+        default="carbon-flash",
+        help="Expected orchestration model profile to verify against (default: carbon-flash)",
     )
     p_audit.add_argument("--no-mcp", action="store_true", help="Skip MCP server checks")
     p_audit.add_argument("--no-plugins", action="store_true", help="Skip plugin checks")
@@ -3105,8 +3122,8 @@ def build_parser() -> argparse.ArgumentParser:
         "--model-profile",
         type=profile_arg,
         choices=list_model_profiles(),
-        default="argon-flash",
-        help="Active multi-model orchestration profile (default: argon-flash)",
+        default="carbon-flash",
+        help="Active multi-model orchestration profile (default: carbon-flash)",
     )
     p_apply.add_argument("--no-mcp", action="store_true", help="Skip MCP server configuration")
     p_apply.add_argument("--no-plugins", action="store_true", help="Skip plugin deployment")

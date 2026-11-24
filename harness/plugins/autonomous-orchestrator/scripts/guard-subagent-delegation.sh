@@ -51,9 +51,9 @@ if [[ "$TARGET_PATH" == *"/.gemini/"* ]] || \
   exit 0
 fi
 
-# 3. Allow if running inside a Flash / Lite / Hydrogen / Haiku subagent or execution model
+# 3. Allow if running inside a Neon / Flash / Lite / Hydrogen / Haiku subagent or execution model
 MODEL_LOWER="$(echo "$MODEL_NAME" | tr '[:upper:]' '[:lower:]')"
-if [[ "$MODEL_LOWER" == *"flash"* ]] || [[ "$MODEL_LOWER" == *"lite"* ]] || [[ "$MODEL_LOWER" == *"hydrogen"* ]] || [[ "$MODEL_LOWER" == *"haiku"* ]]; then
+if [[ "$MODEL_LOWER" == *"neon"* ]] || [[ "$MODEL_LOWER" == *"flash"* ]] || [[ "$MODEL_LOWER" == *"lite"* ]] || [[ "$MODEL_LOWER" == *"hydrogen"* ]] || [[ "$MODEL_LOWER" == *"haiku"* ]]; then
   echo '{"decision": "allow"}'
   exit 0
 fi
@@ -103,7 +103,7 @@ if [[ "$IS_SUBAGENT" == "1" || "$IS_SUBAGENT" == "true" ]]; then
   exit 0
 fi
 
-# 5. Root Orchestrator Gatekeeping (switchable root orchestrators: Orchestrator (Argon), Argon 4, Opus 5.5, Sonnet 5.5)
+# 5. Root Orchestrator Gatekeeping (switchable root orchestrators: Orchestrator (Carbon), Carbon 4, Orchestrator (Argon), Argon 4, Opus 5.5, Sonnet 5.5)
 # Standalone root orchestrators must never directly edit project source code, tests, or UI files.
-echo '{"decision": "deny", "reason": "ORCHESTRATOR VIOLATION: Root session (Argon 4 / Opus 5.5 / Sonnet 5.5) must not call edit_file/write_file on project files directly outside a post-exit_plan_mode execution phase. Delegate implementation to a worker subagent via invoke_subagent(Model=\"flash\") or finalize the plan with exit_plan_mode."}'
+echo '{"decision": "deny", "reason": "ORCHESTRATOR VIOLATION: Root session (Carbon 4 / Argon 4 / Opus 5.5 / Sonnet 5.5) must not call edit_file/write_file on project files directly outside a post-exit_plan_mode execution phase. Delegate implementation to a worker subagent via invoke_subagent(Model=\"flash\") or finalize the plan with exit_plan_mode."}'
 exit 0

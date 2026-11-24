@@ -27,11 +27,12 @@ class TestProfiles(unittest.TestCase):
         self.assertIn('fallback', r.stdout)
 
     def test_default_and_primary_profiles(self):
-        self.assertEqual(self.cat['default_profile'], 'argon-flash')
+        self.assertEqual(self.cat['default_profile'], 'carbon-flash')
+        self.assertIn('neon-high', self.cat['profiles'])
         self.assertIn('hydrogen-high', self.cat['profiles'])
         self.assertIn('flash-high', self.cat['profiles'])
         self.assertNotIn('pro-flash', self.cat['profiles'])
-        for name in ('argon-flash', 'hydrogen-high', 'opus-flash', 'sonnet-flash'):
+        for name in ('carbon-flash', 'argon-flash', 'neon-high', 'hydrogen-high', 'opus-flash', 'sonnet-flash'):
             self.assertIn(name, self.cat['profiles'])
 
     def test_complexity_tiers_everywhere(self):

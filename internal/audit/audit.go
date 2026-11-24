@@ -424,7 +424,7 @@ func Run(opts AuditOptions) (*AuditResult, error) {
 			fmt.Sprintf("Orchestration Profile: '%s' active (%s)", configuredProfile, profDesc), true)
 	} else {
 		addCheck(13, "orchestration_profile_recorded", "Orchestration profile recorded", "warn",
-			"Orchestration Profile: No profile explicitly recorded (default fallback: argon-flash)", false)
+			"Orchestration Profile: No profile explicitly recorded (default fallback: carbon-flash)", false)
 	}
 
 	// 14. Global Skills Registry Audit

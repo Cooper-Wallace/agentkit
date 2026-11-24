@@ -160,7 +160,7 @@ func TestCLIProfile(t *testing.T) {
 
 	// Profile show
 	code := run([]string{"profile", "show"}, &stdout, &stderr)
-	if code != 0 || !strings.Contains(stdout.String(), "argon-flash") {
+	if code != 0 || !strings.Contains(stdout.String(), "carbon-flash") || !strings.Contains(stdout.String(), "neon-high") || !strings.Contains(stdout.String(), "argon-flash") {
 		t.Errorf("profile show failed, code=%d, out=%s", code, stdout.String())
 	}
 
@@ -194,6 +194,16 @@ func TestCLIProfile(t *testing.T) {
 	code = run([]string{"profile", "opus-flash", "--settings-path", settingsFile, "--gemini-dir", geminiDir}, &stdout, &stderr)
 	if code != 0 || !strings.Contains(stdout.String(), "opus-flash") {
 		t.Errorf("profile direct switch failed, code=%d, out=%s, err=%s", code, stdout.String(), stderr.String())
+	}
+
+	// Switch to neon-high and legacy argon-flash remain valid
+	for _, prof := range []string{"neon-high", "argon-flash"} {
+		stdout.Reset()
+		stderr.Reset()
+		code = run([]string{"profile", "switch", prof, "--settings-path", settingsFile, "--gemini-dir", geminiDir}, &stdout, &stderr)
+		if code != 0 || !strings.Contains(stdout.String(), prof) {
+			t.Errorf("profile switch %s failed, code=%d, out=%s, err=%s", prof, code, stdout.String(), stderr.String())
+		}
 	}
 }
 
@@ -300,7 +310,7 @@ func TestCLIFlagsAndBranches(t *testing.T) {
 		"--dry-run",
 		"--link-home",
 		"--no-backup",
-		"--model-profile=argon-flash",
+		"--model-profile=carbon-flash",
 		"--harness", "antigravity",
 		"--settings-path=" + applySettings,
 	}, &stdout, &stderr)

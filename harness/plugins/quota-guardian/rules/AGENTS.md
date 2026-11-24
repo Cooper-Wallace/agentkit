@@ -8,8 +8,8 @@ Delta directives for `quota-guardian`. Refer to global `AGENTS.md` for universal
 
 All `invoke_subagent` prompts MUST include the standard tag `[complexity: low|med|high]` at the start of the prompt:
 - `low`: Routes to `flash_lite` (Gemini group; auto-upgraded to `flash` if prompt touches tests, refactoring, debugging, or security).
-- `med`: Routes to `flash` (Gemini group; shared with Gemini 4 Hydrogen and Gemini 3.8 Flash).
-- `high`: Escalates to `pro` (Gemini 4 Argon group) when Argon quota is healthy (> 15%); otherwise routes to `flash` (Gemini group).
+- `med`: Routes to `flash` (Gemini group; shared with Orchestrator (Neon), Gemini 4 Neon, Gemini 4 Hydrogen, and Gemini 3.8 Flash).
+- `high`: Escalates to `pro` (Gemini 4 Carbon / Argon group, canonical ID `argon`) when Carbon/Argon quota is healthy (> 15%); otherwise routes to `flash` (Gemini group).
 
 ## 2. Quota Guard Bypass & Inspection
 

@@ -239,10 +239,18 @@ class TestOrchestrationProfiles(unittest.TestCase):
         data = json.loads(orch_path.read_text(encoding="utf-8"))
 
         self.assertIn("default_profile", data)
-        self.assertEqual(data["default_profile"], "argon-flash")
+        self.assertEqual(data["default_profile"], "carbon-flash")
         self.assertIn("profiles", data)
 
-        required_profiles = ["argon-flash", "hydrogen-high", "opus-flash", "sonnet-flash", "flash-high"]
+        required_profiles = [
+            "carbon-flash",
+            "argon-flash",
+            "neon-high",
+            "hydrogen-high",
+            "opus-flash",
+            "sonnet-flash",
+            "flash-high",
+        ]
         for prof in required_profiles:
             self.assertIn(prof, data["profiles"], f"Missing profile {prof}")
             prof_data = data["profiles"][prof]
@@ -1557,6 +1565,43 @@ class TestAutonomousOrchestratorPlugin(unittest.TestCase):
             self.assertEqual(data_reset.get("decision"), "deny")
         finally:
             os.unlink(transcript_reset)
+
+        # 11. Happy path: Gemini 4 Neon and Orchestrator (Neon) execution models are allowed
+        for neon_model in ("gemini-4-neon-high", "gemini-pro-orchestrator-neon"):
+            neon_payload = {
+                "toolCall": {
+                    "name": "edit_file",
+                    "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+                },
+                "modelName": neon_model,
+            }
+            res_neon = subprocess.run(
+                [str(self.guard_delegation_script)],
+                input=json.dumps(neon_payload),
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(res_neon.returncode, 0)
+            data_neon = json.loads(res_neon.stdout)
+            self.assertEqual(data_neon.get("decision"), "allow", f"Expected allow for {neon_model}")
+
+        # 12. Guarded failure: standalone Gemini 4 Carbon root orchestrator is denied
+        carbon_payload = {
+            "toolCall": {
+                "name": "edit_file",
+                "args": {"Path": str(Path.home() / "Projects/repo/src/app.py")},
+            },
+            "modelName": "gemini-4-carbon-high",
+        }
+        res_carbon = subprocess.run(
+            [str(self.guard_delegation_script)],
+            input=json.dumps(carbon_payload),
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_carbon.returncode, 0)
+        data_carbon = json.loads(res_carbon.stdout)
+        self.assertEqual(data_carbon.get("decision"), "deny")
 
     def test_guard_agentkit_compliance_hook(self):
         # 1. Verify --dry-run exits 0 with operational message

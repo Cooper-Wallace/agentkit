@@ -614,16 +614,41 @@ class TestQuotaGuardian(unittest.TestCase):
         spec.loader.exec_module(guard_quota)
 
         self.assertEqual(guard_quota._resolve_model_group("gemini-4-hydrogen-high", self.config), "gemini")
+        self.assertEqual(guard_quota._resolve_model_group("gemini-4-neon-high", self.config), "gemini")
+        self.assertEqual(guard_quota._resolve_model_group("gemini-pro-orchestrator-neon", self.config), "gemini")
+        self.assertEqual(guard_quota._resolve_model_group("gemini-4-carbon-high", self.config), "argon")
+        self.assertEqual(guard_quota._resolve_model_group("gemini-pro-orchestrator", self.config), "argon")
         self.assertEqual(guard_quota._resolve_model_group("gemini-pro-orchestrator-g1-pro", self.config), "argon")
         self.assertEqual(guard_quota._resolve_model_group("claude-sonnet-5-5-high", self.config), "claude")
         self.assertEqual(guard_quota._resolve_model_group("gpt-oss-120b-medium", self.config), "claude")
+
+        self.assertEqual(quota_status._resolve_group_id("gemini-4-neon-high", self.config), "gemini")
+        self.assertEqual(quota_status._resolve_group_id("gemini-pro-orchestrator-neon", self.config), "gemini")
+        self.assertEqual(quota_status._resolve_group_id("gemini-4-carbon-high", self.config), "argon")
+        self.assertEqual(quota_status._resolve_group_id("gemini-pro-orchestrator", self.config), "argon")
 
         nested_raw = {
             "response": {
                 "groups": [
                     {
+                        "displayName": "Gemini 4 Neon (High)",
+                        "buckets": [{"remainingFraction": 0.75, "disabled": False}],
+                    },
+                    {
+                        "displayName": "gemini-pro-orchestrator-neon",
+                        "buckets": [{"remainingFraction": 0.60, "disabled": False}],
+                    },
+                    {
                         "displayName": "Gemini 4 Hydrogen (High)",
                         "buckets": [{"remainingFraction": 0.65, "disabled": False}],
+                    },
+                    {
+                        "displayName": "gemini-4-carbon-high",
+                        "buckets": [{"remainingFraction": 0.25, "disabled": False}],
+                    },
+                    {
+                        "displayName": "gemini-pro-orchestrator",
+                        "buckets": [{"remainingFraction": 0.20, "disabled": False}],
                     },
                     {
                         "displayName": "gemini-pro-orchestrator-g1-pro",
@@ -637,7 +662,7 @@ class TestQuotaGuardian(unittest.TestCase):
             }
         }
         summary = quota_status.summarize(nested_raw, self.config)
-        self.assertAlmostEqual(summary["groups"]["gemini"]["remainingFraction"], 0.65)
+        self.assertAlmostEqual(summary["groups"]["gemini"]["remainingFraction"], 0.60)
         self.assertAlmostEqual(summary["groups"]["argon"]["remainingFraction"], 0.10)
         self.assertTrue(summary["groups"]["argon"]["low"])
         self.assertAlmostEqual(summary["groups"]["claude"]["remainingFraction"], 0.90)

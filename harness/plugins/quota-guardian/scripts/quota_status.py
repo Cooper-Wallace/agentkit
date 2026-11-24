@@ -177,7 +177,9 @@ def _resolve_group_id(name: str, config: Dict[str, Any]) -> Optional[str]:
     """Match a group display name or keyword to a canonical group ID."""
     name_lower = name.lower()
 
-    if "argon" in name_lower or "orchestrator" in name_lower:
+    if "neon" in name_lower:
+        return "gemini"
+    if "carbon" in name_lower or "argon" in name_lower or "orchestrator" in name_lower:
         return "argon"
     if "claude" in name_lower or "opus" in name_lower or "sonnet" in name_lower or "gpt" in name_lower:
         return "claude"

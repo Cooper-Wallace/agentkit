@@ -36,7 +36,9 @@ def _resolve_model_group(model_name: str, config: Dict[str, Any]) -> Optional[st
     if m_lower in model_group_map:
         return model_group_map[m_lower]
 
-    if "argon" in m_lower or "orchestrator" in m_lower:
+    if "neon" in m_lower:
+        return "gemini"
+    if "carbon" in m_lower or "argon" in m_lower or "orchestrator" in m_lower:
         return "argon"
     if "claude" in m_lower or "opus" in m_lower or "sonnet" in m_lower or "gpt" in m_lower:
         return "claude"

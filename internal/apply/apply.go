@@ -167,7 +167,7 @@ func Apply(opts ApplyOptions) (*ApplyResult, error) {
 
 	modelProfile := opts.ModelProfile
 	if modelProfile == "" {
-		modelProfile = "argon-flash"
+		modelProfile = "carbon-flash"
 		if profilesCat != nil && profilesCat.DefaultProfile != "" {
 			modelProfile = profilesCat.DefaultProfile
 		}

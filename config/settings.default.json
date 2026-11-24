@@ -1,6 +1,6 @@
 {
   "allowNonWorkspaceAccess": true,
   "colorScheme": "dark",
-  "model": "Gemini 4 Hydrogen (High)",
+  "model": "Gemini 4 Neon (High)",
   "trustedWorkspaces": []
 }
