@@ -12,11 +12,11 @@ These runtime directives govern the hook behaviors and environment overrides of 
   - Set `AGENTKIT_SKIP_SESSION_AUDIT=1` to bypass session start compliance checks.
 
 - **`PreToolUse` Subagent Delegation Gate (`scripts/guard-subagent-delegation.sh`)**:
-  - Blocks Root Orchestrators (Argon 4, Opus 5.5, Sonnet 3.7) from calling `edit_file` or `write_file` directly on project files.
+  - Blocks standalone Root Orchestrators (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`) from calling `edit_file` or `write_file` directly on project files outside a post-`exit_plan_mode` execution phase (`Orchestrator (Carbon)` / `Orchestrator (Argon)` / `Orchestrator (Neon)` / `Gemini 4 Neon` / `Gemini 4 Hydrogen` / `Gemini 3.8 Flash` / `Flash Lite` / `Haiku`).
   - Edits inside Obsidian AgentVault (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`), `~/.gemini/`, and session brain directories are always permitted.
   - Set `AGY_ALLOW_ROOT_EDIT=1` (or `AGENTKIT_ALLOW_ROOT_EDIT=1`) to override this gate during emergency debugging.
 
-- **`PreToolUse` Headroom Token Compression (`scripts/filter-and-wrap.py` & `headroom-wrap.py`)**:
+- **`PreToolUse` Headroom Token Compression (`agentkit hook filter-and-wrap` & `agentkit hook headroom-wrap`)**:
   - Compresses command outputs >= 1,500 chars by 60–90% to conserve context window tokens.
   - Full uncompressed outputs are cached for Reversible CCR retrieval at `~/.cache/antigravity-headroom/<hash>.txt`.
   - Set `AGY_DISABLE_TOKEN_COMPRESSION=1` to bypass output compression.

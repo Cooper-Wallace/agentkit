@@ -3,7 +3,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 [![Go: 1.23+](https://img.shields.io/badge/Go-1.23%2B-00ADD8.svg?logo=go&logoColor=white)](https://golang.org)
-[![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
 
 The harness-agnostic AI agent configuration, permissions catalog, directives, and orchestration toolkit across Cooper Wallace's workstations.
 
@@ -58,22 +57,25 @@ By separating Layer 2 from Layer 1, `agentkit` maintains strict focus on AI agen
 
 | Profile | Root Orchestrator | Worker Subagents | Primary Use Case |
 |---|---|---|---|
-| **`argon-flash`** | Gemini 4 Argon | Gemini 3.8 Flash | **Primary / Default**: Deepest reasoning and architectural precision (when Argon quota is available) with fast Flash subagents. |
-| **`flash-high`** | Gemini 3.8 Flash (High reasoning) | Gemini 3.8 Flash | **Standard**: Fast lifecycle and feature development with high reasoning depth (replaces retired Pro). |
-| **`opus-flash`** | Claude Opus 5.5 | Gemini 3.8 Flash | **Quota / Token Limit Fallback**: High-capability root planner when Gemini quota groups are exhausted or rate-limited. |
-| **`sonnet-flash`** | Claude Sonnet 3.7 | Gemini 3.8 Flash | **High-Throughput**: High-speed reasoning, refactoring, and code synthesis with Flash execution. |
+| **`carbon-flash`** | Orchestrator (Carbon) / Gemini 4 Carbon | Gemini 4 Neon / Hydrogen / 3.8 Flash | **Primary / Default**: Deepest reasoning, two-phase Plan & Execute (`exit_plan_mode`), and architectural precision (when Carbon quota is available) with fast Neon/Hydrogen/Flash execution. |
+| **`argon-flash`** | Orchestrator (Argon) / Gemini 4 Argon | Gemini 4 Neon / Hydrogen / 3.8 Flash | **Primary (Argon)**: Deep reasoning, two-phase Plan & Execute (`exit_plan_mode`), and architectural precision via `gemini-pro-orchestrator-argon` with fast Neon/Hydrogen/Flash execution. |
+| **`neon-high`** | Orchestrator (Neon) / Gemini 4 Neon (High/XHigh) | Gemini 4 Neon / Hydrogen / 3.8 Flash | **Standard (Gemini 4 Neon)**: Fast lifecycle, coding, and feature development (default `settings.default.json` model `Gemini 4 Neon (High)`) with zero Argon/Carbon quota consumption. |
+| **`hydrogen-high`** | Gemini 4 Hydrogen (High/XHigh) | Gemini 4 Hydrogen / 3.8 Flash | **Standard (Gemini 4 Hydrogen)**: High-speed lifecycle, coding, and feature development with deep Gemini 4 Hydrogen reasoning and zero Argon/Carbon quota consumption. |
+| **`flash-high`** | Gemini 3.8 Flash (High reasoning) | Gemini 3.8 Flash | **Standard (Gemini 3.8)**: Fast lifecycle and feature development with high reasoning depth. |
+| **`opus-flash`** | Claude Opus 5.5 | Gemini 4 Neon / Hydrogen / 3.8 Flash | **Quota / Token Limit Fallback**: High-capability root planner when Gemini quota groups are exhausted or rate-limited. |
+| **`sonnet-flash`** | Claude Sonnet 5.5 | Gemini 4 Neon / Hydrogen / 3.8 Flash | **High-Throughput**: High-speed reasoning, refactoring, and code synthesis with Flash execution. |
 
 ### Subagent Complexity Tiers
 
 Subagents are routed to optimal models based on task complexity tags placed at the start of prompts (`[complexity: low|med|high]`):
 - **`low`**: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
 - **`med`**: `flash` (feature code, tests, localized refactors).
-- **`high`**: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy.
+- **`high`**: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Carbon / Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Carbon/Argon quota is healthy.
 
 Switch active profiles seamlessly:
 ```bash
 agentkit profile list
-agentkit profile set flash-high
+agentkit profile set neon-high
 agentkit profile set opus-flash
 ```
 
@@ -91,7 +93,7 @@ agentkit profile set opus-flash
   - Generates visual architecture maps and multi-agent workflows using the open **JSON Canvas** (`.canvas`) specification (`jsoncanvas.org`).
   - Integrated CLI commands (`agentkit vault init`, `agentkit vault ingest`, `agentkit vault sync`, `agentkit vault note`, `agentkit vault status`).
 - **Harness-Agnostic Governance**: Support for Google Antigravity CLI and extensible harness targets via `--harness`.
-- **Switchable Cognitive Profiles**: Switch between `argon-flash`, `flash-high`, `opus-flash`, and `sonnet-flash` profiles to navigate token quotas and workload complexity.
+- **Switchable Cognitive Profiles**: Switch between `carbon-flash`, `argon-flash`, `neon-high`, `hydrogen-high`, `flash-high`, `opus-flash`, and `sonnet-flash` profiles to navigate token quotas and workload complexity.
 - **Quota Telemetry & Fallback Routing**: Query real-time token quotas with `agentkit quota status` and calculate optimal model assignments with `agentkit quota route`.
 - **Tiered Command Permissions**:
   - Pre-approves safe core inspection tools (`cat`, `grep`, `which`, `ls`, `find`, `file`, `diff`, `fastfetch`).
@@ -125,9 +127,9 @@ agentkit profile set opus-flash
 - **Autonomous Orchestrator & Plugin Governance**:
   - Bundles standard plugins (`autonomous-orchestrator`, `quota-guardian`) for multi-model workflows, quota management, and token optimization.
   - Automatically deploys and audits standard plugins in `~/.gemini/config/plugins/` with executable lifecycle hook scripts.
-  - **Cognitive Tiering & Subagent Guard**: Enforces root planning via Argon/Opus and code execution via Flash subagents with `PreToolUse` delegation enforcement (`scripts/guard-subagent-delegation.sh`).
-  - **Quota Guardian & Fallback Routing**: Intercepts subagent delegation (`PreToolUse` on `invoke_subagent`), queries language server quota telemetry (`RetrieveUserQuotaSummary`), dynamically reroutes subagents when quotas drop below 15%, and gates execution with a graceful wrap-up protocol at 5% remaining capacity.
-  - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`filter-and-wrap.py` -> `headroom-wrap.py`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
+  - **Cognitive Tiering & Subagent Guard**: Enforces root planning via Carbon/Argon/Opus/Sonnet and code execution via Neon/Hydrogen/Flash subagents with `PreToolUse` delegation enforcement (`scripts/guard-subagent-delegation.sh`).
+  - **Quota Guardian & Fallback Routing**: Intercepts subagent delegation (`PreToolUse` on `invoke_subagent` via `agentkit hook guard-quota`), queries language server quota telemetry (`RetrieveUserQuotaSummary`), dynamically reroutes subagents when quotas drop below 15%, and gates execution with a graceful wrap-up protocol at 5% remaining capacity.
+  - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`agentkit hook filter-and-wrap` -> `agentkit hook headroom-wrap`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
   - **Deterministic Hook Gates**: Hard blocks direct pushes and trunk merges to `main` (`guard-git-operations.sh`), gates destructive deletions, and prevents task termination on test failures or dirty trees (`verify-clean-completion.sh`).
   - Pre-approves Git worktree operations (`git worktree`, `git rev-parse`, `git ls-files`) for concurrent subagent isolation.
 - **Git Tree Management & Concurrency Isolation**:
@@ -183,7 +185,7 @@ Target Settings: /home/cooper/.gemini/antigravity-cli/settings.json
   ✔ Global Agent Directives installed (/home/cooper/.gemini/AGENTS.md)
   ✔ Directives Symlink (/home/cooper/.gemini/GEMINI.md -> AGENTS.md)
   ✔ Workspace Boundary: 'allowNonWorkspaceAccess' enabled
-  ✔ Active Profile: 'argon-flash' (Gemini 4 Argon -> Gemini 3.8 Flash)
+  ✔ Active Profile: 'carbon-flash' (Gemini 4 Carbon -> Gemini 4 Neon / 3.8 Flash)
   ✔ UI Theme: 'colorScheme' set to 'dark'
   ✔ Environment PATH includes /home/cooper/.local/bin
 
@@ -218,14 +220,21 @@ Inspect and switch cognitive tiering profiles:
 # List available model profiles:
 agentkit profile list
 
-# Switch to standard Flash High profile:
-agentkit profile set flash-high
+# Switch to standard Gemini 4 Neon High profile:
+agentkit profile switch neon-high
+
+# Switch to standard Gemini 4 Hydrogen High profile:
+agentkit profile switch hydrogen-high
+
+# Switch to standard Gemini 3.8 Flash High profile:
+agentkit profile switch flash-high
 
 # Switch to Claude Opus 5.5 fallback profile:
-agentkit profile set opus-flash
+agentkit profile switch opus-flash
 
-# Switch back to primary Argon profile:
-agentkit profile set argon-flash
+# Switch to primary Argon or Carbon profile:
+agentkit profile switch argon-flash
+agentkit profile switch carbon-flash
 ```
 
 ---
@@ -233,7 +242,7 @@ agentkit profile set argon-flash
 ### 4. Quota Telemetry & Subagent Route Optimization
 Query real-time token quotas and calculate optimal subagent routing:
 ```bash
-# Check quota status across Gemini, Claude, and Argon groups:
+# Check quota status across Gemini, Claude, and Carbon/Argon groups:
 agentkit quota status
 
 # Check quota status in JSON format:
@@ -430,9 +439,10 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 ├── cmd/
 │   └── agentkit/                 # Go 1.23+ static CLI entrypoint
 │       ├── main.go               # Top-level CLI router and flag dispatch
-│       ├── caffeine_cmd.go       # Sleep inhibitor and caffeine subcommands
-│       ├── dag_cmd.go            # SQLite task DAG planner and runner
-│       └── vault_cmd.go          # Obsidian AgentVault integration subcommands
+│       ├── caffeine.go           # Sleep inhibitor and caffeine subcommands
+│       ├── dag.go                # SQLite task DAG planner and runner
+│       ├── hook.go               # Native Go lifecycle hook dispatchers
+│       └── vault.go              # Obsidian AgentVault integration subcommands
 │
 ├── internal/                     # Core internal Go packages
 │   ├── apply/                    # Settings merger and profile applicator
@@ -441,24 +451,22 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │   ├── caffeine/                 # Sleep inhibitor engine, leases & DBus integration
 │   ├── dag/                      # Multi-agent SQLite DAG planner and execution runner
 │   ├── diff/                     # Configuration diff engine
+│   ├── hook/                     # Native lifecycle hook handlers (guard-quota, notify-wake, filter-and-wrap, headroom-wrap)
 │   ├── quota/                    # Quota telemetry parser and fallback routing
 │   ├── server/                   # HTTP loopback daemon for wake-lock arbitration
 │   ├── template/                 # Project directives and hook scaffolder
 │   └── vault/                    # Obsidian AgentVault parser, ingest, and sync
 │
-├── bin/
-│   └── agentkit                  # Python CLI implementation (dual-stack compatibility harness)
-│
 ├── config/                       # Embedded standard catalogs (embed.FS)
 │   ├── permissions.json          # Categorized catalog of pre-approved commands
 │   ├── mcp.json                  # Declarative catalog of standard MCP servers & requirements
-│   ├── profiles.json             # Cognitive model tiering profiles (argon-flash, opus-flash, etc.)
+│   ├── profiles.json             # Cognitive model tiering profiles (carbon-flash, argon-flash, neon-high, opus-flash, etc.)
 │   ├── quota.json                # Quota thresholds, provider groups, and routing fallbacks
 │   └── settings.default.json     # Standard baseline preferences
 │
 ├── harness/                      # Harness-level governance, lifecycle hooks, and plugins
 │   ├── plugins/                  # Standard harness plugins
-│   │   ├── autonomous-orchestrator/ # Multi-model orchestration (Argon/Flash) & Headroom CCR
+│   │   ├── autonomous-orchestrator/ # Multi-model orchestration (Carbon/Argon/Neon/Flash) & Headroom CCR
 │   │   └── quota-guardian/       # Quota telemetry, fallback routing, and wrap-up gate
 │   ├── hooks/                    # Standard lifecycle hooks configuration
 │   ├── rules/                    # Universal agent directives (AGENTS.md)
@@ -491,12 +499,7 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │       ├── 0012-wake-lock-and-visual-state.md
 │       └── 0013-dock-based-caffeine-hud-and-visual-design.md
 │
-└── tests/                        # Automated unit and integration test suites
-    ├── test_cli.py               # Python CLI tests
-    ├── test_quota_cli.py         # Quota profiles & routing tests
-    ├── test_agentkit.py          # Enterprise sync and AgentVault tests
-    ├── test_plugins.py           # Verification and clean completion tests
-    └── test_wake.py              # Wake engine, server, and HUD tests
+└── ui/                           # Caffeine HUD Dock Electron/Vite frontend and tests (`npm test`)
 ```
 
 ---
@@ -524,9 +527,9 @@ go test -v -race -cover ./...
 go vet ./...
 ```
 
-Run the automated Python test suite:
+Run the UI test suite:
 ```bash
-python3 -m unittest discover tests -v
+cd ui && npm test
 ```
 
 ---

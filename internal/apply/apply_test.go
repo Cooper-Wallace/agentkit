@@ -53,7 +53,7 @@ func TestApplyHermetic(t *testing.T) {
 		PluginsSrcDir:       pluginsSrc,
 		GlobalDirectivesSrc: directivesSrc,
 		ProjectSkillsDir:    skillsSrc,
-		ModelProfile:        "argon-flash",
+		ModelProfile:        "carbon-flash",
 		HomeDir:             homeDir,
 		LinkHome:            true,
 	})
@@ -89,8 +89,8 @@ func TestApplyHermetic(t *testing.T) {
 	if !hasCustom {
 		t.Errorf("custom permission was erased!")
 	}
-	if updated["orchestrationProfile"] != "argon-flash" {
-		t.Errorf("expected orchestrationProfile 'argon-flash', got %v", updated["orchestrationProfile"])
+	if updated["orchestrationProfile"] != "carbon-flash" {
+		t.Errorf("expected orchestrationProfile 'carbon-flash', got %v", updated["orchestrationProfile"])
 	}
 
 	// 3. Verify directives symlinked
@@ -110,8 +110,8 @@ func TestApplyHermetic(t *testing.T) {
 	if err != nil {
 		t.Errorf("orchestration file missing: %v", err)
 	}
-	if !strings.Contains(string(orchData), "argon-flash") {
-		t.Errorf("expected argon-flash in orchestration.json")
+	if !strings.Contains(string(orchData), "carbon-flash") {
+		t.Errorf("expected carbon-flash in orchestration.json")
 	}
 
 	// 5. Verify MCP servers

@@ -12,7 +12,7 @@ A complete, standard `settings.json` has the following structure:
 {
   "allowNonWorkspaceAccess": true,
   "colorScheme": "dark",
-  "model": "Gemini 3.8 Flash (High)",
+  "model": "Gemini 4 Neon (High)",
   "permissions": {
     "allow": [
       "command(which)",
@@ -37,7 +37,7 @@ A complete, standard `settings.json` has the following structure:
 | :--- | :--- | :--- | :--- |
 | `allowNonWorkspaceAccess` | boolean | Allows the agent to read/write files and execute commands outside explicitly trusted workspaces. | `true` |
 | `colorScheme` | string | Terminal UI color theme (`"dark"` or `"light"`). | `"dark"` |
-| `model` | string | Preferred default AI model (e.g., `"Gemini 3.8 Flash (High)"`). | `"Gemini 3.8 Flash (High)"` |
+| `model` | string | Preferred default AI model (e.g., `"Gemini 4 Neon (High)"`). | `"Gemini 4 Neon (High)"` |
 | `permissions` | object | Contains security rule overrides for tool actions. | `{}` |
 | `permissions.allow` | list[string] | List of pre-approved commands in `command(...)` format. | `[]` |
 | `trustedWorkspaces` | list[string] | Absolute filesystem paths trusted for workspace operations, unprompted file access, and local hook discovery. Includes Obsidian AgentVault (`~/Documents/AgentVault` or `~/AgentVault`) and core projects (`~/Projects/agentkit`, `~/Projects/repokit`) automatically via `agentkit apply` and `agentkit vault init`. | `[]` |

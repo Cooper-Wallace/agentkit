@@ -21,7 +21,7 @@ The following lifecycle hooks represent core automation and safety components im
 ### A. PreToolUse Subagent Delegation Guard
 - **Lifecycle Event**: `PreToolUse` matching `edit_file|write_file`
 - **Script**: `scripts/guard-subagent-delegation.sh`
-- **Purpose**: Enforces cognitive tiering by blocking the Root Orchestrator (Gemini 4 Argon, Claude Opus 5.5, Claude Sonnet 3.7, or Gemini 3.8 Flash High) from directly editing project code, tests, or UI files, ensuring implementation work is delegated to Flash worker subagents.
+- **Purpose**: Enforces cognitive tiering by blocking standalone Root Orchestrators (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`) from directly editing project code, tests, or UI files outside a post-`exit_plan_mode` execution phase (`Orchestrator (Carbon)` / `Orchestrator (Argon)` / `Orchestrator (Neon)` / `Gemini 4 Neon` / `Gemini 4 Hydrogen` / `Gemini 3.8 Flash` / `Flash Lite` / `Haiku`), ensuring standalone implementation work is delegated to worker subagents.
 
 ### B. PreToolUse Git & Filesystem Safety Gate
 - **Lifecycle Event**: `PreToolUse` matching `run_command`
@@ -30,7 +30,7 @@ The following lifecycle hooks represent core automation and safety components im
 
 ### C. PreToolUse Quota Guardian & Fallback Router
 - **Lifecycle Event**: `PreToolUse` matching `invoke_subagent`
-- **Script**: `scripts/guard-quota.py`
+- **Command**: `agentkit hook guard-quota` (`internal/hook/`)
 - **Purpose**: Intercepts subagent delegation calls, checks remaining token quotas via `RetrieveUserQuotaSummary`, dynamically reroutes subagents to fallback model families when quotas fall below 15%, and enforces graceful wrap-up when quotas fall below 5%.
 
 ### D. Stop Quality & Completion Gate
@@ -60,17 +60,17 @@ Standard compression approaches fail in modern harnesses due to two hard constra
 
 ### The Solution: Transparent `PreToolUse` Overwrite
 
-To achieve token compression without violating lifecycle constraints, **`agentkit`** employs the **`PreToolUse` `overwrite` pattern** via `scripts/filter-and-wrap.py` and `scripts/headroom-wrap.py`:
+To achieve token compression without violating lifecycle constraints, **`agentkit`** employs the **`PreToolUse` `overwrite` pattern** via `agentkit hook filter-and-wrap` and `agentkit hook headroom-wrap` (`internal/hook/`):
 
 ```mermaid
 flowchart TD
-    A["Agent calls run_command"] --> B["PreToolUse Hook: filter-and-wrap.py"]
+    A["Agent calls run_command"] --> B["PreToolUse Hook: agentkit hook filter-and-wrap"]
     B -->|Check safety gate| C{Destructive or trunk push?}
     C -->|Yes| D["Block / Ask user confirmation"]
     C -->|No| E{Verbose inspection / test command?}
     E -->|No / Daemon / Pipe| F["Allow original command unchanged"]
-    E -->|Yes| G["Emit overwrite payload:<br/>headroom-wrap.py -- &lt;cmd&gt;"]
-    G --> H["Harness executes headroom-wrap.py"]
+    E -->|Yes| G["Emit overwrite payload:<br/>agentkit hook headroom-wrap -- &lt;cmd&gt;"]
+    G --> H["Harness executes agentkit hook headroom-wrap"]
     H --> I["Subprocess executes target command"]
     I --> J{Output &gt; 1,500 chars?}
     J -->|No| K["Pass raw output through"]
@@ -82,21 +82,21 @@ flowchart TD
 
 ### Hook Protocol & Overwrite Payload
 
-When a candidate command is intercepted, `filter-and-wrap.py` returns an `overwrite` JSON payload on stdout:
+When a candidate command is intercepted, `agentkit hook filter-and-wrap` returns an `overwrite` JSON payload on stdout:
 
 ```json
 {
   "decision": "allow",
   "overwrite": {
-    "CommandLine": "python3 ~/.gemini/config/plugins/autonomous-orchestrator/scripts/headroom-wrap.py -- pytest tests -v"
+    "CommandLine": "agentkit hook headroom-wrap -- pytest tests -v"
   }
 }
 ```
 
 ### Reversible CCR (Contextual Compression with Retrieval)
 
-`headroom-wrap.py` enforces **Reversible CCR**:
-- **Exit Status Preservation**: Captures standard output and standard error while deterministically preserving `proc.returncode` (`sys.exit(proc.returncode)`).
+`agentkit hook headroom-wrap` enforces **Reversible CCR**:
+- **Exit Status Preservation**: Captures standard output and standard error while deterministically preserving the wrapped command's exit status.
 - **Local Disk Cache**: Outputs exceeding `COMPRESSION_THRESHOLD` (default 1,500 chars) are hashed (`SHA-256[:12]`) and stored at `~/.cache/antigravity-headroom/<hash>.txt` with automatic LRU pruning (capped at 100 cache files).
 - **Content-Aware Compression**: Employs `headroom-ai` (if installed) or deterministic built-in engines (`JSON SmartCrusher` and `LogCrusher`) to collapse repetitive passing lines and schema padding while preserving all failure tracebacks.
 - **Retrieval Breadcrumb**: Appends a clear reference line:
@@ -112,12 +112,12 @@ When a candidate command is intercepted, `filter-and-wrap.py` returns an `overwr
 The following production plugins are bundled with `agentkit` to govern autonomous multi-model orchestration, token economy, and quota safety:
 
 ### 1. `autonomous-orchestrator` (Cognitive Tiering & Headroom CCR)
-- **Purpose**: Enforces cognitive tiering, context window preservation, Headroom CCR token compression, and git safety gates across Gemini 4 Argon, Claude Opus 5.5, Claude Sonnet 3.7, and Gemini 3.8 Flash.
+- **Purpose**: Enforces cognitive tiering, context window preservation, Headroom CCR token compression, and git safety gates across `Orchestrator (Carbon)`, `Gemini 4 Carbon`, `Orchestrator (Argon)`, `Gemini 4 Argon`, `Orchestrator (Neon)`, `Gemini 4 Neon`, `Gemini 4 Hydrogen`, `Gemini 3.8 Flash`, `Claude Opus 5.5`, and `Claude Sonnet 5.5`.
 - **Components & Architecture**:
   - **Hooks**:
-    - `PreToolUse` matching `edit_file|write_file` -> `scripts/guard-subagent-delegation.sh`: Blocks the Root Orchestrator from directly modifying project source code, tests, or UI files, mandating delegation to Flash subagents.
+    - `PreToolUse` matching `edit_file|write_file` -> `scripts/guard-subagent-delegation.sh`: Blocks standalone Root Orchestrators from directly modifying project source code, tests, or UI files outside a post-`exit_plan_mode` execution phase, mandating delegation to worker subagents.
     - `PreToolUse` matching `run_command` -> `scripts/guard-git-operations.sh`: Hard-blocks direct pushes or merges to `main`/`master`, and gates destructive operations (`rm -rf`, `mkfs`, `dd`).
-    - `PreToolUse` matching `run_command` -> `scripts/filter-and-wrap.py`: Intercepts verbose test, inspection, and diff commands, rewriting them to execute under `scripts/headroom-wrap.py` for 60%–90% token compression with Reversible CCR caching in `~/.cache/antigravity-headroom/<hash>.txt`.
+    - `PreToolUse` matching `run_command` -> `agentkit hook filter-and-wrap`: Intercepts verbose test, inspection, and diff commands, rewriting them to execute under `agentkit hook headroom-wrap` for 60%–90% token compression with Reversible CCR caching in `~/.cache/antigravity-headroom/<hash>.txt`.
     - `Stop` -> `scripts/verify-clean-completion.sh`: Rejects agent completion if automated tests fail or if uncommitted changes linger in the git working tree.
   - **Rules**: `rules/AGENTS.md` (Cognitive tiering hierarchy, pure-edit subagent isolation, prefix-matchable command shapes, conventional commits).
   - **Skills**: `skills/auto-lifecycle/SKILL.md` (4-phase autonomous feature lifecycle: Contract Freeze, Worker Implementation, Adversarial Review, Promotion & Cleanup).
@@ -126,20 +126,20 @@ The following production plugins are bundled with `agentkit` to govern autonomou
 - **Purpose**: Autonomous quota-aware model routing, subagent task complexity mapping, and graceful wrap-up circuit-breaker to eliminate hung subagents and data loss during token quota exhaustion.
 - **Components & Architecture**:
   - **Hooks**:
-    - `PreToolUse` matching `invoke_subagent` -> executes `scripts/guard-quota.py` (timeout: 10s).
-  - **Scripts**:
-    - `scripts/quota_status.py`: Interrogates the Antigravity Language Server RPC or local cache, categorizes usage into quota groups, and formats tabular/JSON output for CLI and hooks.
-    - `scripts/guard-quota.py`: Intercepts `invoke_subagent` calls. Evaluates task complexity tag (`[complexity: low|med|high]`), checks remaining quota in the target model family, and automatically rewrites the subagent `Model` argument to a healthy fallback family when quota drops below 15%. If all groups drop below 5%, denies execution with `QUOTA WRAP-UP:`.
+    - `PreToolUse` matching `invoke_subagent` -> executes `agentkit hook guard-quota` (timeout: 10s).
+  - **Native Go CLI & Hook Handlers (`cmd/agentkit/` & `internal/hook/`, `internal/quota/`)**:
+    - `agentkit quota status` / `agentkit quota route`: Interrogates the Antigravity Language Server RPC or local cache, categorizes usage into quota groups, and formats tabular/JSON output for CLI and hooks.
+    - `agentkit hook guard-quota`: Intercepts `invoke_subagent` calls. Evaluates task complexity tag (`[complexity: low|med|high]`), checks remaining quota in the target model family, and automatically rewrites the subagent `Model` argument to a healthy fallback family when quota drops below 15%. If all groups drop below 5%, denies execution with `QUOTA WRAP-UP:`.
   - **Configuration (`config/quota.json`)**:
     - `thresholds`: `{"switch_threshold": 0.15, "wrapup_threshold": 0.05, "cache_ttl_seconds": 60}`
     - `groups`: Maps model identifiers to 3 quota groups:
-      - `gemini`: Gemini 3.8 Flash, Flash Lite
-      - `claude`: Claude Opus 5.5, Claude Sonnet 3.7
-      - `argon`: Gemini 4 Argon
+      - `gemini`: Orchestrator (Neon), Gemini 4 Neon (`Low`/`Medium`/`High`/`XHigh`), Gemini 4 Hydrogen (`Low`/`Medium`/`High`/`XHigh`), Gemini 3.8 Flash (`Low`/`Medium`/`High`), Gemini 3.8 Flash Lite
+      - `claude`: Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B
+      - `argon`: Orchestrator (Carbon), Gemini 4 Carbon (`Low`/`Medium`/`High`), Orchestrator (Argon), Gemini 4 Argon (`Low`/`Medium`/`High`)
     - `complexity_to_model`:
       - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
       - `med`: `flash` (feature code, tests, localized refactors).
-      - `high`: `flash` (with escalation to `pro` for architecture, multi-repo design, or adversarial review when Argon quota is healthy).
+      - `high`: `flash` (with escalation to `pro` for architecture, multi-repo design, or adversarial review when Carbon/Argon quota is healthy).
     - `fallbacks`: Declarative fallback routing sequences (`flash_lite` -> `inherit`, `flash` -> `inherit`, `pro` -> `flash` -> `inherit`).
   - **Language Server RPC Endpoint**:
     - Interrogates `RetrieveUserQuotaSummary` over HTTP/JSON:
@@ -150,7 +150,7 @@ The following production plugins are bundled with `agentkit` to govern autonomou
     - `AGENTKIT_QUOTA_FIXTURE`: Absolute path to a mock JSON quota response for unit tests and deterministic simulation.
     - `AGENTKIT_QUOTA_CACHE`: Custom file path for caching the language server quota response (defaults to `~/.cache/antigravity-quota/summary.json`).
   - **Graceful Wrap-Up Protocol**:
-    - When all quota families drop below 5%, `guard-quota.py` denies delegation with `QUOTA WRAP-UP:`.
+    - When all quota families drop below 5%, `agentkit hook guard-quota` denies delegation with `QUOTA WRAP-UP:`.
     - Enforces the `quota-wrapup` protocol: Cease spawning subagents, run local test suite, commit WIP changes on the feature branch, generate a structured `handoff.md`, and advise the user of the exact quota reset time and recommended `/model` switch.
 
 ---

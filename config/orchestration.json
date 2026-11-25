@@ -1,15 +1,18 @@
 {
-  "default_profile": "argon-flash",
+  "default_profile": "carbon-flash",
   "deprecated_aliases": {
     "pro-flash": "flash-high"
   },
   "profiles": {
-    "argon-flash": {
-      "description": "Gemini 4 Argon Root Orchestrator (when Argon quota available and task is complex) -> Gemini 3.8 Flash Worker Subagents (Default tier)",
-      "root_model": "Gemini 4 Argon",
+    "carbon-flash": {
+      "description": "Gemini 4 Carbon / Orchestrator (Carbon) Root Orchestrator (complex architecture & two-phase plan-execute) -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Default tier)",
+      "root_model": "Gemini 4 Carbon / Orchestrator (Carbon)",
       "worker_model": "flash",
-      "root_slug": "argon",
+      "root_slug": "carbon",
       "quota_fallback": [
+        "argon-flash",
+        "neon-high",
+        "hydrogen-high",
         "flash-high",
         "opus-flash",
         "sonnet-flash"
@@ -26,7 +29,90 @@
         "high": {
           "model": "flash",
           "escalate_to": "pro",
-          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy"
+        }
+      }
+    },
+    "argon-flash": {
+      "description": "Gemini 4 Argon / Orchestrator (Argon) Root Orchestrator (complex architecture & two-phase plan-execute) -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Primary tier)",
+      "root_model": "Gemini 4 Argon / Orchestrator (Argon)",
+      "worker_model": "flash",
+      "root_slug": "argon",
+      "quota_fallback": [
+        "neon-high",
+        "hydrogen-high",
+        "flash-high",
+        "opus-flash",
+        "sonnet-flash"
+      ],
+      "complexity_tiers": {
+        "low": {
+          "model": "flash_lite",
+          "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize"
+        },
+        "med": {
+          "model": "flash",
+          "use": "feature code, tests, localized refactors"
+        },
+        "high": {
+          "model": "flash",
+          "escalate_to": "pro",
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy"
+        }
+      }
+    },
+    "neon-high": {
+      "description": "Gemini 4 Neon (High/XHigh) / Orchestrator (Neon) Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Standard Gemini 4 tier)",
+      "root_model": "Gemini 4 Neon (High) / Orchestrator (Neon)",
+      "worker_model": "flash",
+      "root_slug": "neon-high",
+      "quota_fallback": [
+        "hydrogen-high",
+        "flash-high",
+        "opus-flash",
+        "sonnet-flash"
+      ],
+      "root_reasoning": "high",
+      "complexity_tiers": {
+        "low": {
+          "model": "flash_lite",
+          "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize"
+        },
+        "med": {
+          "model": "flash",
+          "use": "feature code, tests, localized refactors"
+        },
+        "high": {
+          "model": "flash",
+          "escalate_to": "pro",
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy"
+        }
+      }
+    },
+    "hydrogen-high": {
+      "description": "Gemini 4 Hydrogen (High/XHigh) Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Standard Gemini 4 tier)",
+      "root_model": "Gemini 4 Hydrogen (High)",
+      "worker_model": "flash",
+      "root_slug": "hydrogen-high",
+      "quota_fallback": [
+        "flash-high",
+        "opus-flash",
+        "sonnet-flash"
+      ],
+      "root_reasoning": "high",
+      "complexity_tiers": {
+        "low": {
+          "model": "flash_lite",
+          "use": "file moves/renames, mechanical find-replace, formatting, doc typos, run one command and summarize"
+        },
+        "med": {
+          "model": "flash",
+          "use": "feature code, tests, localized refactors"
+        },
+        "high": {
+          "model": "flash",
+          "escalate_to": "pro",
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy"
         }
       }
     },
@@ -52,12 +138,12 @@
         "high": {
           "model": "flash",
           "escalate_to": "pro",
-          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy"
         }
       }
     },
     "opus-flash": {
-      "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
+      "description": "Claude Opus 5.5 Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (Quota/token limit fallback tier)",
       "root_model": "Claude Opus 5.5",
       "worker_model": "flash",
       "root_slug": "opus",
@@ -76,13 +162,13 @@
         "high": {
           "model": "flash",
           "escalate_to": "pro",
-          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy"
         }
       }
     },
     "sonnet-flash": {
-      "description": "Claude Sonnet 3.7 Root Orchestrator -> Gemini 3.8 Flash Worker Subagents (High-throughput engineering tier)",
-      "root_model": "Claude Sonnet 3.7",
+      "description": "Claude Sonnet 5.5 Root Orchestrator -> Gemini 4 Neon / Hydrogen / 3.8 Flash Worker Subagents (High-throughput engineering tier)",
+      "root_model": "Claude Sonnet 5.5",
       "worker_model": "flash",
       "root_slug": "sonnet",
       "quota_fallback": [
@@ -100,7 +186,7 @@
         "high": {
           "model": "flash",
           "escalate_to": "pro",
-          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Argon quota healthy"
+          "use": "cross-module refactors, debugging, security, architecture; pro only for review/architecture/debugging when Carbon/Argon quota healthy"
         }
       }
     }

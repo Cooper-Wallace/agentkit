@@ -1,11 +1,11 @@
 ---
 name: auto-lifecycle
-description: "Use whenever executing feature tasks, bug fixes, post-run log reviews, or iterative user feedback adjustments across Argon 4 / Flash High / Opus 5.5 root orchestrators and Flash subagents with automated test verification, and adversarial diff review."
+description: "Use whenever executing feature tasks, bug fixes, post-run log reviews, or iterative user feedback adjustments across Orchestrator (Carbon) / Carbon 4 / Orchestrator (Argon) / Argon 4 / Orchestrator (Neon) / Neon High / Hydrogen High / Flash High / Opus 5.5 / Sonnet 5.5 root orchestrators and Flash subagents with automated test verification, and adversarial diff review."
 ---
 
 # Autonomous Multi-Model Lifecycle Runbook
 
-This skill teaches the Root Orchestrator (Gemini 4 Argon, Gemini 3.8 Flash High, Claude Opus 5.5, or Claude Sonnet 3.7) how to execute features autonomously under Auto mode without human micro-management, while guaranteeing zero trunk contamination, quota headroom awareness, and rigorous adversarial verification.
+This skill teaches the Root Orchestrator (Orchestrator (Carbon), Gemini 4 Carbon, Orchestrator (Argon), Gemini 4 Argon, Orchestrator (Neon), Gemini 4 Neon High/XHigh, Gemini 4 Hydrogen High/XHigh, Gemini 3.8 Flash High, Claude Opus 5.5, or Claude Sonnet 5.5) how to execute features autonomously under Auto mode without human micro-management, while guaranteeing zero trunk contamination, quota headroom awareness, and rigorous adversarial verification.
 
 ---
 
@@ -13,9 +13,9 @@ This skill teaches the Root Orchestrator (Gemini 4 Argon, Gemini 3.8 Flash High,
 
 ```mermaid
 flowchart LR
-    P1["Phase 1: Ingest & Task DAG<br/>(Argon 4 / Flash High / Opus 5.5)"] --> P2A["Phase 2: Worker A [complexity: med]<br/>(Backend & Tests)"]
+    P1["Phase 1: Ingest & Task DAG<br/>(Orchestrator (Carbon/Argon) / Neon High / Opus 5.5)"] --> P2A["Phase 2: Worker A [complexity: med]<br/>(Backend & Tests)"]
     P1 --> P2B["Phase 2: Worker B [complexity: low]<br/>(Pure-Edit UI/Docs)"]
-    P2A --> P3["Phase 3: Adversarial Review<br/>(Argon 4 / Flash High / Opus 5.5)"]
+    P2A --> P3["Phase 3: Adversarial Review<br/>(Orchestrator (Carbon/Argon) / Neon High / Opus 5.5)"]
     P2B --> P3
     P3 --> P4["Phase 4: Promotion & Vault Handoff<br/>(PR + Vault + kill_all)"]
 ```
@@ -27,26 +27,28 @@ flowchart LR
    - When inspecting sibling repositories, use `repomix` AST compression (`repomix` MCP or `repomix --compress`) to retrieve structural skeletons without bloating context.
    - Inspect local project files, existing tests, and architecture constraints.
 2. **Quota Headroom Pre-Check**:
-   - Run `agentkit quota status` before freezing large DAG fan-outs to ensure target quota groups (Gemini, Claude, Argon) have sufficient headroom (>15%).
+   - Run `agentkit quota status` before freezing large DAG fan-outs to ensure target quota groups (Gemini, Claude, Carbon/Argon) have sufficient headroom (>15%).
 3. **Draft Plan Artifact**: Create an executable markdown plan in the artifact directory (`brain/<conversation-id>/plan.md`).
    - Define exact files to modify.
    - Define test contracts and acceptance criteria (requiring **Guarded Failure & Safe Degrade Coverage**: every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests).
    - Outline subtask DAG with explicit complexity tiers (`[complexity: low|med|high]`) for parallel worker execution.
 4. **Branch Isolation (One Branch Per Change)**: Ensure the active branch is a dedicated short-lived feature branch (`feat/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`, `test/<name>`) branched directly from `origin/main`. Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges. Never stack unrelated changes or accumulate multiple features on the same branch.
 
-### Phase 2: Autonomous Implementation (Worker Subagents)
-1. **Strict Subagent Execution**: ALL code, test, and UI edits (including initial implementation as well as iterative tuning after user review feedback) must be executed by subagents (`Workspace: "inherit"` or `"share"`), never directly by the Root Orchestrator (Argon 4 / Flash High / Opus 5.5 / Sonnet 3.7) in the root session.
+### Phase 2: Autonomous Implementation (Worker Subagents & Two-Phase Execution)
+1. **Delegation & Two-Phase Execution Discipline**:
+   - In **`Orchestrator (Carbon)`** / **`Orchestrator (Argon)`** two-phase Plan & Execute mode (`exit_plan_mode`), the fast post-plan execution turn (`Gemini 4 Neon`, `Gemini 4 Hydrogen`, or `Gemini 3.8 Flash`) may apply the approved plan directly or dispatch parallel subagents across disjoint file sets.
+   - In **standalone Root Orchestrator** sessions (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`), ALL code, test, and UI edits (including initial implementation as well as iterative tuning after user review feedback) MUST be executed by subagents (`Workspace: "inherit"` or `"share"`), never directly in the root session.
 2. **Complexity-Aware Model Tiering**:
    - **`low`**: Launch with `Model: "flash_lite"` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
    - **`med`**: Launch with `Model: "flash"` (feature code, tests, localized refactors).
-   - **`high`**: Launch with `Model: "flash"` (cross-module refactors, complex debugging, security), with escalation to `Model: "pro"` (Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Argon quota is healthy (>15%).
+   - **`high`**: Launch with `Model: "flash"` (cross-module refactors, complex debugging, security), with escalation to `Model: "pro"` (Gemini 4 Carbon / Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Carbon/Argon quota is healthy (>15%).
    - Prefix every subagent prompt with the complexity tag: `[complexity: low|med|high]`.
 3. **Automated Fallback & Wrap-Up Protection**:
    - `quota-guardian` automatically monitors quota via `RetrieveUserQuotaSummary` and reroutes subagents to healthy fallback groups if a group drops below 15%.
    - If all quota groups drop below 5%, `quota-guardian` denies further subagent delegation with `QUOTA WRAP-UP:`. Follow the graceful wrap-up protocol immediately (stop delegation, run tests, commit WIP, write `handoff.md`, advise user of reset time).
 4. **Disjoint-File Parallel Worker Pool**: Split the Phase 1 DAG into parallel subagents partitioned by file domain (e.g., Worker A: Backend & Unit Tests; Worker B: Frontend/UI; Worker C: Architecture Docs) so workers execute in parallel without write contention.
 5. **Automated Tool Output Token Suppression (Headroom CCR)**:
-   - Note that `PreToolUse` automatically intercepts and wraps verbose test/inspection commands via `headroom-wrap.py` (`filter-and-wrap.py` -> `headroom-wrap.py`), compressing outputs >= 1,500 chars by 60-90%.
+   - Note that `PreToolUse` automatically intercepts and wraps verbose test/inspection commands via `agentkit hook headroom-wrap` (`agentkit hook filter-and-wrap` -> `agentkit hook headroom-wrap`), compressing outputs >= 1,500 chars by 60-90%.
    - Full uncompressed outputs are cached locally at `~/.cache/antigravity-headroom/<hash>.txt` for reversible CCR retrieval via `read_file` when specific stack trace slices are required.
 6. **Launch Worker Subagents in Isolated Worktrees**: Delegate coding and testing using `invoke_subagent`:
    - **Separate Worktrees for Concurrent Threads**: Always set `Workspace: "share"` (which provisions an isolated Git worktree) when inside a Git repository root to prevent `.git/index.lock` collisions, dirty working tree races, and write contention across concurrent threads. Concurrent workers must never operate in the same physical working directory simultaneously. Use `Workspace: "inherit"` with strictly disjoint file boundaries only when the active session workspace is `$HOME` rather than a repository root.
@@ -58,7 +60,7 @@ flowchart LR
    - Instruct workers: *"Return only a concise 10-line summary of files modified, commit hash/message, and test verification results."*
 8. **Reactive Wakeup**: When the subagents complete, the agent harness reactively resumes the Root Orchestrator.
 
-### Phase 3: Adversarial Critique & Self-Healing (Argon 4 / Flash High / Opus 5.5)
+### Phase 3: Adversarial Critique & Self-Healing (Orchestrator (Carbon) / Carbon 4 / Orchestrator (Argon) / Argon 4 / Neon High / Opus 5.5)
 1. **Inspect Git Diff & Subagent Commits**:
    - Run `git status`, `git diff`, and `git log -n 1 --stat` to inspect changes and verify that each worker subagent produced a single atomic Conventional Commit representing its completed deliverable without uncommitted working tree residue.
 2. **Audit Checkpoints**:

@@ -131,9 +131,9 @@ updated_by: agentkit
 > Directives governing cognitive tiering, zero-prompt command discipline, and quota wrap-up.
 
 ## 1. Cognitive Architecture & Model Tiering
-- **Root Orchestrator**: Gemini 4 Argon (`+"`pro`"+`) / Flash High (`+"`flash`"+`) / Claude Opus 5.5 (`+"`opus`"+`).
+- **Root Orchestrator**: Orchestrator (Carbon) / Gemini 4 Carbon / Orchestrator (Argon) / Gemini 4 Argon (`+"`pro`"+`) / Orchestrator (Neon) / Gemini 4 Neon High (`+"`neon-high`"+`) / Gemini 4 Hydrogen High (`+"`hydrogen-high`"+`) / Flash High (`+"`flash`"+`) / Claude Opus 5.5 / Sonnet 5.5 (`+"`opus`"+`/`+"`sonnet`"+`).
 - **Subagent Workers**: Partitioned by complexity (`+"`low`"+`: `+"`flash_lite`"+`, `+"`med`"+`: `+"`flash`"+`, `+"`high`"+`: `+"`flash`"+`/`+"`pro`"+`).
-- Zero project editing by Root Orchestrator: All code implementation delegated to worker subagents.
+- Zero direct source editing by standalone Root Orchestrator: Delegate implementation to worker subagents (or use `+"`Orchestrator (Carbon)`"+` / `+"`Orchestrator (Argon)`"+` / `+"`Orchestrator (Neon)`"+` two-phase `+"`exit_plan_mode`"+` execution).
 
 ## 2. Quota Awareness & Graceful Wrap-Up
 - Automated fallback routing when provider quota falls below 15%%.

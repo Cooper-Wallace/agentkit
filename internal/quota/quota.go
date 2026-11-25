@@ -62,9 +62,15 @@ type rawGroup struct {
 	Buckets     []rawBucket `json:"buckets"`
 }
 
-type rawPayload struct {
+type rawResponseWrapper struct {
 	Groups  []rawGroup  `json:"groups"`
 	Buckets []rawBucket `json:"buckets"`
+}
+
+type rawPayload struct {
+	Groups   []rawGroup          `json:"groups"`
+	Buckets  []rawBucket         `json:"buckets"`
+	Response *rawResponseWrapper `json:"response,omitempty"`
 }
 
 func parseBucketRemaining(b rawBucket) float64 {
@@ -105,13 +111,16 @@ func parseBucketString(val interface{}) string {
 
 func resolveGroupID(name string) string {
 	lower := strings.ToLower(name)
-	if strings.Contains(lower, "argon") {
+	if strings.Contains(lower, "neon") {
+		return "gemini"
+	}
+	if strings.Contains(lower, "carbon") || strings.Contains(lower, "argon") || strings.Contains(lower, "orchestrator") {
 		return "argon"
 	}
-	if strings.Contains(lower, "claude") {
+	if strings.Contains(lower, "claude") || strings.Contains(lower, "opus") || strings.Contains(lower, "sonnet") || strings.Contains(lower, "gpt") {
 		return "claude"
 	}
-	if strings.Contains(lower, "gemini") || strings.Contains(lower, "flash") {
+	if strings.Contains(lower, "gemini") || strings.Contains(lower, "hydrogen") || strings.Contains(lower, "flash") {
 		return "gemini"
 	}
 	return "gemini"
@@ -255,8 +264,13 @@ func Status(quotaFile string) (QuotaStatus, error) {
 	}
 
 	groupsData := payload.Groups
-	if len(groupsData) == 0 && len(payload.Buckets) > 0 {
-		groupsData = []rawGroup{{DisplayName: "default", Buckets: payload.Buckets}}
+	bucketsData := payload.Buckets
+	if len(groupsData) == 0 && len(bucketsData) == 0 && payload.Response != nil {
+		groupsData = payload.Response.Groups
+		bucketsData = payload.Response.Buckets
+	}
+	if len(groupsData) == 0 && len(bucketsData) > 0 {
+		groupsData = []rawGroup{{DisplayName: "default", Buckets: bucketsData}}
 	}
 
 	groupedBuckets := map[string][]rawBucket{
