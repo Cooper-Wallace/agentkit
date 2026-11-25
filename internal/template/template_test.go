@@ -230,3 +230,144 @@ func TestScaffoldDefaultTargetDir(t *testing.T) {
 		t.Errorf("expected AGENTS.md in current directory")
 	}
 }
+
+func TestScaffoldEvidence(t *testing.T) {
+	tempDir := t.TempDir()
+	target := filepath.Join(tempDir, "evidence-proj")
+
+	err := Scaffold(Options{
+		Type:        "evidence",
+		TargetDir:   target,
+		ProjectName: "evidence-proj",
+		Description: "An evidence-backed service.",
+		Language:    "Go",
+		TestCommand: "go test -race ./...",
+	})
+	if err != nil {
+		t.Fatalf("Scaffold evidence failed: %v", err)
+	}
+
+	expectedFiles := []string{
+		"intent.md",
+		"design.md",
+		"agentic-workflow.md",
+		"verify.md",
+		"operate.md",
+		"decisions.md",
+	}
+	evidenceDir := filepath.Join(target, "evidence")
+	for _, name := range expectedFiles {
+		path := filepath.Join(evidenceDir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("expected evidence file %s to exist: %v", name, err)
+		}
+		text := string(data)
+		if !strings.Contains(text, "evidence-proj") {
+			t.Errorf("evidence file %s missing project name: %s", name, text)
+		}
+		if strings.Contains(text, "{{") {
+			t.Errorf("evidence file %s contains unreplaced placeholder: %s", name, text)
+		}
+	}
+
+	// Verify specific placeholders substituted across files
+	intentData, _ := os.ReadFile(filepath.Join(evidenceDir, "intent.md"))
+	if !strings.Contains(string(intentData), "An evidence-backed service.") {
+		t.Errorf("intent.md missing description: %s", string(intentData))
+	}
+	verifyData, _ := os.ReadFile(filepath.Join(evidenceDir, "verify.md"))
+	if !strings.Contains(string(verifyData), "go test -race ./...") || !strings.Contains(string(verifyData), "Go") {
+		t.Errorf("verify.md missing language or test command: %s", string(verifyData))
+	}
+
+	// Guarded failure: existing file must not be overwritten without --force
+	sentinel := "DO NOT OVERWRITE"
+	sentinelPath := filepath.Join(evidenceDir, "decisions.md")
+	if err := os.WriteFile(sentinelPath, []byte(sentinel), 0644); err != nil {
+		t.Fatalf("write sentinel failed: %v", err)
+	}
+	err = Scaffold(Options{
+		Type:        "evidence",
+		TargetDir:   target,
+		ProjectName: "should-fail",
+	})
+	if err == nil {
+		t.Errorf("expected error when evidence file already exists without force")
+	}
+	afterFail, _ := os.ReadFile(sentinelPath)
+	if string(afterFail) != sentinel {
+		t.Errorf("existing file was overwritten despite missing --force: got %q", string(afterFail))
+	}
+
+	// Overwrite with --force
+	err = Scaffold(Options{
+		Type:        "evidence",
+		TargetDir:   target,
+		ProjectName: "forced-proj",
+		Force:       true,
+	})
+	if err != nil {
+		t.Fatalf("expected success with --force, got %v", err)
+	}
+	afterForce, _ := os.ReadFile(sentinelPath)
+	if !strings.Contains(string(afterForce), "forced-proj") {
+		t.Errorf("expected overwritten file to contain forced-proj, got %s", string(afterForce))
+	}
+
+	// Custom TemplateSrc directory
+	customDir := filepath.Join(tempDir, "custom-evidence")
+	if err := os.MkdirAll(customDir, 0755); err != nil {
+		t.Fatalf("mkdir customDir failed: %v", err)
+	}
+	for _, name := range expectedFiles {
+		body := "CUSTOM " + name + " | {{PROJECT_NAME}} | {{PROJECT_DESCRIPTION}} | {{PRIMARY_LANGUAGE}} | {{TEST_COMMAND}}"
+		if err := os.WriteFile(filepath.Join(customDir, name), []byte(body), 0644); err != nil {
+			t.Fatalf("write custom template %s failed: %v", name, err)
+		}
+	}
+	customTarget := filepath.Join(tempDir, "custom-target")
+	err = Scaffold(Options{
+		Type:        "evidence",
+		TargetDir:   customTarget,
+		ProjectName: "custom-app",
+		Description: "Custom desc",
+		Language:    "Rust",
+		TestCommand: "cargo test",
+		TemplateSrc: customDir,
+	})
+	if err != nil {
+		t.Fatalf("Scaffold evidence with custom TemplateSrc failed: %v", err)
+	}
+	for _, name := range expectedFiles {
+		data, err := os.ReadFile(filepath.Join(customTarget, "evidence", name))
+		if err != nil {
+			t.Fatalf("read custom output %s failed: %v", name, err)
+		}
+		want := "CUSTOM " + name + " | custom-app | Custom desc | Rust | cargo test"
+		if string(data) != want {
+			t.Errorf("custom %s = %q, want %q", name, string(data), want)
+		}
+	}
+
+	// Guarded error: invalid TemplateSrc (non-existent or non-dir)
+	err = Scaffold(Options{
+		Type:        "evidence",
+		TargetDir:   filepath.Join(tempDir, "bad-src-target"),
+		TemplateSrc: filepath.Join(tempDir, "does-not-exist"),
+	})
+	if err == nil {
+		t.Errorf("expected error for non-existent evidence TemplateSrc")
+	}
+
+	notADir := filepath.Join(tempDir, "file.md")
+	_ = os.WriteFile(notADir, []byte("hi"), 0644)
+	err = Scaffold(Options{
+		Type:        "evidence",
+		TargetDir:   filepath.Join(tempDir, "file-src-target"),
+		TemplateSrc: notADir,
+	})
+	if err == nil {
+		t.Errorf("expected error when evidence TemplateSrc is a file instead of directory")
+	}
+}
