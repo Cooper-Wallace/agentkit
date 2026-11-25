@@ -70,6 +70,9 @@ Commands:
       Plan, inspect, and execute multi-agent task execution DAGs.
       Options: --file <path>, --step <id>, --name <name>, --output <path>, --json
 
+  hook <guard-quota|notify-wake|filter-and-wrap|headroom-wrap> [options]
+      Execute native Go harness lifecycle hooks (quota guard, wake notify, Headroom CCR).
+
   version, -v, --version
       Print agentkit version.
 
@@ -135,6 +138,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 	case "dag":
 		return runDag(cmdArgs, stdout, stderr)
+
+	case "hook":
+		return runHook(cmdArgs, stdout, stderr)
 
 	default:
 		fmt.Fprintf(stderr, "Unknown command: %s\n", command)

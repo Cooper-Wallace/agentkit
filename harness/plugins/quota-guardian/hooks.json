@@ -8,7 +8,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "./scripts/guard-quota.py",
+            "command": "agentkit hook guard-quota",
             "timeout": 10
           }
         ]

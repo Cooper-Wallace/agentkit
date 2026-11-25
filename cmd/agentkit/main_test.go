@@ -56,6 +56,7 @@ func TestCLIBasics(t *testing.T) {
 
 func TestCLIAuditAndApply(t *testing.T) {
 	tempDir := t.TempDir()
+	t.Setenv("HOME", tempDir)
 	settingsFile := filepath.Join(tempDir, "settings.json")
 	mcpFile := filepath.Join(tempDir, "mcp.json")
 
@@ -389,5 +390,41 @@ func TestCLIFlagsAndBranches(t *testing.T) {
 	code = run([]string{"snapshot", "--settings-path=" + cleanSettings}, &stdout, &stderr)
 	if code != 0 || !strings.Contains(stdout.String(), "No unmanaged permissions found") {
 		t.Errorf("snapshot clean failed, code=%d, out=%s", code, stdout.String())
+	}
+}
+
+func TestCLIHook(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+
+	// No subcommand -> exit 1
+	code := run([]string{"hook"}, &stdout, &stderr)
+	if code != 1 {
+		t.Errorf("expected exit 1 for hook without subcommand, got %d", code)
+	}
+
+	// Help -> exit 0
+	stdout.Reset()
+	stderr.Reset()
+	code = run([]string{"hook", "--help"}, &stdout, &stderr)
+	if code != 0 || !strings.Contains(stdout.String(), "agentkit hook") {
+		t.Errorf("hook --help failed, code=%d, out=%s", code, stdout.String())
+	}
+
+	// Dry-run subcommands -> exit 0 and output contains "dry-run"
+	for _, sub := range []string{"guard-quota", "notify-wake", "filter-and-wrap", "headroom-wrap"} {
+		stdout.Reset()
+		stderr.Reset()
+		code = run([]string{"hook", sub, "--dry-run"}, &stdout, &stderr)
+		if code != 0 || !strings.Contains(stdout.String(), "dry-run") {
+			t.Errorf("hook %s --dry-run failed, code=%d, out=%s, err=%s", sub, code, stdout.String(), stderr.String())
+		}
+	}
+
+	// Unknown subcommand -> exit 1 (guarded failure)
+	stdout.Reset()
+	stderr.Reset()
+	code = run([]string{"hook", "unknown"}, &stdout, &stderr)
+	if code != 1 {
+		t.Errorf("expected exit 1 for unknown hook subcommand, got %d", code)
 	}
 }
