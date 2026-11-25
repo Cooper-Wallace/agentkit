@@ -169,3 +169,57 @@ Parquet schemas can drift over time as upstream data providers add, rename, or c
    ```sql
    PRAGMA table_info('v_clean_bars');
    ```
+
+---
+
+## 6. Independent DuckDB SQL Oracle & Clean Persistence Seams
+
+### Independent DuckDB SQL Oracle Verification
+Complex Polars, Dagster, or LLM-generated feature pipelines frequently hide subtle grouping, null-handling, or window-frame bugs. Cross-check pipeline outputs against an independent, minimal **DuckDB SQL oracle** over deterministic synthetic fixtures:
+- Assert exact row counts, key uniqueness, nullability, and numeric parity (`atol=1e-9`) between the production transform and the independent SQL oracle.
+- Keep the oracle independent (written directly in SQL from business specs) rather than sharing helper code with the pipeline under test.
+
+### Clean Persistence Seams for Cloud Portability
+Keep DuckDB and local Parquet/Delta I/O behind a typed repository interface (`Protocol` or ABC) so domain transforms never import `duckdb` directly. Swapping local DuckDB for MotherDuck, Snowflake, BigQuery, or S3 Delta requires only a new adapter implementation.
+
+```python
+from typing import Protocol
+import duckdb
+import polars as pl
+
+class FeatureRepository(Protocol):
+    def fetch_window(self, symbol: str) -> pl.DataFrame: ...
+
+class DuckDBFeatureRepository:
+    def __init__(self, con: duckdb.DuckDBPyConnection, table_name: str) -> None:
+        self._con = con
+        self._table = table_name
+
+    def fetch_window(self, symbol: str) -> pl.DataFrame:
+        return self._con.execute(
+            f"SELECT ts, close FROM {self._table} WHERE symbol = ? ORDER BY ts", [symbol]
+        ).pl()
+
+def test_polars_pipeline_matches_duckdb_sql_oracle() -> None:
+    fixture = pl.DataFrame({
+        "symbol": ["AAPL", "AAPL", "AAPL"],
+        "ts": [1, 2, 3],
+        "close": [100.0, 102.0, 101.0],
+    })
+    # Production Polars transform
+    prod_df = fixture.sort("ts").with_columns(
+        pl.col("close").rolling_mean(window_size=2, min_periods=1).over("symbol").alias("ma_2")
+    )
+
+    # Independent DuckDB SQL oracle
+    con = duckdb.connect(":memory:")
+    con.register("bars", fixture.to_arrow())
+    oracle_df = con.execute("""
+        SELECT symbol, ts, close,
+               AVG(close) OVER (PARTITION BY symbol ORDER BY ts ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS ma_2
+        FROM bars
+        ORDER BY ts
+    """).pl()
+
+    assert prod_df.equals(oracle_df)
+```
