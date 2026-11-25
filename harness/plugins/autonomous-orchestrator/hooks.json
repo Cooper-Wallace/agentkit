@@ -37,7 +37,7 @@
           },
           {
             "type": "command",
-            "command": "./scripts/filter-and-wrap.py",
+            "command": "agentkit hook filter-and-wrap",
             "timeout": 10
           }
         ]

@@ -16,7 +16,7 @@ These runtime directives govern the hook behaviors and environment overrides of 
   - Edits inside Obsidian AgentVault (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`), `~/.gemini/`, and session brain directories are always permitted.
   - Set `AGY_ALLOW_ROOT_EDIT=1` (or `AGENTKIT_ALLOW_ROOT_EDIT=1`) to override this gate during emergency debugging.
 
-- **`PreToolUse` Headroom Token Compression (`scripts/filter-and-wrap.py` & `headroom-wrap.py`)**:
+- **`PreToolUse` Headroom Token Compression (`agentkit hook filter-and-wrap` & `agentkit hook headroom-wrap`)**:
   - Compresses command outputs >= 1,500 chars by 60–90% to conserve context window tokens.
   - Full uncompressed outputs are cached for Reversible CCR retrieval at `~/.cache/antigravity-headroom/<hash>.txt`.
   - Set `AGY_DISABLE_TOKEN_COMPRESSION=1` to bypass output compression.

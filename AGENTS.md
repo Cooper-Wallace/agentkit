@@ -12,10 +12,12 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 ├── GEMINI.md                 # Symlink to AGENTS.md
 ├── README.md                 # Human-oriented quickstart and usage documentation
 ├── LICENSE                   # MIT License
-├── install.sh                # Symlinks agentkit to ~/.local/bin
+├── install.sh                # Builds and installs static binary to ~/.local/bin/agentkit
 │
-├── bin/
-│   └── agentkit              # Primary Python 3 CLI tool (audit, apply, diff, snapshot, template, profile, quota, skill, tool)
+├── cmd/
+│   └── agentkit/             # Primary Go 1.23+ CLI tool (audit, apply, diff, snapshot, template, profile, quota, hook, caffeine, wake, sleep, vault, dag)
+│
+├── internal/                 # Core internal Go packages (apply, audit, caffeine, dag, diff, hook, quota, server, template, vault)
 │
 ├── config/
 │   ├── permissions.json      # Declarative catalog of pre-approved commands by category
@@ -30,11 +32,12 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 │   │   │   ├── hooks.json    # Subagent delegation, Headroom CCR, git safety gates
 │   │   │   ├── rules/        # Cognitive tiering & zero-prompt discipline rules
 │   │   │   ├── skills/       # 4-phase autonomous feature lifecycle runbook (auto-lifecycle)
-│   │   │   └── scripts/      # Lifecycle hook scripts (headroom-wrap, guard-*)
-│   │   └── quota-guardian/   # Quota monitoring, fallback routing, and graceful wrap-up gate
-│   │       ├── hooks.json    # PreToolUse invoke_subagent interception
-│   │       ├── plugin.json   # Plugin metadata manifest
-│   │       └── scripts/      # Quota status query and guard scripts
+│   │   │   └── scripts/      # Shell lifecycle hook scripts (guard-*)
+│   │   ├── quota-guardian/   # Quota monitoring, fallback routing, and graceful wrap-up gate (via `agentkit hook guard-quota`)
+│   │   │   ├── hooks.json    # PreToolUse invoke_subagent interception
+│   │   │   └── plugin.json   # Plugin metadata manifest
+│   │   └── wake-lock/        # Sleep inhibition activity hooks (via `agentkit hook notify-wake`)
+│   │       └── hooks.json    # PreInvocation/PreToolUse/Stop wake hooks
 │   ├── hooks/                # Lifecycle hooks configuration
 │   ├── rules/                # Universal agent directives (AGENTS.md)
 │   └── skills/               # Harness operational skills
@@ -66,9 +69,7 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
 │       ├── 0012-wake-lock-and-visual-state.md
 │       └── 0013-dock-based-caffeine-hud-and-visual-design.md
 │
-└── tests/
-    ├── test_cli.py           # Automated unit test suite
-    └── test_quota_cli.py     # Quota profiles, CLI commands, and routing tests
+└── ui/                       # Caffeine HUD Dock Electron/Vite frontend and tests (`npm test`)
 ```
 
 ---
@@ -99,15 +100,15 @@ Welcome to the **agentkit** repository. This repository defines, audits, and enf
      - Partition tasks across concurrent subagents operating on strictly disjoint file sets for race-free parallel execution.
 
 4. **Strict Test Coverage & Guarded Failure Standards**:
-   - Any modifications to the permission catalog, parser, merger, profiles, quota logic, or audit engine must be accompanied by updated unit tests in `tests/`.
+   - Any modifications to the permission catalog, parser, merger, profiles, quota logic, hook handlers, or audit engine must be accompanied by updated Go unit tests (`cmd/agentkit/*_test.go`, `internal/**/*_test.go`).
    - **Guarded Failure & Safe Degrade Coverage**: Every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests.
-   - Run tests with `python3 -m unittest discover tests -v`.
+   - Run Go tests with `go test -v -race ./...` (and UI tests in `ui/` with `npm test`).
 
 5. **Conventional Commits**:
    - Adhere strictly to Conventional Commits 1.0.0.
 
 6. **Dynamic Paths**:
-   - Never hardcode `/home/cooper`. Use `$HOME` in bash and `Path.home()` in Python.
+   - Never hardcode `/home/cooper`. Use `$HOME` in bash and `os.UserHomeDir()` in Go.
 
 7. **Minimally Verbose & Deterministic CLI Design**:
    - Design CLIs across projects to be clean, self-documenting, and minimally verbose without unnecessary abbreviation or cryptic shortening.

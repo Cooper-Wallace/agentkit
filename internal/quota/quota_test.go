@@ -9,6 +9,9 @@ import (
 
 func TestQuotaStatusSyntheticFallback(t *testing.T) {
 	t.Setenv("AGENTKIT_QUOTA_CACHE", filepath.Join(t.TempDir(), "nonexistent.json"))
+	t.Setenv("AGENTKIT_QUOTA_FIXTURE", "")
+	t.Setenv("ANTIGRAVITY_LS_ADDRESS", "")
+	t.Setenv("ANTIGRAVITY_CSRF_TOKEN", "")
 	status, err := Status("")
 	if err != nil {
 		t.Fatalf("Status with empty file failed: %v", err)

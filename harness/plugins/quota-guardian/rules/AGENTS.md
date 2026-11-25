@@ -18,6 +18,6 @@ All `invoke_subagent` prompts MUST include the standard tag `[complexity: low|me
 
 ## 3. Strict Denial Adherence on Quota Wrap-Up
 
-When `guard-quota.py` denies `invoke_subagent` with `QUOTA WRAP-UP: All model quotas are critically low`:
+When `agentkit hook guard-quota` denies `invoke_subagent` with `QUOTA WRAP-UP: All model quotas are critically low`:
 1. Immediately cease invoking new subagents (do not retry or attempt model bypass).
 2. Execute the `quota-wrapup` skill: run tests, commit WIP to the active feature branch, author handoff note in Obsidian AgentVault, and advise the user.

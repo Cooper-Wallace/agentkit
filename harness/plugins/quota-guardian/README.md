@@ -21,12 +21,9 @@ The **Quota Guardian** plugin provides automated quota-aware model routing, comp
 harness/plugins/quota-guardian/
 ├── README.md               # User and developer documentation
 ├── plugin.json             # Antigravity plugin manifest
-├── hooks.json              # PreToolUse hook configuration for invoke_subagent
+├── hooks.json              # PreToolUse hook configuration (invokes `agentkit hook guard-quota`)
 ├── rules/
 │   └── AGENTS.md           # Universal quota rules and directives for agents
-├── scripts/
-│   ├── quota_status.py     # Quota summary querying and route calculation CLI
-│   └── guard-quota.py      # PreToolUse hook script for invoke_subagent
 └── skills/
     └── quota-wrapup/
         └── SKILL.md        # 6-phase graceful task conclusion runbook
@@ -54,7 +51,7 @@ agentkit quota route --complexity high --json
 
 ## Environment Variables
 
-- `AGENTKIT_QUOTA_GUARD=off`: Disables `guard-quota.py` hook interception.
+- `AGENTKIT_QUOTA_GUARD=off`: Disables `agentkit hook guard-quota` interception.
 - `AGENTKIT_QUOTA_FIXTURE=/path/to/fixture.json`: Injects an offline JSON payload for testing and verification.
 - `AGENTKIT_QUOTA_CACHE=/path/to/cache.json`: Overrides the default cache path (`~/.cache/agentkit/quota.json`).
 - `AGENTKIT_QUOTA_CONFIG=/path/to/quota.json`: Overrides the configuration file path.
@@ -65,5 +62,5 @@ agentkit quota route --complexity high --json
 
 Run unit tests:
 ```bash
-python3 -m unittest tests/test_quota_guardian.py -v
+go test ./...
 ```

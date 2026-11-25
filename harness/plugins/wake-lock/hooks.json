@@ -4,7 +4,7 @@
     "PreInvocation": [
       {
         "type": "command",
-        "command": "./scripts/notify-wake.py active",
+        "command": "agentkit hook notify-wake active",
         "timeout": 5
       }
     ],
@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "./scripts/notify-wake.py active",
+            "command": "agentkit hook notify-wake active",
             "timeout": 5
           }
         ]
@@ -23,7 +23,7 @@
     "Stop": [
       {
         "type": "command",
-        "command": "./scripts/notify-wake.py idle",
+        "command": "agentkit hook notify-wake idle",
         "timeout": 5
       }
     ]

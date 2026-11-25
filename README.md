@@ -3,7 +3,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-yellow.svg)](https://conventionalcommits.org)
 [![Go: 1.23+](https://img.shields.io/badge/Go-1.23%2B-00ADD8.svg?logo=go&logoColor=white)](https://golang.org)
-[![Python: 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://python.org)
 
 The harness-agnostic AI agent configuration, permissions catalog, directives, and orchestration toolkit across Cooper Wallace's workstations.
 
@@ -129,8 +128,8 @@ agentkit profile set opus-flash
   - Bundles standard plugins (`autonomous-orchestrator`, `quota-guardian`) for multi-model workflows, quota management, and token optimization.
   - Automatically deploys and audits standard plugins in `~/.gemini/config/plugins/` with executable lifecycle hook scripts.
   - **Cognitive Tiering & Subagent Guard**: Enforces root planning via Carbon/Argon/Opus/Sonnet and code execution via Neon/Hydrogen/Flash subagents with `PreToolUse` delegation enforcement (`scripts/guard-subagent-delegation.sh`).
-  - **Quota Guardian & Fallback Routing**: Intercepts subagent delegation (`PreToolUse` on `invoke_subagent`), queries language server quota telemetry (`RetrieveUserQuotaSummary`), dynamically reroutes subagents when quotas drop below 15%, and gates execution with a graceful wrap-up protocol at 5% remaining capacity.
-  - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`filter-and-wrap.py` -> `headroom-wrap.py`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
+  - **Quota Guardian & Fallback Routing**: Intercepts subagent delegation (`PreToolUse` on `invoke_subagent` via `agentkit hook guard-quota`), queries language server quota telemetry (`RetrieveUserQuotaSummary`), dynamically reroutes subagents when quotas drop below 15%, and gates execution with a graceful wrap-up protocol at 5% remaining capacity.
+  - **Headroom CCR Token Compression**: Intercepts verbose test, inspection, and diff commands via `PreToolUse` overwrite (`agentkit hook filter-and-wrap` -> `agentkit hook headroom-wrap`), shrinking output tokens by 60%–90% while caching raw logs in `~/.cache/antigravity-headroom/<hash>.txt` for reversible retrieval.
   - **Deterministic Hook Gates**: Hard blocks direct pushes and trunk merges to `main` (`guard-git-operations.sh`), gates destructive deletions, and prevents task termination on test failures or dirty trees (`verify-clean-completion.sh`).
   - Pre-approves Git worktree operations (`git worktree`, `git rev-parse`, `git ls-files`) for concurrent subagent isolation.
 - **Git Tree Management & Concurrency Isolation**:
@@ -440,9 +439,10 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 ├── cmd/
 │   └── agentkit/                 # Go 1.23+ static CLI entrypoint
 │       ├── main.go               # Top-level CLI router and flag dispatch
-│       ├── caffeine_cmd.go       # Sleep inhibitor and caffeine subcommands
-│       ├── dag_cmd.go            # SQLite task DAG planner and runner
-│       └── vault_cmd.go          # Obsidian AgentVault integration subcommands
+│       ├── caffeine.go           # Sleep inhibitor and caffeine subcommands
+│       ├── dag.go                # SQLite task DAG planner and runner
+│       ├── hook.go               # Native Go lifecycle hook dispatchers
+│       └── vault.go              # Obsidian AgentVault integration subcommands
 │
 ├── internal/                     # Core internal Go packages
 │   ├── apply/                    # Settings merger and profile applicator
@@ -451,13 +451,11 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │   ├── caffeine/                 # Sleep inhibitor engine, leases & DBus integration
 │   ├── dag/                      # Multi-agent SQLite DAG planner and execution runner
 │   ├── diff/                     # Configuration diff engine
+│   ├── hook/                     # Native lifecycle hook handlers (guard-quota, notify-wake, filter-and-wrap, headroom-wrap)
 │   ├── quota/                    # Quota telemetry parser and fallback routing
 │   ├── server/                   # HTTP loopback daemon for wake-lock arbitration
 │   ├── template/                 # Project directives and hook scaffolder
 │   └── vault/                    # Obsidian AgentVault parser, ingest, and sync
-│
-├── bin/
-│   └── agentkit                  # Python CLI implementation (dual-stack compatibility harness)
 │
 ├── config/                       # Embedded standard catalogs (embed.FS)
 │   ├── permissions.json          # Categorized catalog of pre-approved commands
@@ -501,12 +499,7 @@ Downstream consumer repositories—including quantitative trading pipelines (**`
 │       ├── 0012-wake-lock-and-visual-state.md
 │       └── 0013-dock-based-caffeine-hud-and-visual-design.md
 │
-└── tests/                        # Automated unit and integration test suites
-    ├── test_cli.py               # Python CLI tests
-    ├── test_quota_cli.py         # Quota profiles & routing tests
-    ├── test_agentkit.py          # Enterprise sync and AgentVault tests
-    ├── test_plugins.py           # Verification and clean completion tests
-    └── test_wake.py              # Wake engine, server, and HUD tests
+└── ui/                           # Caffeine HUD Dock Electron/Vite frontend and tests (`npm test`)
 ```
 
 ---
@@ -534,9 +527,9 @@ go test -v -race -cover ./...
 go vet ./...
 ```
 
-Run the automated Python test suite:
+Run the UI test suite:
 ```bash
-python3 -m unittest discover tests -v
+cd ui && npm test
 ```
 
 ---
