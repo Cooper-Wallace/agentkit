@@ -8,6 +8,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  statuses: write
+  actions: write
 
 jobs:
   release-stage:
@@ -16,3 +18,12 @@ jobs:
     with:
       staging-branch: "release-staging"
       target-branch: "main"
+
+  package-release:
+    name: "Package & Upload Assets"
+    needs: release-stage
+    if: ${{ needs.release-stage.outputs.releases_created == 'true' }}
+    uses: Cooper-Wallace/repokit/.github/workflows/reusable-release-go.yml@v1
+    with:
+      tag-name: ${{ needs.release-stage.outputs.tag_name }}
+      go-version: "1.23"
