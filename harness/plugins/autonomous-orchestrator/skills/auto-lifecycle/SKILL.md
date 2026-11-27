@@ -30,9 +30,10 @@ flowchart LR
    - Run `agentkit quota status` before freezing large DAG fan-outs to ensure target quota groups (Gemini, Claude, Carbon/Argon) have sufficient headroom (>15%).
 3. **Draft Plan Artifact**: Create an executable markdown plan in the artifact directory (`brain/<conversation-id>/plan.md`).
    - Define exact files to modify.
-   - Define test contracts and acceptance criteria (requiring **Guarded Failure & Safe Degrade Coverage**: every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests).
+   - Define test contracts and acceptance criteria using stable Acceptance Criteria IDs (`AC-<DOMAIN>-<N>`) paired with verification methods (`unit`, `property`, `integration`, `oracle`, `CI`, `manual`), and requiring **Guarded Failure & Safe Degrade Coverage** (every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests).
    - Outline subtask DAG with explicit complexity tiers (`[complexity: low|med|high]`) for parallel worker execution.
 4. **Branch Isolation (One Branch Per Change)**: Ensure the active branch is a dedicated short-lived feature branch (`feat/<name>`, `fix/<name>`, `docs/<name>`, `refactor/<name>`, `test/<name>`) branched directly from `origin/main`. Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges. Never stack unrelated changes or accumulate multiple features on the same branch.
+5. **Contracts-First Phase 0 (Before Parallel Fan-Out)**: Land one sequential setup commit containing new dependency/lockfile changes, shared interfaces/types/typed errors, and mechanical architectural boundary checks (`import-linter`, ESLint `no-restricted-imports`, `ruff`) before launching concurrent worktree workers.
 
 ### Phase 2: Autonomous Implementation (Worker Subagents & Two-Phase Execution)
 1. **Delegation & Two-Phase Execution Discipline**:
@@ -57,6 +58,7 @@ flowchart LR
    - **One Commit Per Subagent**: Instruct each worker subagent: *"Upon verifying all changes pass automated tests, stage your modifications and produce exactly ONE atomic Conventional Commit (`git add <files>` and `git commit -m '<type>(<scope>): <short summary>'`). Do NOT leave uncommitted modifications or produce multiple messy WIP commits."*
    - **Pure-Edit Workers**: For workers modifying code, UI, or documentation without running tests/commands: *"Use ONLY `read_file` and `edit_file`. NEVER call `run_command`."*
    - **Test/Build Workers**: For workers running tests or build commands: *"Prioritize workspace-relative generic commands (`.venv/bin/pytest tests -v`, `git status`, `git diff`) when inside the repo root. Never use `cd ... && ...`, shell chains (`&&`, `;`, `|`), or `/path/to/.venv/bin/python3 -c ...` one-liners. Reserve absolute or `-C` paths only when cross-directory invocations from `$HOME` are required."*
+   - **Installed-Docs Grounding**: For fast-moving frameworks (Next.js, Drizzle, Polars, Dagster, etc.), instruct workers to verify breaking APIs against locally installed docs/type definitions (`node_modules/*/dist/docs/`, `.venv/...`) before coding rather than relying on training-data assumptions.
    - Instruct workers: *"Return only a concise 10-line summary of files modified, commit hash/message, and test verification results."*
 8. **Reactive Wakeup**: When the subagents complete, the agent harness reactively resumes the Root Orchestrator.
 
@@ -65,6 +67,9 @@ flowchart LR
    - Run `git status`, `git diff`, and `git log -n 1 --stat` to inspect changes and verify that each worker subagent produced a single atomic Conventional Commit representing its completed deliverable without uncommitted working tree residue.
 2. **Audit Checkpoints**:
    - Review logic against edge cases, error handling, and potential race conditions.
+   - Verify `AC-*` coverage against the Phase 1 plan, documenting any unverified scope or deferred checks in an explicit **Known Gaps** section.
+   - Verify fail-fast startup checks (env validation reporting only variable names, storage/DB readiness, migration parity) and allow-listed structured JSON logging hygiene (no raw stack traces, SQL, file paths, secrets, or PII).
+   - Explicitly distinguish dev/unit test runs from production-build and runtime smoke checks.
    - Verify that no secrets, `.env` files, or temporary scratch statements leaked.
    - Verify that commit messages comply with Conventional Commits 1.0.0 and represent a coherent, single unit of work.
 3. **Self-Healing & User Review Feedback Loop**: When either the adversarial review OR the user reports a regression, tuning issue, or requested adjustment: the Root Orchestrator diagnoses the logs/diff and updates `plan.md`, but **MUST dispatch a subagent (`Model: "flash"`)** to implement the fix and update unit tests — never editing project files directly in the root session.
@@ -94,10 +99,13 @@ flowchart LR
 $(git log main..HEAD --oneline)
 
 ### Phase 3 Adversarial Review Audit
-<adversarial review summary and edge case verification>
+<adversarial review summary, AC-* coverage status, and edge case verification>
 
 ### Verification
-<automated test verification details>"
+<automated test verification details>
+
+### Known Gaps
+<any unverified scope, deferred checks, or None>"
    gh pr checks
    ```
    Post any subsequent adversarial review adjustments to the PR using `gh pr comment` or by updating the PR description.

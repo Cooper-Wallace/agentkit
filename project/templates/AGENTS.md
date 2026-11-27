@@ -1,121 +1,41 @@
-# {{PROJECT_NAME}} - Agent Directives & Architecture
+# {{PROJECT_NAME}} - Agent Directives
 
-Welcome to the **{{PROJECT_NAME}}** repository. This document provides project-specific architecture context, coding standards, model tiering guidelines, and operational rules for AI pair programming sessions.
+{{PROJECT_DESCRIPTION}}
 
----
+## Stack & Commands
 
-## 1. Project Overview
+- **Primary Language / Runtime**: {{PRIMARY_LANGUAGE}}
+- **Single Verification Gate**: Run before committing or reporting completion:
+  ```bash
+  {{TEST_COMMAND}}
+  ```
 
-- **Description**: {{PROJECT_DESCRIPTION}}
-- **Primary Language / Framework**: {{PRIMARY_LANGUAGE}}
-- **Repository Architecture**:
-  - `src/` or `bin/`: Core application source code
-  - `tests/`: Automated unit and integration test suite
-  - `docs/`: Architecture documentation and ADRs
-- **Minimally Verbose & Deterministic CLI Design**:
-  - Design CLIs across projects to be clean, self-documenting, and minimally verbose without unnecessary abbreviation or cryptic shortening.
-  - Because developer tools in this ecosystem are predominantly orchestrated agentically (via AI agent workflows, tool calls, scripts, and CI runners), semantic clarity, predictability, and unambiguous command shapes take precedence over rapid human keystroke shortcuts.
-  - Top-level operational shorthands are restricted to explicit, high-frequency state toggles (such as `agentkit wake` and `agentkit sleep` for immediate manual power overrides), while arbitrary contractions (`caff`, `cfg`, `mgr`, `sync-tmp`) are strictly prohibited.
+## Layer Import Rules
 
----
+Dependencies flow strictly downward; **never import upward** across layers:
 
-## 2. Cognitive Architecture & Model Tiering
+| Layer | Purpose | May Import From | Must Not Import From |
+| :--- | :--- | :--- | :--- |
+| `src/` | Core domain logic, adapters, CLIs | Standard library, declared deps | `tests/`, `docs/`, `evidence/` |
+| `tests/` | Unit, property, & integration suites | `src/`, test fixtures | `docs/`, `evidence/` |
+| `docs/` & `evidence/` | ADRs, specs, & evidence artifacts | Standalone Markdown / links | `src/` runtime execution |
 
-- **Root Orchestrator**:
-  - **Primary Tier (`carbon-flash` [default] / `argon-flash`)**: **Orchestrator (Carbon)** (`gemini-pro-orchestrator`) and **Gemini 4 Carbon** (`High` / `Medium` / `Low`), alongside **Orchestrator (Argon)** (`gemini-pro-orchestrator-argon`) and **Gemini 4 Argon** (`High` / `Medium` / `Low`; `Model: "pro"` / `"inherit"`) when Carbon/Argon quota is available AND task is complex (architecture, multi-repo planning, adversarial review). In `Orchestrator (Carbon)` / `Orchestrator (Argon)` two-phase mode, Phase 1 plans in read-only `plan_mode` and hands off via `exit_plan_mode` to Phase 2 (`Gemini 4 Neon`, `Gemini 4 Hydrogen`, or `Gemini 3.8 Flash`).
-  - **Standard Tier (`neon-high` / `hydrogen-high` / `flash-high`)**: **Orchestrator (Neon)** (`gemini-pro-orchestrator-neon`) and **Gemini 4 Neon** (`High` / `XHigh` / `Medium` / `Low`; profile `neon-high`; default `settings.default.json` model `Gemini 4 Neon (High)`), alongside **Gemini 4 Hydrogen** (`High` / `XHigh` / `Medium` / `Low`; profile `hydrogen-high`) and **Gemini 3.8 Flash (High)** (profile `flash-high`) in the Gemini quota group for standard feature and lifecycle workflows with zero Argon/Carbon quota consumption.
-  - **Fallback Tiers (`opus-flash` / `sonnet-flash`)**: **Claude Opus 5.5** / **Claude Sonnet 5.5** (`Low` / `Medium` / `High`; `Model: "opus"` / `"inherit"`) when Gemini quota groups are exhausted or rate-limited.
-  - When not in a post-`exit_plan_mode` execution phase, the standalone Root Orchestrator (`Gemini 4 Carbon`, `Gemini 4 Argon`, `Claude Opus 5.5`, `Claude Sonnet 5.5`) MUST NEVER directly edit project source code, tests, or UI files — only artifact files in the session brain directory (e.g., `plan.md`). All standalone code implementation, post-review bugfixes, and test updates MUST be delegated to worker subagents.
-- **Subagent Complexity Tiers**:
-  - `low`: `flash_lite` (file moves/renames, mechanical find-replace, formatting, doc typos, simple one-command inspection).
-  - `med`: `flash` (feature code, tests, localized refactors).
-  - `high`: `flash` (cross-module refactors, complex debugging, security), with escalation to `pro` (Gemini 4 Carbon / Gemini 4 Argon) for architecture, multi-repo design, or adversarial review when Carbon/Argon quota is healthy.
-  - Tag convention: place `[complexity: low|med|high]` at the start of subagent prompts.
-- **Disjoint-File Parallel Worker Partitioning**:
-  - Multi-component tasks MUST be partitioned across concurrent subagents operating on strictly disjoint file sets so workers execute in parallel without write contention.
+## Project Rules
 
----
+1. **Clean Code & DRY**: Keep functions small and single-purpose; extract shared helpers instead of duplicating logic. CLIs must use clear, non-abbreviated flags and support `--dry-run` + idempotency where mutating.
+2. **Guarded Failure & Property Tests**: Every feature or bugfix requires guarded-failure / safe-degrade tests alongside happy paths, plus property-based or oracle invariants for non-trivial transforms.
+3. **Fail-Fast Startup & Allow-Listed JSON Logs**: Validate required env/config and schemas at startup before processing; emit structured JSON logs containing only explicitly allow-listed non-sensitive fields.
+4. **Installed-Docs Grounding**: Verify third-party APIs, CLI flags, and schemas against installed package docstrings/help or local docs before writing code—never guess signatures.
+5. **One Branch Per Change & Atomic Commits**: Branch from `origin/main` (`feat/*`, `fix/*`, `docs/*`, `refactor/*`, `test/*`). Concurrent agents must use isolated git worktrees and produce one atomic Conventional Commit per deliverable.
+6. **Human-Only PR Merge**: Agents may open PRs and verify CI checks, but MUST NEVER run `gh pr merge` or enable auto-merge.
+7. **Dynamic Paths**: Resolve paths relative to repo root or `$HOME` / `Path.home()`; never hardcode user home directories.
+8. **No Secrets**: Keep credentials and API keys in untracked `.env` files; never log, print, or commit secrets.
 
-## 3. Quota Awareness & Graceful Wrap-Up
+## Read More Only When You Need It
 
-- **Pre-Flight Quota Inspection**:
-  - Check remaining quota with `agentkit quota status` before launching large subagent fan-outs.
-- **The 3 Quota Groups**:
-  - **Gemini Group** (`gemini`): `Orchestrator (Neon)`, `Gemini 4 Neon` (`Low` / `Medium` / `High` / `XHigh`), `Gemini 4 Hydrogen` (`Low` / `Medium` / `High` / `XHigh`), `Gemini 3.8 Flash` (`Low` / `Medium` / `High`), `Gemini 3.8 Flash Lite` (`flash_lite`) (standard root execution and high-throughput subagent execution).
-  - **Claude + GPT Group** (`claude`): `Claude Opus 5.5`, `Claude Sonnet 5.5`, `GPT-OSS 120B` (fallback root orchestrator and cross-family execution).
-  - **Gemini 4 Carbon / Argon Group** (`argon` canonical group ID): `Orchestrator (Carbon)`, `Gemini 4 Carbon` (`Low` / `Medium` / `High`), `Orchestrator (Argon)`, `Gemini 4 Argon` (`Low` / `Medium` / `High`) — dedicated deep reasoning, two-phase planning, and adversarial critique quota.
-- **Automated Routing**:
-  - The `quota-guardian` plugin automatically intercepts subagent delegation via `PreToolUse`.
-  - When the target model's quota group drops below **15% remaining capacity**, `quota-guardian` automatically reroutes subagents to a healthy fallback group without interrupting execution.
-- **Graceful Wrap-Up Circuit Breaker**:
-  - When all eligible quota groups drop below **5% remaining capacity**, `quota-guardian` denies further delegation with `QUOTA WRAP-UP:`.
-  - Agents MUST immediately follow the `quota-wrapup` protocol:
-    1. Cease spawning new subagents.
-    2. Run local test suites to verify system stability.
-    3. Create a clean WIP commit on the active feature branch (`git commit -m "chore(wip): save state prior to quota wrap-up"`).
-    4. Generate a comprehensive handoff note in the Obsidian AgentVault (`$HOME/Documents/AgentVault/Sessions/handoff-YYYY-MM-DD-quota-wrapup.md`), update `Projects/<project>.md`, and mirror `handoff.md` in conversation artifacts.
-    5. Advise the user of the exact quota reset timestamp and recommend an advisory root model switch.
-- **Advisory Root Model Switching**:
-  - The root session model cannot be switched programmatically via API during an active session.
-  - When root quota is depleted, the agent must provide clear advisory guidance instructing the user to switch models via the chat UI picker or the `/model` slash command.
-
----
-
-## 4. Perpetual Long-Term Memory & Offline Collaboration (Obsidian AgentVault)
-
-- **Local Obsidian AgentVault**:
-  - The local Obsidian AgentVault (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`, configurable via `$AGENTKIT_AGENTVAULT_PATH` or `$AGENTKIT_VAULT_PATH`) serves as the long-term, human-in-the-loop memory store across sessions, adhering to the open Obsidian Skills standard and "files over apps" philosophy.
-  - **Automatic Workspace Whitelisting**: The AgentVault directory (`$HOME/Documents/AgentVault` or `$HOME/AgentVault`) as well as core repositories (`agentkit` and `repokit` at `$HOME/Projects/agentkit` and `$HOME/Projects/repokit`) are automatically whitelisted in Antigravity's `trustedWorkspaces` via `agentkit apply` and `agentkit vault init` to eliminate file read/write prompts during autonomous workflows and cross-repo introspection.
-- **Offline Human-Agent Collaboration Protocol**:
-  - **Ingest at Session Start (Phase 1)**: Check `User-Input/pending/` at session start (or run `agentkit vault ingest`) to process offline user directives, feedback, and backlog notes written between conversations. Archive processed directives to `User-Input/processed/`.
-  - **Project Living Notes**: Maintain project knowledge base in `Projects/<project>.md`, keeping architecture, current branch/commit, and task checklists aligned.
-  - **Handoff at Session Wrap-Up (Phase 4)**: Write structured handoff notes to `Sessions/handoff-YYYY-MM-DD-<topic>.md`, capturing completed deliverables, test verification results, and offline tasks.
-  - **Visual Architecture with JSON Canvas**: Visual architecture maps and multi-agent DAGs are maintained in `Architecture/` using the open JSON Canvas specification (`.canvas`).
-
----
-
-## 5. Git Workflow & Version Control Standards
-
-- **Branching Strategy: One Branch Per Change**:
-  - Every discrete task, feature, bug fix, refactor, or test improvement must operate on its own dedicated short-lived feature branch branched directly from `main`:
-    - `feat/<feature-name>`: New functionality
-    - `fix/<bug-name>`: Bug fixes
-    - `docs/<doc-name>`: Documentation updates
-    - `refactor/<target>`: Structural code improvements
-    - `test/<suite>`: Test additions or refactoring
-  - Before creating a feature branch or isolated worktree, agents MUST run `git fetch origin main` and branch from `origin/main` (`git worktree add -b feat/<name> <path> origin/main`) so worktrees are never branched from a stale local `main` after GitHub web UI merges.
-  - Never stack unrelated features or accumulate unrelated changes on the same branch. Keep scope narrow, focused, and atomic.
-- **Commit Hygiene: One Atomic Commit Per Subagent**:
-  - Each worker subagent assigned to a deliverable must produce a single atomic Conventional Commit (`<type>(<scope>): <short summary>`) representing its completed, tested unit of work.
-  - Workers must never leave uncommitted changes or produce messy WIP commits.
-  - Commit messages must strictly follow Conventional Commits 1.0.0: `<type>(<scope>): <short summary>`
-  - Types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`.
-  - Use imperative, present-tense verbs ("add", "fix", "update", not "added" or "fixes").
-  - Scope is optional but encouraged for modular repositories.
-- **Multi-Agent Concurrency: Isolated Git Worktrees for Concurrent Threads**:
-  - When multiple agent threads or subagents work concurrently within the same repository, they MUST operate in isolated git worktrees (`Workspace: "share"` in Antigravity or `git worktree add`) to prevent `.git/index.lock` collisions, dirty working tree races, and write contention.
-  - Concurrent workers must never operate on the same physical working directory simultaneously.
-- **Trunk Hygiene & Merge Governance**:
-  - Repositories follow the **Squash and Merge** model governed by `repokit`.
-  - Squash titles default to `PR_TITLE` and bodies to `PR_BODY`. Direct pushes to `main` and local trunk merges are strictly prohibited.
-- **Human-Only Trunk Promotion & Auto-Merge Prohibition**:
-  - Merging Pull Requests into `main` is strictly a human-in-the-loop action. Autonomous agents MUST NEVER execute `gh pr merge`, enable GitHub auto-merge, or automate trunk merging. Agents are restricted to opening Pull Requests (`gh pr create`), posting adversarial review audits, and verifying check suites (`gh pr checks`). PR promotion into `main` must only occur via manual human review and approval in the GitHub web UI once all quality gates pass.
-
----
-
-## 6. Testing & Verification
-
-Before submitting changes or marking tasks complete, run the project test suite:
-```bash
-{{TEST_COMMAND}}
-```
-- **Guarded Failure & Safe Degrade Coverage**: Every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests.
-
----
-
-## 7. Safety & Environment Rules
-
-- Do not hardcode absolute system paths; resolve paths relative to the project root or use `$HOME`.
-- Scripts and tooling must support `--dry-run` and be fully idempotent.
-- Sensitive environment variables and secrets must remain in untracked `.env` files.
-- Agent harness configuration and directives are governed by `agentkit`.
+| Resource | When to Read |
+| :--- | :--- |
+| [README.md](README.md) | Setup, usage examples, and user-facing overview |
+| [docs/ENGINEERING.md](docs/ENGINEERING.md) | Deep module conventions, build details, and style |
+| [docs/decisions/](docs/decisions/) | Architecture Decision Records (ADRs) for past choices |
+| [evidence/intent.md](evidence/intent.md) | Acceptance criteria (`AC-*`), scope boundaries, and evidence pack (`design.md`, `verify.md`, `operate.md`) |

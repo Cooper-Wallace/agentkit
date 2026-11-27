@@ -18,6 +18,8 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
   - Design CLIs across projects to be clean, self-documenting, and minimally verbose without unnecessary abbreviation or cryptic shortening.
   - Because developer tools in this ecosystem are predominantly orchestrated agentically (via AI agent workflows, tool calls, scripts, and CI runners), semantic clarity, predictability, and unambiguous command shapes take precedence over rapid human keystroke shortcuts.
   - Top-level operational shorthands are restricted to explicit, high-frequency state toggles (such as `agentkit wake` and `agentkit sleep` for immediate manual power overrides), while arbitrary contractions (`caff`, `cfg`, `mgr`, `sync-tmp`) are strictly prohibited.
+- **Installed-Docs Grounding**: Verify breaking APIs for fast-moving frameworks (Next.js, Drizzle, Polars, Dagster, etc.) against locally installed docs/type definitions (`node_modules/*/dist/docs/`, `.venv/...`) before coding rather than relying on training-data assumptions.
+- **Operability & Safe-Logging Baseline**: Services/pipelines must run **fail-fast startup checks** (validate env reporting only variable names, storage/DB readiness, and migration parity before serving), emit **structured allow-listed JSON logs** (never log raw stack traces, SQL, file paths, secrets, or PII), and maintain **clean production seams** (typed repository/limiter/auth interfaces so local prototypes swap cleanly to cloud equivalents).
 
 ---
 
@@ -138,8 +140,11 @@ Welcome to Cooper Wallace's development workspace. This document establishes uni
     - Java: `mvn test`
 - **Guarded Failure & Safe Degrade Coverage**:
   - Every feature or bugfix test suite must include at least one guarded failure, validation rejection, or safe degrade-mode test alongside happy-path tests.
+- **Traceable Acceptance Criteria (`AC-*`) & Invariant Verification**:
+  - Assign stable Acceptance Criteria IDs (`AC-<DOMAIN>-<N>`) in feature plans paired with verification methods (`unit`, `property`, `integration`, `oracle`, `CI`, `manual`), citing them in tests and PR audits. Use property-based testing (`hypothesis` / `fast-check`) for date/timezone bucketing, probability conservation, anti-leakage splits, and aggregation invariants, and pair complex pipelines with an independent SQL/DuckDB verification oracle on synthetic fixtures.
 - **Audit & Status Inspection**:
   - Inspect `git status` and `git diff` before committing to ensure no unintended scratch files or debug statements leak into repositories.
+  - Include an explicit **Known Gaps** section in PR audits documenting any unverified scope or deferred checks.
 
 ---
 

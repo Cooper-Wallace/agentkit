@@ -192,3 +192,97 @@ func TestAuditFixFlag(t *testing.T) {
 		t.Errorf("expected fix to increase passed checks, got %d", res.PassedChecks)
 	}
 }
+
+func TestAuditProjectDirectives(t *testing.T) {
+	origPath, baseOpts := setupStandardEnvironment(t)
+	defer os.Setenv("PATH", origPath)
+
+	// 1. Happy path: concise AGENTS.md (<= 80 lines) -> 15 checks, compliant
+	happyDir := filepath.Join(t.TempDir(), "happy-proj")
+	if err := os.MkdirAll(happyDir, 0755); err != nil {
+		t.Fatalf("mkdir happyDir failed: %v", err)
+	}
+	conciseContent := strings.Repeat("# Line\n", 40)
+	if err := os.WriteFile(filepath.Join(happyDir, "AGENTS.md"), []byte(conciseContent), 0644); err != nil {
+		t.Fatalf("write concise AGENTS.md failed: %v", err)
+	}
+
+	happyOpts := baseOpts
+	happyOpts.ProjectDir = happyDir
+	res, err := Run(happyOpts)
+	if err != nil {
+		t.Fatalf("Audit Run (happy project dir) failed: %v", err)
+	}
+	if res.TotalChecks != 15 {
+		t.Errorf("expected 15 checks, got %d", res.TotalChecks)
+	}
+	if !res.Compliant {
+		t.Errorf("expected Compliant true, got %d/%d", res.PassedChecks, res.TotalChecks)
+	}
+	last := res.Checks[len(res.Checks)-1]
+	if last.ID != 15 || last.Name != "project_directives_progressive_disclosure" || last.Status != "pass" || !last.Passed {
+		t.Errorf("unexpected check 15 result: %+v", last)
+	}
+
+	// GEMINI.md fallback check
+	geminiOnlyDir := filepath.Join(t.TempDir(), "gemini-fallback")
+	_ = os.MkdirAll(geminiOnlyDir, 0755)
+	_ = os.WriteFile(filepath.Join(geminiOnlyDir, "GEMINI.md"), []byte("# Concise Gemini\n"), 0644)
+	fallbackCheck := CheckProjectDirectives(geminiOnlyDir)
+	if fallbackCheck.Status != "pass" || !fallbackCheck.Passed {
+		t.Errorf("expected GEMINI.md fallback to pass, got %+v", fallbackCheck)
+	}
+
+	// 2. Guarded warning: AGENTS.md > 120 lines -> warn, non-compliant
+	warnDir := filepath.Join(t.TempDir(), "warn-proj")
+	if err := os.MkdirAll(warnDir, 0755); err != nil {
+		t.Fatalf("mkdir warnDir failed: %v", err)
+	}
+	bloatedContent := strings.Repeat("# Bloated directive line\n", MaxProjectAgentsLines+5)
+	if err := os.WriteFile(filepath.Join(warnDir, "AGENTS.md"), []byte(bloatedContent), 0644); err != nil {
+		t.Fatalf("write bloated AGENTS.md failed: %v", err)
+	}
+
+	warnOpts := baseOpts
+	warnOpts.ProjectDir = warnDir
+	res, err = Run(warnOpts)
+	if err != nil {
+		t.Fatalf("Audit Run (warn project dir) failed: %v", err)
+	}
+	if res.TotalChecks != 15 {
+		t.Errorf("expected 15 checks, got %d", res.TotalChecks)
+	}
+	if res.Compliant {
+		t.Errorf("expected Compliant false when AGENTS.md exceeds %d lines", MaxProjectAgentsLines)
+	}
+	last = res.Checks[len(res.Checks)-1]
+	if last.Status != "warn" || last.Passed {
+		t.Errorf("expected warn & Passed=false, got %+v", last)
+	}
+	if !strings.Contains(last.Message, "progressive disclosure") {
+		t.Errorf("expected progressive disclosure recommendation in message, got %q", last.Message)
+	}
+
+	// 3. Guarded failure: missing AGENTS.md and GEMINI.md -> fail, non-compliant
+	missingDir := filepath.Join(t.TempDir(), "missing-proj")
+	if err := os.MkdirAll(missingDir, 0755); err != nil {
+		t.Fatalf("mkdir missingDir failed: %v", err)
+	}
+
+	missingOpts := baseOpts
+	missingOpts.ProjectDir = missingDir
+	res, err = Run(missingOpts)
+	if err != nil {
+		t.Fatalf("Audit Run (missing project dir) failed: %v", err)
+	}
+	if res.TotalChecks != 15 {
+		t.Errorf("expected 15 checks, got %d", res.TotalChecks)
+	}
+	if res.Compliant {
+		t.Errorf("expected Compliant false when AGENTS.md is missing")
+	}
+	last = res.Checks[len(res.Checks)-1]
+	if last.Status != "fail" || last.Passed {
+		t.Errorf("expected fail & Passed=false, got %+v", last)
+	}
+}
