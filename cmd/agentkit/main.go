@@ -27,7 +27,7 @@ Usage:
 Commands:
   audit [options]
       Audit machine compliance against standardized agent directives, permissions, and tools.
-      Options: --fix, --json, --harness <name>, --settings-path <path>
+      Options: --fix, --json, --harness <name>, --settings-path <path>, --project-dir <dir>
 
   apply [options]
       Idempotently apply permissions, global directives, MCP servers, and orchestration profiles.
@@ -46,7 +46,7 @@ Commands:
 
   template [options]
       Scaffold project-level agent directives or lifecycle hooks.
-      Options: --type <agents|gemini|project-gemini|hook>, --target <dir>, --name <name>, --desc <desc>, --lang <lang>, --test <cmd>, --force
+      Options: --type <agents|gemini|project-gemini|hook|evidence>, --target <dir>, --name <name>, --desc <desc>, --lang <lang>, --test <cmd>, --force
 
   snapshot [options]
       Export or display unmanaged local permissions and MCP servers.
@@ -165,6 +165,11 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 				i++
 				opts.SettingsPath = args[i]
 			}
+		case "--project-dir":
+			if i+1 < len(args) {
+				i++
+				opts.ProjectDir = args[i]
+			}
 		case "--harness":
 			if i+1 < len(args) {
 				i++
@@ -173,6 +178,8 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 		default:
 			if strings.HasPrefix(arg, "--settings-path=") {
 				opts.SettingsPath = strings.TrimPrefix(arg, "--settings-path=")
+			} else if strings.HasPrefix(arg, "--project-dir=") {
+				opts.ProjectDir = strings.TrimPrefix(arg, "--project-dir=")
 			}
 		}
 	}

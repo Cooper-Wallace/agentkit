@@ -160,3 +160,51 @@ def slice_performance_by_regime(df: pd.DataFrame, y_true_col: str, y_pred_col: s
         }
     return pd.DataFrame(results).T
 ```
+
+---
+
+## 6. Property-Based Invariants & Safe-Abstain Boundary Verification
+
+Before promoting calibrated classifiers or decision policies, verify mathematical and safety invariants across randomized inputs using property-based tests (`hypothesis`):
+
+1. **Probability Simplex Conservation**: Every predicted probability vector $p \in \mathbb{R}^K$ must satisfy $0 \le p_k \le 1$, $\sum_{k=1}^K p_k = 1$ (within floating-point tolerance), and contain zero `NaN` or `Inf` values—including after Platt or isotonic calibration.
+2. **Monotonic Confidence & Filter Thresholds**: Raising a confidence filter threshold ($\tau_2 \ge \tau_1$) must never increase the accepted sample count ($N_{\text{accepted}}(\tau_2) \le N_{\text{accepted}}(\tau_1)$) and must monotonically increase or preserve the abstain rate.
+3. **Deterministic Safe-Abstain Verification**: Inputs with missing required features, `NaN`/`Inf` values, or max class probability below $\tau$ must deterministically return an explicit `ABSTAIN` signal (never a silent default class or exception-swallowed prediction).
+
+```python
+import math
+import numpy as np
+from hypothesis import given, strategies as st
+
+def predict_with_abstain(logits: np.ndarray, threshold: float) -> tuple[np.ndarray, str]:
+    if not np.all(np.isfinite(logits)) or logits.ndim != 1 or logits.size == 0:
+        return np.array([]), "ABSTAIN"
+    shifted = logits - np.max(logits)
+    probs = np.exp(shifted) / np.sum(np.exp(shifted))
+    decision = f"CLASS_{int(np.argmax(probs))}" if float(np.max(probs)) >= threshold else "ABSTAIN"
+    return probs, decision
+
+@given(
+    logits=st.lists(st.floats(min_value=-20.0, max_value=20.0, allow_nan=False, allow_infinity=False), min_size=2, max_size=6),
+    t_low=st.floats(min_value=0.0, max_value=0.95, allow_nan=False),
+    delta=st.floats(min_value=0.0, max_value=0.05, allow_nan=False),
+)
+def test_simplex_monotonic_threshold_and_safe_abstain(logits: list[float], t_low: float, delta: float) -> None:
+    arr = np.array(logits, dtype=float)
+    probs, dec_low = predict_with_abstain(arr, t_low)
+    _, dec_high = predict_with_abstain(arr, t_low + delta)
+
+    # 1. Probability simplex conservation
+    assert np.all((probs >= 0.0) & (probs <= 1.0))
+    assert math.isclose(float(np.sum(probs)), 1.0, rel_tol=1e-9, abs_tol=1e-9)
+
+    # 2. Monotonic abstain boundary: tighter threshold cannot turn ABSTAIN into an active prediction
+    if dec_low == "ABSTAIN":
+        assert dec_high == "ABSTAIN"
+
+    # 3. Guarded safe-abstain on corrupted/NaN input
+    corrupted = arr.copy()
+    corrupted[0] = np.nan
+    probs_bad, dec_bad = predict_with_abstain(corrupted, t_low)
+    assert probs_bad.size == 0 and dec_bad == "ABSTAIN"
+```

@@ -32,6 +32,9 @@ type AuditResult struct {
 	Checks          []AuditCheck `json:"checks"`
 }
 
+// MaxProjectAgentsLines defines the maximum allowed line count for a project's AGENTS.md before warning.
+const MaxProjectAgentsLines = 120
+
 // AuditOptions provides flags and path overrides for the audit command.
 type AuditOptions struct {
 	SettingsPath        string
@@ -41,6 +44,7 @@ type AuditOptions struct {
 	PluginsDir          string
 	GlobalDirectivesDir string
 	ProjectSkillsDir    string
+	ProjectDir          string
 	HomeDir             string
 	JSON                bool
 	Fix                 bool
@@ -455,6 +459,15 @@ func Run(opts AuditOptions) (*AuditResult, error) {
 			fmt.Sprintf("Global Skills Registry: project skills missing from %s", skillsPath), false)
 	}
 
+	// 15. Optional Project Directives Progressive Disclosure Audit
+	if strings.TrimSpace(opts.ProjectDir) != "" {
+		check := CheckProjectDirectives(opts.ProjectDir)
+		checks = append(checks, check)
+		if check.Passed {
+			passedCount++
+		}
+	}
+
 	totalChecks := len(checks)
 	score := 0
 	if totalChecks > 0 {
@@ -530,6 +543,82 @@ func FormatAudit(res *AuditResult) string {
 	}
 
 	return sb.String()
+}
+
+// CheckProjectDirectives audits a project directory's AGENTS.md (or GEMINI.md fallback)
+// for existence and progressive disclosure line-count compliance.
+func CheckProjectDirectives(projectDir string) AuditCheck {
+	const (
+		checkID   = 15
+		checkName = "project_directives_progressive_disclosure"
+		checkDesc = "Project agent directives follow progressive disclosure"
+	)
+
+	agentsPath := filepath.Join(projectDir, "AGENTS.md")
+	geminiPath := filepath.Join(projectDir, "GEMINI.md")
+
+	var targetPath string
+	switch {
+	case fileExists(agentsPath):
+		targetPath = agentsPath
+	case fileExists(geminiPath):
+		targetPath = geminiPath
+	default:
+		return AuditCheck{
+			ID:          checkID,
+			Name:        checkName,
+			Description: checkDesc,
+			Status:      "fail",
+			Message:     fmt.Sprintf("Project Directives: missing AGENTS.md or GEMINI.md in %s", projectDir),
+			Passed:      false,
+		}
+	}
+
+	data, err := os.ReadFile(targetPath)
+	if err != nil {
+		return AuditCheck{
+			ID:          checkID,
+			Name:        checkName,
+			Description: checkDesc,
+			Status:      "fail",
+			Message:     fmt.Sprintf("Project Directives: failed to read %s (%v)", targetPath, err),
+			Passed:      false,
+		}
+	}
+
+	lineCount := countLines(string(data))
+	if lineCount > MaxProjectAgentsLines {
+		return AuditCheck{
+			ID:          checkID,
+			Name:        checkName,
+			Description: checkDesc,
+			Status:      "warn",
+			Message: fmt.Sprintf("Project Directives: %s has %d lines (> %d max); adopt progressive disclosure (<= 80 lines target, <= %d max)",
+				filepath.Base(targetPath), lineCount, MaxProjectAgentsLines, MaxProjectAgentsLines),
+			Passed: false,
+		}
+	}
+
+	return AuditCheck{
+		ID:          checkID,
+		Name:        checkName,
+		Description: checkDesc,
+		Status:      "pass",
+		Message: fmt.Sprintf("Project Directives: %s has %d lines (<= %d max, progressive disclosure compliant)",
+			filepath.Base(targetPath), lineCount, MaxProjectAgentsLines),
+		Passed: true,
+	}
+}
+
+func countLines(s string) int {
+	if s == "" {
+		return 0
+	}
+	n := strings.Count(s, "\n")
+	if !strings.HasSuffix(s, "\n") {
+		n++
+	}
+	return n
 }
 
 func fileExists(path string) bool {

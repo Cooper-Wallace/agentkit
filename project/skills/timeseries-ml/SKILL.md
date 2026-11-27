@@ -191,3 +191,55 @@ def train_timeseries_xgb(X_train, y_train, X_val, y_val):
 | Fitting on raw prices/scores | Non-stationary drift breaks tree split thresholds | Transform to returns, rolling z-scores, or fractional diffs |
 | Evaluating solely on Accuracy | Misleading on imbalanced financial bars / win states | Evaluate PR-AUC, Brier score, and Sharpe / PnL return |
 | Unbounded `ffill()` | Propagates stale data across market shutdowns/off-seasons | Use `ffill(limit=K)` and add missingness indicator flag |
+
+---
+
+## 8. Property-Based Invariant Testing (`hypothesis`)
+
+Unit tests on static slices often miss subtle future lookahead bugs or timezone edge cases around Daylight Saving Time (DST) and market-close boundaries. Enforce temporal invariants across randomized synthetic series using `hypothesis`:
+
+1. **Zero Future Lookahead Invariance**: Mutating or appending observations at $t > t_{\text{cutoff}}$ must leave every engineered feature at $t \le t_{\text{cutoff}}$ bit-for-bit identical, and every walk-forward fold must satisfy $\max(\text{train\_ts}) + \text{purge} < \min(\text{val\_ts})$.
+2. **DST & Market-Close Timestamp Boundaries**: Normalizing exchange timestamps (e.g., `America/New_York`) to UTC must preserve strict monotonic ordering across spring-forward/fall-back DST transitions and never assign post-close prints (e.g., `16:00:01 ET`) into the closing bar of the same session.
+
+```python
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+import numpy as np
+import pandas as pd
+from hypothesis import given, strategies as st
+
+NY_TZ = ZoneInfo("America/New_York")
+
+def compute_causal_momentum(close: pd.Series, window: int = 3) -> pd.Series:
+    return close.pct_change(window)
+
+@given(
+    prices=st.lists(st.floats(min_value=10.0, max_value=500.0, allow_nan=False, allow_infinity=False), min_size=12, max_size=40),
+    shock=st.floats(min_value=0.1, max_value=10.0, allow_nan=False, allow_infinity=False),
+)
+def test_zero_future_lookahead_and_dst_monotonicity(prices: list[float], shock: float) -> None:
+    # Start across a real US DST spring-forward boundary (2024-03-10)
+    start_utc = datetime(2024, 3, 10, 6, 0, tzinfo=timezone.utc)
+    idx_utc = pd.DatetimeIndex([start_utc + timedelta(hours=i) for i in range(len(prices))])
+    base = pd.Series(prices, index=idx_utc)
+
+    cutoff = len(prices) // 2
+    perturbed = base.copy()
+    perturbed.iloc[cutoff + 1 :] = perturbed.iloc[cutoff + 1 :] * shock
+
+    feat_base = compute_causal_momentum(base)
+    feat_perturbed = compute_causal_momentum(perturbed)
+
+    # Invariant 1: Future shocks must never alter features at or before cutoff
+    np.testing.assert_allclose(
+        feat_base.iloc[: cutoff + 1].dropna().to_numpy(),
+        feat_perturbed.iloc[: cutoff + 1].dropna().to_numpy(),
+        rtol=0.0,
+        atol=0.0,
+    )
+
+    # Invariant 2: UTC normalization across DST preserves strict monotonic order
+    local_idx = idx_utc.tz_convert(NY_TZ)
+    roundtrip_utc = local_idx.tz_convert(timezone.utc)
+    assert roundtrip_utc.is_monotonic_increasing and roundtrip_utc.is_unique
+```
